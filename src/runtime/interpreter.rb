@@ -148,11 +148,11 @@ module Ore
 			case expr.scope_operator&.value
 			when '../' # global
 				stack.first
-			when './' # underlying type within context
+			when './' # underlying type within context, aka accessing a static declaration
 				stack.reverse_each.find do |scope|
 					scope.instance_of? Ore::Type
 				end
-			when '.' # instance within context
+			when '.' # instance within context, aka self, this, etc
 				stack.reverse_each.find do |scope|
 					scope.is_a? Ore::Instance
 				end

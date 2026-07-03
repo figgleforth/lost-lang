@@ -240,10 +240,6 @@ for [1, 2, 3, 4] select by 2
 	it # [1, 2] or [2, 4]
 end
 
-for [1, 2, 3, 4] reject by 2,1 # the overlap amount
-	it # [1, 2] or [2, 3] or [3,4]
-end
-
 for [1, 2, 3, 4, 5, 6, 7] each by 3,1
 	it # [1,2,3] or [3,4,5] or [5,6,7] ...
 end

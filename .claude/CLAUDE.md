@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Working Relationship
+
+User writes the code and **Claude starts in PM/advisor mode**: help maintain `todos.md`, track what's in flight, surface language gaps worth prioritizing, review approach, and act as a sounding board for design decisions — don't jump into implementation unprompted, even when a task looks small or the next step seems obvious. Only write code, run the implementation, or make edits to source/`.ore` files when explicitly asked to act as an assistant for that task. Write a changelog only when asked to.
+
+This is a side project (sometimes PRs — other times commit straight to `main`), and keeping it feeling like one matters: the point is to push the language toward its vision himself, hitting real gaps under real workloads (see the `hockey-sim port` entry in `todos.md`), not delegating that discovery process away.
+
 ## About Ore
 
 Ore is an educational programming language for web development, implemented in Ruby. It features:
@@ -116,14 +122,30 @@ Annotations whose RHS is non-literal (an identifier, a function call, etc.) are 
 
 `Type_Checker` has two core methods:
 
-- `infer_type(expr)` — maps an expression to an Ore type name string (`'String'`, `'Number'`, `'Symbol'`), or looks up `Identifier_Expr` values in `@types_by_identifier`. Returns `nil` if unknown.
+- `infer_type(expr)` — maps an expression to an Ore type name string (`'String'`, `'Number'`, `'Symbol'`), or looks up `Identifier_Expr` values in `type_by_identifier`. Returns `nil` if unknown.
 - `check(expr)` — recursive dispatcher; returns `nil` (no error) or a `Type_Mismatch` error. Recurses into all child-bearing expression types.
 
-`@types_by_identifier` is a hash built during the walk:
+`type_by_identifier` is a hash built during the walk:
 - Typed assignments (`x: String = ...`) register `'x' => 'String'`
 - Named functions with typed params (`add { a: Number; ... }`) register `'add' => ['Number', 'Number']` via `register_func`
 
-Call site checking happens in `check_call` — it looks up the receiver name in `@types_by_identifier`, retrieves the param type array, and compares each literal argument's inferred type against the expected type.
+Call site checking happens in `check_call` — it looks up the receiver name in `type_by_identifier`, retrieves the param type array, and compares each literal argument's inferred type against the expected type.
+
+### Runtime Type Contracts (`:=`)
+
+Separate from the static `Type_Checker` above, `:=` is a runtime-enforced type contract handled entirely in the interpreter (`interp_infix_walrus` in `interpreter.rb`), not the type checker:
+
+```ore
+x := 4        # infers Number, locks x to that type
+x = 8         # ok — same type
+x = 'hello'   # raises Ore::Type_Contract_Violation
+```
+
+- `:=` infers a type from the RHS and records it on the assigning scope's `type_by_identifier`
+- Subsequent plain `=` assignments to that identifier are checked against the recorded type on every assignment (not just literal RHS, unlike the static checker)
+- Re-running `:=` on the same identifier re-infers and overwrites the locked type
+- Plain `=` without a prior `:=` or `: Type` annotation stays fully dynamic
+- Raises `Ore::Type_Contract_Violation` (`errors.rb`), not `Type_Mismatch`
 
 ### Important gotcha
 
@@ -180,7 +202,7 @@ Identifiers starting with `_` are considered private by convention (e.g., `_priv
 
 ## Static Declarations
 
-Type-level (static) members are declared using the `..` scope operator:
+Type-level (static) members are declared using the `./` scope operator:
 
 ```ore
 Person {
@@ -273,7 +295,7 @@ The `@` operator allows unpacking instance members into sibling scopes for clean
 
 ### Auto-unpack in Function Parameters
 
-`@` behaes as a prefix operator here.
+`@` behaves as a prefix operator here.
 
 ```ore
 add { @vec;
@@ -311,6 +333,37 @@ thingy { @island;
 - Sibling scopes are checked first during identifier lookup (before current scope declarations)
 - Only works with Instance types; errors with `Invalid_Unpack_Infix_Right_Operand` for non-instances
 - Only `+=` and `-=` operators supported; other operators error with `Invalid_Unpack_Infix_Operator`
+
+## Operator Overloading
+
+Custom operators are declared with `@operator`, a fixity directive, a precedence number, and a function body. Parsed specially in `parser.rb` (`scan_and_register_operator_overloads_before_parsing` pre-scans and registers precedence before the main parse, since fixity/precedence affects how the rest of the file parses):
+
+```ore
+@operator -> @infix 300 { left, right;
+    right(left)
+}
+
+double { n; n * 2 }
+5 -> double  # => 10
+```
+
+- Fixities: `@infix`, `@prefix`, `@postfix`, and `@circumfix` (only `infix`/`prefix`/`postfix` are documented in `readme.md`; `circumfix` is accepted by the parser but undocumented there)
+- The operator symbol can be any symbol sequence or identifier (`->`, `!!`, `pm`, `$`)
+- Overloads are stored as regular functions in the declaring scope — they don't leak outside it
+- Represented internally as `Ore::Operator_Overload_Expr` (fixity, precedence, operator lexeme, `Func_Expr` body)
+
+## Ranges
+
+Four range operators, all built on the same `..`/`.<`/`>.`/`><` family (`RANGE_OPERATORS` in `constants.rb`, handled in `interp_infix` in `interpreter.rb`):
+
+```ore
+1..5    # inclusive:        1, 2, 3, 4, 5
+1.< 5   # exclusive end:     1, 2, 3, 4
+>. 1 5  # exclusive start:      2, 3, 4, 5
+>< 1 5  # exclusive both:       2, 3, 4
+```
+
+`.<` trims the end, `>.`/`><` bump the start by 1 — implemented as `Ore::Range.new(start, finish, exclude_end: bool)` with `start`/`start + 1` depending on operator.
 
 ## Built-in Types and Intrinsic Methods
 
@@ -573,6 +626,10 @@ Tests use Minitest and inherit from `Base_Test` (in test/base_test.rb):
 - `test/lexer_test.rb` - Lexer tests
 - `test/parser_test.rb` - Parser tests
 - `test/interpreter_test.rb` - Interpreter tests
+- `test/type_checker_test.rb` - Static type checker tests
+- `test/composition_test.rb` - Class composition operator tests
+- `test/pipeline_test.rb` - Full lex→parse→interpret pipeline tests
+- `test/error_test.rb` - Runtime error tests
 - `test/proxies_test.rb` - Ruby Proxy method tests
 - `test/regression_test.rb` - Regression tests
 - `test/server_test.rb` - Server and routing tests
