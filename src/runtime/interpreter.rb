@@ -1627,7 +1627,7 @@ module Ore
 					elements.each do |element, index|
 						if collection.is_a? Ore::Dictionary
 							new_it = element[1]
-							new_at = element[0].to_s
+							new_at = element[0]
 							scope.declare 'it', new_it
 							scope.declare 'at', new_at
 							element = new_it

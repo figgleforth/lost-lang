@@ -2375,13 +2375,13 @@ class Interpreter_Test < Base_Test
 
 		    collection = []
 		    for dict
-		    	collection << (at, it)
+		    	collection << (at, it) # at is the string key, it is the vlaue
 		    end
 
 		    collection
 		CODE
 		assert_equal 2, out.values.count
-		assert_equal [Ore::Tuple.new(['x', 4]), Ore::Tuple.new(['y', 8])], out.values
+		assert_equal [Ore::Tuple.new([:x, 4]), Ore::Tuple.new([:y, 8])], out.values
 	end
 
 	def test_dictionary_in_for_loops_stride_is_ignored
@@ -2394,12 +2394,12 @@ class Interpreter_Test < Base_Test
 
 		    collection = []
 		    for dict by 2
-		    	collection << (at, it)
+		    	collection << (at, it) # at is the string key, it is the vlaue
 		    end
 
 		    collection
 		CODE
 		assert_equal 3, out.values.count
-		assert_equal [Ore::Tuple.new(['a', 15]), Ore::Tuple.new(['b', 16]), Ore::Tuple.new(['c', 23])], out.values
+		assert_equal [Ore::Tuple.new([:a, 15]), Ore::Tuple.new([:b, 16]), Ore::Tuple.new([:c, 23])], out.values
 	end
 end
