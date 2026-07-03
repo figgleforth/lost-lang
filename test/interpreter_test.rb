@@ -2365,4 +2365,41 @@ class Interpreter_Test < Base_Test
 		CODE
 		assert_equal 23, out
 	end
+
+	def test_dictionary_in_for_loops
+		out = Ore.interp <<~CODE
+		    dict = {
+		    	x = 4,
+		    	y = 8
+		    }
+
+		    collection = []
+		    for dict
+		    	collection << (at, it)
+		    end
+
+		    collection
+		CODE
+		assert_equal 2, out.values.count
+		assert_equal [Ore::Tuple.new(['x', 4]), Ore::Tuple.new(['y', 8])], out.values
+	end
+
+	def test_dictionary_in_for_loops_stride_is_ignored
+		out = Ore.interp <<~CODE
+		    dict = {
+		    	a = 15,
+		    	b = 16,
+				c = 23
+		    }
+
+		    collection = []
+		    for dict by 2
+		    	collection << (at, it)
+		    end
+
+		    collection
+		CODE
+		assert_equal 3, out.values.count
+		assert_equal [Ore::Tuple.new(['a', 15]), Ore::Tuple.new(['b', 16]), Ore::Tuple.new(['c', 23])], out.values
+	end
 end
