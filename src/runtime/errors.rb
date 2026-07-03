@@ -164,4 +164,7 @@ module Ore
 
 	class Operator_Overload_Precedence_Must_Be_Integer < Error
 	end
+
+	class Unsupported_Feature < Error
+	end
 end

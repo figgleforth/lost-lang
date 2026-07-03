@@ -1582,14 +1582,18 @@ module Ore
 
 			push_then_pop Scope.new('for_loop') do |scope|
 				values = case collection
-				when Ore::Range
-					collection
+
+				when Ore::Dictionary
+					collection.dict
 				when Ore::Array
 					collection.values
+
+				when Ore::Range
+					collection
 				when Ore::String
 					collection.value.chars
 				else
-					collection
+					collection # todo; This could be a number, and every other object in the language.
 				end
 
 				# New for-loop verbs, to be handled with stride and without
@@ -1613,14 +1617,23 @@ module Ore
 				# Initialize collection variables outside catch block so they persist after stop
 				collected = []
 				count_val = 0
-				chunks    = if stride
+				elements  = if stride && !collection.is_a?(Ore::Dictionary)
 					values.each_slice(stride).each_with_index
 				else
 					values.each_with_index
 				end
 
 				stop_value = catch :stop do
-					chunks.each do |element, index|
+					elements.each do |element, index|
+						if collection.is_a? Ore::Dictionary
+							new_it = element[1]
+							new_at = element[0].to_s
+							scope.declare 'it', new_it
+							scope.declare 'at', new_at
+							element = new_it
+							index   = new_at
+						end
+
 						case loop_type
 						when 'each'
 							result = iterate_body.call element, index
