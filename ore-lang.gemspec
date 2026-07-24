@@ -1,4 +1,4 @@
-require_relative 'src/version'
+require_relative 'src/ruby/version'
 
 Gem::Specification.new do |spec|
 	spec.name                  = 'ore-lang'

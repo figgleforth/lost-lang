@@ -31,7 +31,7 @@ This [`src`](/src) folder contains the implementation of Ore in Ruby. The codeba
 `Interpreter` is the entry point. Call `run` with source code and it handles lexing, parsing, and execution:
 
 ```ruby
-require './src/ore'
+require './src/ruby/ore'
 
 interpreter = Ore::Interpreter.new
 result      = interpreter.run "'Hello, World!'" # => Hello, World!
@@ -40,7 +40,7 @@ result      = interpreter.run "'Hello, World!'" # => Hello, World!
 You can also step through each phase manually:
 
 ```ruby
-require './src/ore'
+require './src/ruby/ore'
 
 lexer       = Ore::Lexer.new "'Hello, World!'"
 lexemes     = lexer.output       # => array of Lexemes
@@ -56,7 +56,7 @@ result            = interpreter.output # => Hello, World!
 Or use the `Ore` module convenience methods:
 
 ```ruby
-require './src/ore'
+require './src/ruby/ore'
 
 source      = '"Hello, Again!"'
 lexemes     = Ore.lex source        # => array of Lexemes

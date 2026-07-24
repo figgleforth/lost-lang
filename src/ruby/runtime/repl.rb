@@ -1,4 +1,4 @@
-require './src/ore.rb'
+require './src/ruby/ore.rb'
 require 'readline'
 
 module Ore

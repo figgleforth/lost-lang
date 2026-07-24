@@ -1,5 +1,5 @@
 require 'minitest/autorun'
-require_relative '../src/ore'
+require_relative '../src/ruby/ore'
 require_relative 'base_test'
 
 class Lexer_Test < Base_Test

@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-require_relative '../src/ore'
+require_relative '../src/ruby/ore'
 
 INSTRUCTIONS = <<~INST
     Usage:

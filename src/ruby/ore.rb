@@ -31,7 +31,7 @@ require_relative 'runtime/interpreter'
 require_relative 'runtime/repl'
 
 module Ore
-	ROOT_PATH             = File.expand_path('../', __dir__)
+	ROOT_PATH             = File.expand_path('../../', __dir__)
 	STANDARD_LIBRARY_PATH = File.join(ROOT_PATH, 'ore', 'preload.ore')
 
 	extend Helpers
