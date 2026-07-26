@@ -599,7 +599,7 @@ module Ore
 				# todo: Don't just discard the comma, make tuples implied when commas are found in #complete_expression
 				eat and nil
 
-			elsif curr? ';'
+			elsif curr? FUNCTION_DELIMITER
 				# This is reserved for function declarations
 				raise Ore::Reserved_Function_Delimiter.new curr_lexeme
 
