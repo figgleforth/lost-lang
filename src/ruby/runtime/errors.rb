@@ -24,6 +24,9 @@ module Ore
 	class Cannot_Assign_Incompatible_Type < Error
 	end
 
+	class Cannot_Assign_Undeclared_Identifier < Error
+	end
+
 	class Cannot_Initialize_Non_Type_Identifier < Error
 	end
 

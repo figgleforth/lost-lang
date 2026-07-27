@@ -1,12 +1,13 @@
 module Ore
 	class Scope
-		attr_accessor :enclosing_scope, :sibling_scopes, :declarations, :name, :type_by_identifier
+		attr_accessor :enclosing_scope, :sibling_scopes, :declarations, :name, :type_by_identifier, :static_declarations
 
 		def initialize name = nil
-			@name               = name
-			@declarations       = {}
-			@sibling_scopes     = []
-			@type_by_identifier = {}
+			@name                = name
+			@declarations        = {}
+			@sibling_scopes      = []
+			@type_by_identifier  = {}
+			@static_declarations = Set.new
 		end
 
 		def declare identifier, value
@@ -44,7 +45,7 @@ module Ore
 				sibling.has? id_str
 			end
 
-			@declarations.key? id_str
+			@declarations.key?(id_str) || @static_declarations.include?(id_str)
 		end
 
 		def delete key
@@ -70,16 +71,11 @@ module Ore
 	end
 
 	class Type < Scope
-		attr_accessor :expressions, :types, :routes, :static_declarations
+		attr_accessor :expressions, :types, :routes
 
 		def initialize name = nil
 			super name
-			@types               = Set[name]
-			@static_declarations = Set.new
-		end
-
-		def has? identifier
-			super(identifier) || @static_declarations.include?(identifier)
+			@types = Set[name]
 		end
 	end
 

@@ -52,7 +52,7 @@ Array {
 	}
 
 	map { func;
-		result = []
+		result := []
 		for values
 			```
 			bug: Noticed when testing [].map(), both it and at must be declared in the given anon func or it crashes
@@ -67,7 +67,7 @@ Array {
 	}
 
 	filter { func;
-		result = []
+		result := []
 		for values
 			if func(it)
 				result.push(it)
@@ -77,7 +77,7 @@ Array {
 	}
 
 	reduce { init, func;
-		accumulator = init
+		accumulator := init
 		for values
 			accumulator = func(accumulator, it)
 		end

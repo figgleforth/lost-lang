@@ -14,7 +14,7 @@ class Server_Test < Base_Test
 		    	}
 		    }
 
-		    server = Server()
+		    server := Server()
 		ORE
 
 		result = Ore.interp code
@@ -37,7 +37,7 @@ class Server_Test < Base_Test
 		    	}
 		    }
 
-		    app = Web_App()
+		    app := Web_App()
 		ORE
 
 		result = Ore.interp code
@@ -64,7 +64,7 @@ class Server_Test < Base_Test
 		    	}
 		    }
 
-		    app = Web_App()
+		    app := Web_App()
 		ORE
 
 		interpreter = Ore::Interpreter.new
@@ -81,7 +81,7 @@ class Server_Test < Base_Test
 		    		.port = port
 		    	}
 		    }
-		    app = Server()
+		    app := Server()
 		ORE
 
 		interpreter     = Ore::Interpreter.new
@@ -114,7 +114,7 @@ class Server_Test < Base_Test
 		    	}
 		    }
 
-		    app = Web_App()
+		    app := Web_App()
 		ORE
 
 		interpreter = Ore::Interpreter.new
@@ -142,7 +142,7 @@ class Server_Test < Base_Test
 		    	}
 		    }
 
-		    app = Web_App()
+		    app := Web_App()
 		ORE
 
 		interpreter     = Ore::Interpreter.new
@@ -176,7 +176,7 @@ class Server_Test < Base_Test
 		    	}
 		    }
 
-		    app = Web_App()
+		    app := Web_App()
 		ORE
 
 		interpreter = Ore::Interpreter.new

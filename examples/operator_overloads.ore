@@ -28,14 +28,14 @@ Currency {
 }
 
 @operator $ @prefix 900 { amount;
-	c = Currency()
+	c := Currency()
 	c.amount = amount
 	c.name = 'US Dollar'
 	c.code = 'USD'
 	c
 }
 
-price = $42
+price := $42
 @puts "-- Dollar operator --"
 @puts "`price.name`: `price.code` `price.amount`"
 
@@ -51,7 +51,7 @@ Time {
 }
 
 @operator : @infix 700 { hour, minute;
-	t = Time()
+	t := Time()
 	t.hour = hour
 	t.minute = minute
 	t
@@ -67,8 +67,8 @@ Time {
 	left
 }
 
-morning = 9:30am
-evening = 11:22pm
+morning := 9:30am
+evening := 11:22pm
 
 @puts "-- : and am/pm custom operators --"
 @puts "`morning.hour`:`morning.minute``morning.period`"
@@ -78,15 +78,15 @@ evening = 11:22pm
 # ─── Scoped overload ─────────────────────────────────────────────────────────
 # Overloads declared inside a function stay inside that function's scope.
 
-result = compute {;
+result := compute {;
 	@operator + @infix 700 { left, right;
 		left * right
 	}
-	inner = 3 + 4
+	inner := 3 + 4
 }()
 
 
-outer = 3 + 4
+outer := 3 + 4
 
 @assert result == 12
 @assert outer == 7

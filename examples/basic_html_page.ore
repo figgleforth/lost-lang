@@ -2,11 +2,11 @@
 @use 'ore/server.ore'
 
 Page_Body | Body {
-  css_display = 'flex'
-  css_justify_content = 'center'
-  css_align_items = 'center'
-  css_min_height = '100vh'
-  css_margin = '0'
+  css_display := 'flex'
+  css_justify_content := 'center'
+  css_align_items := 'center'
+  css_min_height := '100vh'
+  css_margin := '0'
 }
 
 ```Layout component```
@@ -14,9 +14,9 @@ Layout | Html {
 	title,
 	body_content,
 
-	css_filter = 'invert()'
-	css_font_family = 'monospace'
-	css_font_size = '1.2em'
+	css_filter := 'invert()'
+	css_font_family := 'monospace'
+	css_font_size := '1.2em'
 
 	new { title, body_content;
 		.title = title
@@ -43,12 +43,12 @@ Hero | Section {
 Code_Example | Pre {
 	subject,
 
-	css_margin_left = '2em'
-	css_background_color = '#ccc'
-	css_border = '1px solid #888'
-	css_padding = '1em'
-	css_border_radius = '9px'
-	css_display = 'inline-block'
+	css_margin_left := '2em'
+	css_background_color := '#ccc'
+	css_border := '1px solid #888'
+	css_padding := '1em'
+	css_border_radius := '9px'
+	css_display := 'inline-block'
 }
 
 ```Feature section component```
@@ -91,7 +91,7 @@ Page_Content | Div {
 	}
 
 	render {;
-		naming = Feature_Section(
+		naming := Feature_Section(
 			"Naming conventions replace keywords",
 			[
 				Feature_Item("Capitalize classes"),
@@ -100,7 +100,7 @@ Page_Content | Div {
 			]
 		)
 
-		composition = Feature_Section(
+		composition := Feature_Section(
 			"Class composition replaces inheritance",
 			[
 				Feature_Item("| Union - merge classes (left side wins conflicts)"),
@@ -110,7 +110,7 @@ Page_Content | Div {
 			]
 		)
 
-		dot_notation = Feature_Section(
+		dot_notation := Feature_Section(
 			"Dot notation for convenience",
 			[
 				Feature_Item("array.1.0.8 accesses nested structures"),
@@ -120,7 +120,7 @@ Page_Content | Div {
 			]
 		)
 
-		other_features = Feature_Section(
+		other_features := Feature_Section(
 			"Other features",
 			[
 				Feature_Item("First-class functions and classes"),
@@ -128,7 +128,7 @@ Page_Content | Div {
 			]
 		)
 
-		web_features = Feature_Section(
+		web_features := Feature_Section(
 			"Web server support with routing",
 			[
 				Feature_Item("Route definitions use method://path syntax"),
@@ -156,7 +156,7 @@ Page_Content | Div {
 	}
 }
 
-readme_snippet = "Hello {
+readme_snippet := "Hello {
 	subject,
 
 	new { subject;
@@ -178,5 +178,5 @@ App | Server {
 	}
 }
 
-app = App()
+app := App()
 @start app

@@ -133,18 +133,30 @@ Call site checking happens in `check_call` — it looks up the receiver name in 
 
 ### Runtime Type Contracts (`:=`)
 
-Separate from the static `Type_Checker` above, `:=` is a runtime-enforced type contract handled entirely in the interpreter (`interp_infix_walrus` in `interpreter.rb`), not the type checker:
+Separate from the static `Type_Checker` above, `:=` is a runtime-enforced type contract handled entirely in the interpreter (`interp_infix_declaration` in `interpreter.rb`), not the type checker. `:=` is also the general declaration operator — `=` is pure assignment and requires the identifier to already be declared (handled in `interp_infix_assignment`), raising `Ore::Cannot_Reassign_Undeclared_Identifier` otherwise:
 
 ```ore
-x := 4        # infers Number, locks x to that type
+x := 4        # declares x, infers Number, locks x to that type
 x = 8         # ok — same type
 x = 'hello'   # raises Ore::Type_Contract_Violation
+
+y = 4         # raises Ore::Cannot_Reassign_Undeclared_Identifier — y was never declared
+
+counter := -1
+increment {;
+	counter := 99   # shadows — declares a new local `counter`, doesn't touch the outer one
+	counter += 1    # `=`/compound ops still resolve outward, so this mutates the local
+}
+increment()
+counter           # still -1 — the outer `counter` was never touched
 ```
 
-- `:=` infers a type from the RHS and records it on the assigning scope's `type_by_identifier`
+- `:=` declares the identifier, infers a type from the RHS, and records it on the assigning scope's `type_by_identifier`
+- `:=` always declares on the current scope (`stack.last`), shadowing any identically-named identifier in an enclosing scope, rather than reusing/overwriting it. Plain `=` and compound ops (`+=`, etc.) still resolve through the enclosing scope via `scope_for_identifier`, which is how closures over outer variables keep working
 - Subsequent plain `=` assignments to that identifier are checked against the recorded type on every assignment (not just literal RHS, unlike the static checker)
 - Re-running `:=` on the same identifier re-infers and overwrites the locked type
-- Plain `=` without a prior `:=` or `: Type` annotation stays fully dynamic
+- `=` without a prior `:=` (or a `: Type` annotation, or another declaration form — see below) raises `Ore::Cannot_Reassign_Undeclared_Identifier`
+- A `: Type` annotation (`x: Number = 4`) and a Class-styled identifier assigned a Scope value (`My_Type = Other {}`) are each themselves self-declaring, so `=` is allowed to introduce those identifiers too
 - Raises `Ore::Type_Contract_Violation` (`errors.rb`), not `Type_Mismatch`
 
 ### Important gotcha
@@ -206,7 +218,7 @@ Type-level (static) members are declared using the `./` scope operator:
 
 ```ore
 Person {
-    ./count = 0       # Static variable shared across all instances
+    ./count := 0      # Static variable shared across all instances
 
     ./increment {;  # Static method
         count += 1
@@ -245,7 +257,7 @@ Built-in types like `Server`, `Record`, and `Dom` are composed this way:
 
 ```ore
 Web_App | Server { get:// {; "Hello" } }
-Post | Record { ./database = ../db; table_name = 'posts' }
+Post | Record { ./database := ../db; table_name := 'posts' }
 Layout | Dom { render {; Html([Body("Hello")]) } }
 ```
 
@@ -286,7 +298,7 @@ Point {
     }
 }
 
-p = Point(3, 4)  # Calls new
+p := Point(3, 4)  # Calls new
 ```
 
 ## Unpack Feature
@@ -302,7 +314,7 @@ add { @vec;
     x + y  "# Access vec.x and vec.y directly
 }
 
-v = Vector(3, 4)
+v := Vector(3, 4)
 add(v)  "# Returns 7
 ```
 
@@ -312,12 +324,12 @@ add(v)  "# Returns 7
 
 ```ore
 Island {
-	name;
+	name,
 }
 
-island = Island()
+island := Island()
 @ += island  # Add island's members to sibling scope
-x = island_member  # Access members directly
+x := island_member  # Access members directly
 
 @ -= island  # Remove island from sibling scope
 
@@ -428,7 +440,7 @@ Defined in: `ore/array.ore`, implemented in `scopes.rb` as `Ore::Array`
 Methods: `keys()`, `values()`, `has_key?(key)`, `delete(key)`, `merge(other)`, `count()`, `empty?()`, `clear()`, `fetch(key, default)`
 
 ```ore
-dict = {x: 4, y: 8}
+dict := {x: 4, y: 8}
 dict[:x]           # Access by key => 4
 dict[:z] = 15      # Assignment
 dict.keys()        # [:x, :y, :z]
@@ -456,7 +468,7 @@ Defined in: `ore/number.ore`, implemented in `scopes.rb` as `Ore::Number`
 Static methods for reading and writing files:
 
 ```ore
-content = File_System.read('./path/to/file.txt')  # Read file contents as string
+content := File_System.read('./path/to/file.txt')  # Read file contents as string
 File_System.write_string_to_file('./path/to/file.txt', 'Hello, World!')  # Write string to file
 ```
 
@@ -491,22 +503,22 @@ For loops support transformation verbs that return values: `map`, `select`, `rej
 
 ```ore
 `Transform each element
-doubled = for [1, 2, 3, 4, 5] map
+doubled := for [1, 2, 3, 4, 5] map
     it * 2
 end  # => [2, 4, 6, 8, 10]
 
 `Filter elements where body is truthy
-evens = for [1, 2, 3, 4, 5, 6] select
+evens := for [1, 2, 3, 4, 5, 6] select
     it % 2 == 0
 end  # => [2, 4, 6]
 
 `Filter elements where body is falsy
-odds = for [1, 2, 3, 4, 5, 6] reject
+odds := for [1, 2, 3, 4, 5, 6] reject
     it % 2 == 0
 end  # => [1, 3, 5]
 
 `Count elements where body is truthy
-count = for [1, 2, 3, 4, 5, 6] count
+count := for [1, 2, 3, 4, 5, 6] count
     it % 2 == 0
 end  # => 3
 ```
@@ -515,7 +527,7 @@ end  # => 3
 
 ```ore
 `Map chunks of 2
-sums = for [1, 2, 3, 4, 5, 6] map by 2
+sums := for [1, 2, 3, 4, 5, 6] map by 2
     it.0 + it.1
 end  # => [3, 7, 11]
 ```
@@ -524,7 +536,7 @@ end  # => [3, 7, 11]
 
 ```ore
 `Stop returns partial results for map/select/reject
-partial = for [1, 2, 3, 4, 5] map
+partial := for [1, 2, 3, 4, 5] map
     stop if it == 4
     it * 2
 end  # => [2, 4, 6]
@@ -567,7 +579,7 @@ while x < 4
 elwhile y > -8
     y -= 1
 else
-    z = 1
+    z := 1
 end
 ```
 
@@ -576,7 +588,7 @@ end
 `unless condition` is equivalent to `if !condition`. All control flows (`if`, `unless`, `while`, `until`) are expressions and return values:
 
 ```ore
-x = unless condition
+x := unless condition
     4
 else
     -4
@@ -647,7 +659,7 @@ Ore includes built-in database support with an ActiveRecord-style ORM using Sequ
 ```ore
 @use 'ore/database.ore'
 
-db = Sqlite('./data/myapp.db')
+db := Sqlite('./data/myapp.db')
 @connect db  # Establishes connection
 ```
 
@@ -676,8 +688,8 @@ The `Record` type provides ActiveRecord-style ORM functionality:
 @use 'ore/record.ore'
 
 User | Record {
-    ./database = ../db      # Set database (static declaration)
-    table_name = 'users'
+    ./database := ../db     # Set database (static declaration)
+    table_name := 'users'
 }
 ```
 
@@ -693,8 +705,8 @@ User.create({name: "Alice", email: "alice@example.com"})
 User.create({name: "Bob", email: "bob@example.com"})
 
 `Query records
-users = User.all()         # => Array of Dictionary instances
-user = User.find(1)        # => Dictionary with {id: 1, name: "Alice", ... }
+users := User.all()        # => Array of Dictionary instances
+user := User.find(1)       # => Dictionary with {id: 1, name: "Alice", ... }
 
 `Delete records
 User.delete(1)
@@ -706,7 +718,7 @@ User.delete(1)
 @use 'ore/database.ore'
 @use 'ore/record.ore'
 
-db = Sqlite('./temp/blog.db')
+db := Sqlite('./temp/blog.db')
 @connect db
 
 # Create schema
@@ -718,13 +730,13 @@ db.create_table('posts', {
 
 # Define model
 Post | Record {
-    ./database = ../db
-    table_name = 'posts'
+    ./database := ../db
+    table_name := 'posts'
 }
 
 # Use ORM
 Post.create({title: "Hello", body: "World"})
-posts = Post.all()
+posts := Post.all()
 
 for posts
     @puts "`it[:title]`: `it[:body]`"
@@ -797,11 +809,11 @@ Layout | Dom {
 
 ```ore
 Styled_Div | Dom {
-    html_element = 'p'
-    html_class = 'my_class'
-    html_id = 'my_id'
-    css_background_color = 'black'
-    css_color = 'white'
+    html_element := 'p'
+    html_class := 'my_class'
+    html_id := 'my_id'
+    css_background_color := 'black'
+    css_color := 'white'
 }
 # => <p class='my_class' id='my_id' style='background-color:black;color:white;'></p>
 ```

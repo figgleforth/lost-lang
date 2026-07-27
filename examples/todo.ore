@@ -20,20 +20,20 @@ Todos_Ul | Ul {
 
 # Main todo app component
 Todo_App | Div {
-	html_id = 'todos'  # Target element for DOM updates
-	todos = []         # In-memory state - list of todo strings
-	input = Todo_Input()
+	html_id := 'todos'  # Target element for DOM updates
+	todos := []         # In-memory state - list of todo strings
+	input := Todo_Input()
 
 	# Handler reads input.value - the current textarea content.
 	# dom.js collects all input values and sends them with the
 	# onclick request. The server updates input.value before
 	# this handler runs.
-	add_todo = {;
+	add_todo := {;
 		todos.push(input.value)
 	}
 
 	render {;
-		button = Button("Add Todo")
+		button := Button("Add Todo")
 		button.onclick = add_todo
 
 		Form([input, button, Todos_Ul(todos)])
@@ -41,7 +41,7 @@ Todo_App | Div {
 }
 
 # Create instance outside the server so state persists across requests
-todo_app = Todo_App()
+todo_app := Todo_App()
 
 App | Server {
 	get:// home {;

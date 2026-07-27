@@ -32,29 +32,32 @@ class Interpreter_Test < Base_Test
 		end
 	end
 
-	def test_does_not_raise_undeclared_identifier_when_assigning
+	def test_does_not_raise_undeclared_identifier_when_declaring
 		refute_raises Ore::Undeclared_Identifier do
-			Ore.interp 'found = true'
+			Ore.interp 'found := true'
 		end
 	end
 
 	def test_variable_assignment_and_lookup
-		out = Ore.interp 'name = "Locke", name'
+		out = Ore.interp 'name := "Locke", name'
 		assert_equal 'Locke', out
 	end
 
 	def test_constant_assignment_and_lookup
-		out = Ore.interp 'ENVIRONMENT = :development, ENVIRONMENT'
+		out = Ore.interp 'ENVIRONMENT := :development, ENVIRONMENT'
 		assert_equal :development, out
 	end
 
 	def test_cannot_assign_incompatible_type
+		# todo; raises Cannot_Reassign_Undeclared_Identifier
 		assert_raises Ore::Cannot_Assign_Incompatible_Type do
-			Ore.interp 'My_Type = :anything'
+			Ore.interp 'MyType {}
+			My_Type = :anything'
 		end
 
 		refute_raises Ore::Cannot_Assign_Incompatible_Type do
-			Ore.interp 'My_Type = Other {}'
+			Ore.interp 'MyType {}
+			My_Type = Other {}'
 		end
 	end
 
@@ -127,7 +130,7 @@ class Interpreter_Test < Base_Test
 
 	def test_basic_type_declaration
 		out = Ore.interp 'Hatch {
-			computer = nil
+			computer := nil
 
 			enter { numbers;
 				# do something with the numbers
@@ -196,30 +199,30 @@ class Interpreter_Test < Base_Test
 
 	def test_constants_cannot_be_reassigned
 		assert_raises Ore::Cannot_Reassign_Constant do
-			Ore.interp 'ENVIRONMENT = :development
+			Ore.interp 'ENVIRONMENT := :development
 			ENVIRONMENT = :production'
 		end
 	end
 
 	def test_variable_declarations
-		out = Ore.interp 'cool = "Cooper"'
+		out = Ore.interp 'cool := "Cooper"'
 		assert_equal 'Cooper', out
 
-		out = Ore.interp 'delta = 0.017'
+		out = Ore.interp 'delta := 0.017'
 		assert_equal 0.017, out
 	end
 
 	def test_declared_variable_lookup
-		out = Ore.interp 'number = 42
+		out = Ore.interp 'number := 42
 		number'
 		assert_equal 42, out
 	end
 
 	def test_variable_can_be_reassigned
-		out = Ore.interp 'number = 42'
+		out = Ore.interp 'number := 42'
 		assert_equal 42, out
 
-		out = Ore.interp 'number = 42
+		out = Ore.interp 'number := 42
 		number = 8'
 		assert_equal 8, out
 	end
@@ -334,9 +337,9 @@ class Interpreter_Test < Base_Test
 		assert_kind_of Ore::Tuple, out
 		assert_equal [1, 2], out.values
 
-		out = Ore.interp 't = ("Hello", "from" ,"Tuple")
-		t_first = t.0
-		t2 = (t.0, t.1, t.2)
+		out = Ore.interp 't := ("Hello", "from" ,"Tuple")
+		t_first := t.0
+		t2 := (t.0, t.1, t.2)
 		(t_first, t == t2, t_first == t2, t2)'
 		assert_equal "Hello", out.values.first
 		assert out.values[1]
@@ -380,7 +383,7 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_create_dictionary_with_local_value
-		out = Ore.interp 'x=4, y=2, { x=x, y=y }'
+		out = Ore.interp 'x:=4, y:=2, { x=x, y=y }'
 		assert_equal out.dict, { x: 4, y: 2 }
 	end
 
@@ -395,12 +398,12 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_colon_as_dictionary_infix_operator
-		out = Ore.interp 'x = 123, { x: x }'
+		out = Ore.interp 'x := 123, { x: x }'
 		assert_equal out.dict, { x: 123 }
 	end
 
 	def test_equals_as_dictionary_infix_operator
-		out = Ore.interp 'x = 123, { x = x }'
+		out = Ore.interp 'x := 123, { x = x }'
 		assert_equal out.dict, { x: 123 }
 	end
 
@@ -424,27 +427,27 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_dictionary_subscript
-		out = Ore.interp "dict = {x}
-		original = dict[:x]
+		out = Ore.interp "dict := {x}
+		original := dict[:x]
 		dict[:x] = 4815
 		(original, dict[:x])"
 		assert_equal [nil, 4815], out.values
 	end
 
 	def test_dictionary_subscript_string_and_symbol_do_not_behave_differently
-		out = Ore.interp "dict = {x=4815}
+		out = Ore.interp "dict := {x=4815}
 		(dict['x'], dict[:x])"
 		assert_equal [4815, 4815], out.values
 	end
 
 	def test_too_many_dictionary_subscript_arguments
 		assert_raises Ore::Too_Many_Subscript_Expressions do
-			Ore.interp "dict = {x=4815}
+			Ore.interp "dict := {x=4815}
 			dict[:x, 123]"
 		end
 
 		assert_raises Ore::Too_Many_Subscript_Expressions do
-			Ore.interp "dict = {x=4815}
+			Ore.interp "dict := {x=4815}
 			dict[:x, 123] = 162342"
 		end
 	end
@@ -460,7 +463,7 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_dictionary_subscript_with_variable
-		out = Ore.interp 'key = :a, dict = { a: 99 }, dict[key]'
+		out = Ore.interp 'key := :a, dict := { a: 99 }, dict[key]'
 		assert_equal 99, out
 	end
 
@@ -481,7 +484,7 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_assigning_function_to_variable
-		out = Ore.interp 'funk = { a, b, c; }'
+		out = Ore.interp 'funk := { a, b, c; }'
 		assert_equal 3, out.expressions.count
 	end
 
@@ -516,8 +519,8 @@ class Interpreter_Test < Base_Test
 			position,
 			rotation,
 
-			x = 0
-			y = 0
+			x := 0
+			y := 0
 
 			to_s {;
 				"Transform!"
@@ -538,7 +541,7 @@ class Interpreter_Test < Base_Test
 
 	def test_raises_non_type_initialization_error
 		assert_raises Ore::Cannot_Initialize_Non_Type_Identifier do
-			Ore.interp 'x = 1, x.new'
+			Ore.interp 'x := 1, x.new'
 		end
 	end
 
@@ -553,8 +556,8 @@ class Interpreter_Test < Base_Test
 			position,
 			rotation,
 
-			x = 4
-			y = 8
+			x := 4
+			y := 8
 
 			to_s {;
 				"Transform!"
@@ -570,18 +573,18 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_complex_type_with_value_lookup
-		out = Ore.interp 'Vector1 { x = 4 }
+		out = Ore.interp 'Vector1 { x := 4 }
 		Vector1.new.x
 		'
 		assert_equal 4, out
 	end
 
 	def test_instance_complex_value_lookup
-		out = Ore.interp 'Vector2 { x = 1, y = 2 }
+		out = Ore.interp 'Vector2 { x := 1, y := 2 }
 		Transform {
-			position = Vector2.new
+			position := Vector2.new
 		}
-		t = Transform.new
+		t := Transform.new
 		(t.position, t.position.y)
 		'
 		assert_kind_of Ore::Tuple, out
@@ -590,8 +593,8 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_type_declaration_with_parens
-		out = Ore.interp 'Vector2 { x = 0, y = 1 }
-		pos = Vector2()'
+		out = Ore.interp 'Vector2 { x := 0, y := 1 }
+		pos := Vector2()'
 		assert_instance_of Ore::Instance, out
 		data = { 'x' => 0, 'y' => 1 }
 		assert_equal data, out.declarations
@@ -599,18 +602,18 @@ class Interpreter_Test < Base_Test
 
 	def test_dot_slash
 		assert_raises Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance do
-			Ore.interp '.x = 123'
+			Ore.interp '.x := 123'
 		end
 	end
 
 	def test_look_up_dot_slash_without_dot_slash
 		assert_raises Ore::Cannot_Use_Type_Scope_Operator_Outside_Type do
-			Ore.interp './x = 123'
+			Ore.interp './x := 123'
 		end
 	end
 
 	def test_look_up_dot_slash_with_dot_slash
-		out = Ore.interp '../y = 543
+		out = Ore.interp '../y := 543
 		../y'
 		assert_equal 543, out
 	end
@@ -635,7 +638,7 @@ class Interpreter_Test < Base_Test
 		A {
 			B {
 				C {
-					d = 4
+					d := 4
 				}
 			}
 		}'
@@ -655,7 +658,7 @@ class Interpreter_Test < Base_Test
 
 	def test_closures_do_capture_values
 		out = Ore.interp '
-		counter = -1
+		counter := -1
 		increment { count;
 			counter += count
 		}
@@ -672,7 +675,7 @@ class Interpreter_Test < Base_Test
 				input * input
 			}
 
-			result = square(5)
+			result := square(5)
 			result'
 			assert_equal 25, out
 		end
@@ -683,7 +686,7 @@ class Interpreter_Test < Base_Test
 		add { amount = 1, to = 4;
 			to + amount
 		}
-		inc = add() # should return 5
+		inc := add() # should return 5
 		add(inc, 1)'
 		assert_equal 6, out
 	end
@@ -710,20 +713,20 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_array_access_by_dot_index
-		out = Ore.interp 'things = [4, 8, 15]
+		out = Ore.interp 'things := [4, 8, 15]
 		things.0'
 		assert_equal 4, out
 	end
 
 	def test_array_nested_non_array_dot_index
 		assert_raises Ore::Invalid_Dot_Infix_Left_Operand do
-			Ore.interp 'things = [4, 8, 15]
+			Ore.interp 'things := [4, 8, 15]
 		things.0.1'
 		end
 	end
 
 	def test_nested_array_access_by_dot_index
-		out = Ore.interp 'things = [4, [8, 15, 16], 23, [42, 108, 418, 3]]
+		out = Ore.interp 'things := [4, [8, 15, 16], 23, [42, 108, 418, 3]]
 		(things.1.0, things.3.1)'
 		assert_instance_of Ore::Tuple, out
 		assert_equal 8, out.values.first
@@ -731,14 +734,14 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_function_scope
-		out = Ore.interp 'x = 123
+		out = Ore.interp 'x := 123
 		double {; x * 2 }
 		double()'
 		assert_equal 246, out
 	end
 
 	def test_function_scope_some_more
-		out = Ore.interp 'x = 108
+		out = Ore.interp 'x := 108
 
 		Doubler {
 			double {; x * 2 }
@@ -778,8 +781,8 @@ class Interpreter_Test < Base_Test
 		Atom {
 			new {;}
 		}
-		a = Atom()
-		b = Atom.new()
+		a := Atom()
+		b := Atom.new()
 		(a, b)'
 		refute out.values.first.has? :new
 		refute out.values.last.has? :new
@@ -787,7 +790,7 @@ class Interpreter_Test < Base_Test
 
 	def test_while_loops
 		out = Ore.interp '
-		x = 0
+		x := 0
 		while x < 4
 			x += 1
 		end
@@ -797,9 +800,9 @@ class Interpreter_Test < Base_Test
 
 	def test_fancy_while_loops
 		out = Ore.interp '
-		x = 0
-		y = 0
-		z = 0
+		x := 0
+		y := 0
+		z := 0
 		while x < 4
 			x += 1
 		elwhile y > -8
@@ -813,7 +816,7 @@ class Interpreter_Test < Base_Test
 
 	def test_until_loops
 		out = Ore.interp '
-		x = 1
+		x := 1
 		until x >= 23
 			x += 2
 		end
@@ -823,8 +826,8 @@ class Interpreter_Test < Base_Test
 
 	def test_fancy_until_loops
 		out = Ore.interp '
-		x = 1
-		y = 0
+		x := 1
+		y := 0
 		until x >= 23
 			x += 2
 		else
@@ -837,8 +840,8 @@ class Interpreter_Test < Base_Test
 
 	def test_control_flows_as_expressions
 		out = Ore.interp '
-		condition = false
-		x = unless condition # Equivalent to "if !condition"
+		condition := false
+		x := unless condition # Equivalent to "if !condition"
 			4
 		else
 			-4
@@ -849,19 +852,19 @@ class Interpreter_Test < Base_Test
 
 	def test_if_and_unless_control_flows
 		out = Ore.interp '
-		a = if true
+		a := if true
 			4
 		end
 
-		b = if false
+		b := if false
 			8
 		end
 
-		c = unless true
+		c := unless true
 			15
 		end
 
-		d = if not true
+		d := if not true
 			23
 		else
 			16
@@ -877,7 +880,7 @@ class Interpreter_Test < Base_Test
 		x,
 		y,
 
-		equal = x == y
+		equal := x == y
 		(x, y, equal)'
 		assert_equal out.values[0].object_id, out.values[1].object_id
 		assert_equal true, out.values[2]
@@ -886,7 +889,7 @@ class Interpreter_Test < Base_Test
 	def test_accessing_declarations_through_type_composition
 		out = Ore.interp "
 		Vec2 {
-			x = 0, y = 0
+			x := 0, y := 0
 
 			new { x, y;
 				.x = x
@@ -915,11 +918,11 @@ class Interpreter_Test < Base_Test
 			}
 		}
 
-		pos = Vec2(4, 8)
-		t = Transform(pos)
-		a = t.to_s()
+		pos := Vec2(4, 8)
+		t := Transform(pos)
+		a := t.to_s()
 		t.scale!(3)
-		b = t.to_s()
+		b := t.to_s()
 
 		# Let's remove Vec2 from a type that composes with Transform
 		Xform | Transform ~ Vec2 {}
@@ -939,13 +942,14 @@ class Interpreter_Test < Base_Test
 		refute_raises Ore::Undeclared_Identifier do
 			out = Ore.interp "
 			Vec2 {
-				x = 0, y = 0
+				x := 0, y := 0
 
 				new { x, y;
 					.x = x
 					.y = y
 				}
 			}
+			v := Vec2(4, 8)
 
 			Transform | Vec2 {
 				new { position = Vec2();
@@ -953,10 +957,13 @@ class Interpreter_Test < Base_Test
 					y = position.y
 				}
 			}
+			t := Transform(Vec2(15, 16))
 
-			Xform | Transform ~ Vec2 {}
-
-			Xform(Vec2(23, 42))
+			Xform | Transform ~ Vec2 {
+				# ~Vec2 removes x and y declarations, but retains Transform's new{;} so unless you declare a new initializer here, you are still required to pass in position arg from Transform, which depends on x and y, which have been removed.
+				new { p: Vec2; }
+			}
+			x := Xform(v)
 			"
 			assert_instance_of Ore::Instance, out
 			assert_equal ['Xform', 'Transform'], out.types
@@ -967,15 +974,15 @@ class Interpreter_Test < Base_Test
 		refute_raises Ore::Undeclared_Identifier do
 			out = Ore.interp '
 			Aa {
-				a = 1
+				a := 1
 			}
 			Bb {
-				a = 4, b = 2, unique = 10
+				a := 4, b := 2, unique := 10
 			}
 
 			Union | Aa | Bb {}
 
-			u = Union()
+			u := Union()
 			(u.a, u.b, u.unique)
 			'
 			assert_equal [1, 2, 10], out.values
@@ -985,27 +992,27 @@ class Interpreter_Test < Base_Test
 	def test_difference_composition
 		shared_code = "
 			Aa {
-				a = 8
-				common = 15
+				a := 8
+				common := 15
 			}
 
 			Bb {
-				b = 42
-				common = 16
+				b := 42
+				common := 16
 			}
 
 			AaBb | Aa | Bb {}
 
 			Diff | AaBb ~ Bb {
-				common = 23
+				common := 23
 			}
 
-			d = Diff()".freeze
+			d := Diff()".freeze
 
 		refute_raises Ore::Undeclared_Identifier do
 			out = Ore.interp "#{shared_code}
-			a = Aa()
-			b = Bb()
+			a := Aa()
+			b := Bb()
 			(d.a, a.common, b.common, d.common)"
 			assert_equal [8, 15, 16, 23], out.values
 		end
@@ -1018,12 +1025,12 @@ class Interpreter_Test < Base_Test
 
 	def test_intersection_composition
 		shared_code = "
-			Aa { a = 4,  common = 8 }
-			Bb { b = 15, common = 16 }
+			Aa { a := 4,  common := 8 }
+			Bb { b := 15, common := 16 }
 
 			Intersected | Aa & Bb {}
 
-			i = Intersected()"
+			i := Intersected()"
 
 		refute_raises Ore::Undeclared_Identifier do
 			out = Ore.interp "#{shared_code}
@@ -1044,11 +1051,11 @@ class Interpreter_Test < Base_Test
 
 	def test_symmetric_difference_composition
 		shared_code = "
-			Aa { a = 4, common = 10 }
-			Bb { b = 8, common = 10 }
+			Aa { a := 4, common := 10 }
+			Bb { b := 8, common := 10 }
 
 			Sym_Diff | Aa ^ Bb {}
-			s = Sym_Diff()\n"
+			s := Sym_Diff()\n"
 
 		out = Ore.interp "#{shared_code} (s.a, s.b)"
 		assert_equal [4, 8], out.values
@@ -1060,8 +1067,8 @@ class Interpreter_Test < Base_Test
 
 	def test_union_composition_is_left_biased
 		out = Ore.interp "
-		Aa { a = 4 }
-		Bb { a = 8 }
+		Aa { a := 4 }
+		Bb { a := 8 }
 		Union | Aa | Bb {}
 		Union().a"
 		assert_equal 4, out
@@ -1069,14 +1076,14 @@ class Interpreter_Test < Base_Test
 
 	def test_composition_with_inbody_declarations
 		out = Ore.interp "
-		Aa { a = 15 }
-		Bb { a = 16, b, }
+		Aa { a := 15 }
+		Bb { a := 16, b, }
 		Union {
 			# With or without space is valid
 			| Aa
 			|Bb
 		}
-		u = Union()
+		u := Union()
 		(u.a, u.b)"
 		assert_equal [15, nil], out.values
 	end
@@ -1094,18 +1101,18 @@ class Interpreter_Test < Base_Test
 
 	def test_html_element
 		out = Ore.interp "My_Div {
-			element = 'div'
+			element := 'div'
 
-			id = 'my_div'
-			class = 'my_class'
-			data_something = 'some data attribute'
+			id := 'my_div'
+			class := 'my_class'
+			data_something := 'some data attribute'
 
 			render {;
 				'Text content of this div'
 			}
 		}
 
-		it = My_Div()
+		it := My_Div()
 		(My_Div, it, it.render())"
 		assert_instance_of Ore::Type, out.values[0]
 		assert_instance_of Ore::Instance, out.values[1]
@@ -1132,7 +1139,7 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_load_assignment_into_variable_identifier
-		out = Ore.interp "mod = @use 'test/fixtures/test_module.ore'
+		out = Ore.interp "mod := @use 'test/fixtures/test_module.ore'
 		(mod, mod.MODULE_NAME, mod.MODULE_VALUE, mod.module_func(10))"
 
 		assert_instance_of Ore::Tuple, out
@@ -1143,13 +1150,13 @@ class Interpreter_Test < Base_Test
 
 		# Verify declarations are NOT in current scope
 		assert_raises Ore::Undeclared_Identifier do
-			Ore.interp "mod = @use 'test/fixtures/test_module.ore'
+			Ore.interp "mod := @use 'test/fixtures/test_module.ore'
 			MODULE_NAME"
 		end
 	end
 
 	def test_load_assignment_into_class_identifier
-		out = Ore.interp "Module = @use 'test/fixtures/test_module.ore'
+		out = Ore.interp "Module := @use 'test/fixtures/test_module.ore'
 		(Module, Module.MODULE_NAME, Module.MODULE_VALUE, Module.module_func(10))"
 
 		assert_instance_of Ore::Tuple, out
@@ -1160,13 +1167,13 @@ class Interpreter_Test < Base_Test
 
 		# Verify declarations are NOT in current scope
 		assert_raises Ore::Undeclared_Identifier do
-			Ore.interp "Module = @use 'test/fixtures/test_module.ore'
+			Ore.interp "Module := @use 'test/fixtures/test_module.ore'
 			MODULE_NAME"
 		end
 	end
 
 	def test_load_assignment_into_constant_identifier
-		out = Ore.interp "MODULE = @use 'test/fixtures/test_module.ore'
+		out = Ore.interp "MODULE := @use 'test/fixtures/test_module.ore'
 		(MODULE, MODULE.MODULE_NAME, MODULE.MODULE_VALUE, MODULE.module_func(10))"
 
 		assert_instance_of Ore::Tuple, out
@@ -1177,15 +1184,15 @@ class Interpreter_Test < Base_Test
 
 		# Verify declarations are NOT in current scope
 		assert_raises Ore::Undeclared_Identifier do
-			Ore.interp "MODULE = @use 'test/fixtures/test_module.ore'
+			Ore.interp "MODULE := @use 'test/fixtures/test_module.ore'
 			MODULE_NAME"
 		end
 	end
 
 	def test_load_same_file_into_multiple_scopes
 		out = Ore.interp "
-		lib1 = @use 'test/fixtures/test_module.ore'
-		lib2 = @use 'test/fixtures/test_module.ore'
+		lib1 := @use 'test/fixtures/test_module.ore'
+		lib2 := @use 'test/fixtures/test_module.ore'
 
 		(lib1, lib2, lib1.MODULE_VALUE, lib2.MODULE_VALUE, lib1 != lib2)"
 
@@ -1204,14 +1211,14 @@ class Interpreter_Test < Base_Test
 		assert_raises Ore::Cannot_Reassign_Constant do
 			out = Ore.interp "
 			@use 'test/fixtures/constants.ore'
-			@use 'test/fixtures/constants.ore'"
+			CODE = 123"
 		end
 	end
 
 	def test_for_loop
 		out = Ore.interp "
-		NUMBERS = [4, 8, 15, 16, 23, 42]
-		numbers = []
+		NUMBERS := [4, 8, 15, 16, 23, 42]
+		numbers := []
 
 		for NUMBERS
 			numbers << it
@@ -1224,14 +1231,14 @@ class Interpreter_Test < Base_Test
 	def test_for_loop_with_scopes
 		out = Ore.interp <<~ORE
 		    Numbers {
-		    	numbers = []
+		    	numbers := []
 
 				new { numbers;
 					.numbers = numbers
 				}
 
 		    	multiply { by;
-					result = []
+					result := []
 		    		for .numbers
 		    			result.push(it * by)
 		    		end
@@ -1246,8 +1253,8 @@ class Interpreter_Test < Base_Test
 
 	def test_for_loop_by_strides
 		out = Ore.interp "
-		NUMBERS = [4, 8, 15, 16, 23, 42]
-		numbers = []
+		NUMBERS := [4, 8, 15, 16, 23, 42]
+		numbers := []
 
 		for NUMBERS by 2
 			numbers << it
@@ -1259,7 +1266,7 @@ class Interpreter_Test < Base_Test
 
 	def test_for_loop_at_and_it_builtins
 		out = Ore.interp "
-		indices = []
+		indices := []
 
 		for [4, 8, 15, 16, 23, 42]
 			indices << '`at`: `it`'
@@ -1271,10 +1278,10 @@ class Interpreter_Test < Base_Test
 
 	def test_for_loop_with_ranges
 		out = Ore.interp "
-		zero = []
-		one = []
-		two = []
-		three = []
+		zero := []
+		one := []
+		two := []
+		three := []
 
 		for 1..5
 			zero << it
@@ -1302,7 +1309,7 @@ class Interpreter_Test < Base_Test
 
 	def test_for_loop_skip
 		out = Ore.interp "
-		result = []
+		result := []
 		for [1, 2, 3, 4, 5]
 			if it == 3
 				skip
@@ -1315,7 +1322,7 @@ class Interpreter_Test < Base_Test
 
 	def test_for_loop_stop
 		out = Ore.interp "
-		result = []
+		result := []
 		for [1, 2, 3, 4, 5]
 			if it == 3
 				stop
@@ -1328,7 +1335,7 @@ class Interpreter_Test < Base_Test
 
 	def test_for_loop_skip_with_index
 		out = Ore.interp "
-		result = []
+		result := []
 		for ['a', 'b', 'c', 'd']
 			if at == 1 or at == 2
 				skip
@@ -1341,7 +1348,7 @@ class Interpreter_Test < Base_Test
 
 	def test_for_loop_stop_with_index
 		out = Ore.interp "
-		result = []
+		result := []
 		for ['a', 'b', 'c', 'd']
 			if at == 2
 				stop
@@ -1354,7 +1361,7 @@ class Interpreter_Test < Base_Test
 
 	def test_nested_for_loop_stop
 		out = Ore.interp "
-		result = []
+		result := []
 
 		for 0..10
 			skip if it == 4
@@ -1494,8 +1501,8 @@ class Interpreter_Test < Base_Test
 
 	def test_for_loop_verbs_do_not_mutate
 		out = Ore.interp "
-		original = [1, 2, 3, 4, 5]
-		doubled = for original map
+		original := [1, 2, 3, 4, 5]
+		doubled := for original map
 			it * 2
 		end
 		original"
@@ -1504,8 +1511,8 @@ class Interpreter_Test < Base_Test
 
 	def test_while_loop_skip
 		out = Ore.interp "
-		result = []
-		x = 0
+		result := []
+		x := 0
 		while x < 5
 			x += 1
 			if x == 3
@@ -1519,8 +1526,8 @@ class Interpreter_Test < Base_Test
 
 	def test_while_loop_stop
 		out = Ore.interp "
-		result = []
-		x = 0
+		result := []
+		x := 0
 		while x < 10
 			x += 1
 			if x == 4
@@ -1534,8 +1541,8 @@ class Interpreter_Test < Base_Test
 
 	def test_until_loop_skip
 		out = Ore.interp "
-		result = []
-		x = 0
+		result := []
+		x := 0
 		until x >= 5
 			x += 1
 			if x == 2 or x == 4
@@ -1549,8 +1556,8 @@ class Interpreter_Test < Base_Test
 
 	def test_until_loop_stop
 		out = Ore.interp "
-		result = []
-		x = 0
+		result := []
+		x := 0
 		until x >= 10
 			x += 1
 			if x == 3
@@ -1565,8 +1572,8 @@ class Interpreter_Test < Base_Test
 	def test_unpack_parameter
 		out = Ore.interp "
 		Vector {
-			x = 0
-			y = 0
+			x := 0
+			y := 0
 
 			new { x, y;
 				.x = x
@@ -1578,7 +1585,7 @@ class Interpreter_Test < Base_Test
 			x + y
 		}
 
-		v = Vector(3, 4)
+		v := Vector(3, 4)
 		add(v)"
 		assert_equal 7, out
 	end
@@ -1586,8 +1593,9 @@ class Interpreter_Test < Base_Test
 	def test_unpack_identifier
 		out = Ore.interp "
 		Point {
-			a = 0
-			b = 0
+			a := 0
+			b := 0
+
 
 			new { a, b;
 				.a = a
@@ -1596,7 +1604,7 @@ class Interpreter_Test < Base_Test
 		}
 
 		calc {;
-			p = Point(10, 20)
+			p := Point(10, 20)
 			@ += p
 			a + b
 		}
@@ -1608,8 +1616,8 @@ class Interpreter_Test < Base_Test
 	def test_sibling_stack_manipulation_with_unpack_operator
 		out = Ore.interp "
 		Point {
-			a = 0
-			b = 0
+			a := 0
+			b := 0
 
 			new { a, b;
 				.a = a
@@ -1617,9 +1625,9 @@ class Interpreter_Test < Base_Test
 			}
 		}
 
-		p = Point(4, 8)
+		p := Point(4, 8)
 		@ += p
-		one = a + b
+		one := a + b
 		@ -= p
 
 		@ += Point(15, 16)
@@ -1630,8 +1638,8 @@ class Interpreter_Test < Base_Test
 	def test_unpack_and_nested_functions
 		out = Ore.interp "
 		Point {
-			a = 0
-			b = 0
+			a := 0
+			b := 0
 
 			new { a, b;
 				.a = a
@@ -1640,7 +1648,7 @@ class Interpreter_Test < Base_Test
 		}
 
 		outer {;
-			p = Point(23, 42)
+			p := Point(23, 42)
 			@ += p
 
 			inner {;
@@ -1677,13 +1685,13 @@ class Interpreter_Test < Base_Test
 		shared_code = <<~CODE
 		    Type {
 				# Instance declarations
-		    	number = 4
-		    	_private = 8
+		    	number := 4
+		    	_private := 8
 
 				# Static declarations
 				./nilled,
-		    	./static = 15
-		    	./_static_private = 16
+		    	./static := 15
+		    	./_static_private := 16
 
 				calling_private_through_instance {; _private }
 		    	calling_static_through_instance {; static }
@@ -1739,8 +1747,8 @@ class Interpreter_Test < Base_Test
 
 		assert_raises Ore::Cannot_Call_Private_Instance_Member do
 			Ore.interp "
-			Inner { _secret = 42 }
-		    Outer { inner = Inner() }
+			Inner { _secret := 42 }
+		    Outer { inner := Inner() }
             Outer().inner._secret"
 		end
 
@@ -1820,26 +1828,26 @@ class Interpreter_Test < Base_Test
 	def test_binding_and_privacy_with_composition
 		shared_code = <<~CODE
 		    Base {
-		    	base_instance_public = 1
-		    	_base_instance_private = 2
+		    	base_instance_public := 1
+		    	_base_instance_private := 2
 
-		    	./base_static_public = 10
-		    	./_base_static_private = 20
+		    	./base_static_public := 10
+		    	./_base_static_private := 20
 		    }
 
 		    Other {
-		    	other_instance = 3
-		    	_other_private = 4
+		    	other_instance := 3
+		    	_other_private := 4
 
-		    	./other_static_public = 30
-		    	./_other_static_private = 40
+		    	./other_static_public := 30
+		    	./_other_static_private := 40
 		    }
 		CODE
 
 		# Union composition - should merge all members
 		out = Ore.interp "#{shared_code}
 		Merged | Base | Other {}
-		m = Merged()
+		m := Merged()
 		(m.base_instance_public, m.other_instance)"
 		assert_equal [1, 3], out.values
 
@@ -1926,23 +1934,23 @@ class Interpreter_Test < Base_Test
 		# Intersection composition - keeps only shared members
 		shared_code = <<~CODE
 		    Left {
-		    	shared_instance = 1
-		    	_shared_private = 2
-		    	left_only = 3
+		    	shared_instance := 1
+		    	_shared_private := 2
+		    	left_only := 3
 
-		    	./shared_static = 10
-		    	./_shared_static_private = 20
-		    	./left_static_only = 30
+		    	./shared_static := 10
+		    	./_shared_static_private := 20
+		    	./left_static_only := 30
 		    }
 
 		    Right {
-		    	shared_instance = 4
-		    	_shared_private = 5
-		    	right_only = 6
+		    	shared_instance := 4
+		    	_shared_private := 5
+		    	right_only := 6
 
-		    	./shared_static = 40
-		    	./_shared_static_private = 50
-		    	./right_static_only = 60
+		    	./shared_static := 40
+		    	./_shared_static_private := 50
+		    	./right_static_only := 60
 		    }
 		CODE
 
@@ -2073,8 +2081,8 @@ class Interpreter_Test < Base_Test
 	def test_multiple_unpacks
 		shared_code = <<~ORE
 		    Point {
-		    	a = 0
-		    	b = 0
+		    	a := 0
+		    	b := 0
 
 		    	new { a, b;
 		    		.a = a
@@ -2084,23 +2092,23 @@ class Interpreter_Test < Base_Test
 		ORE
 
 		out = Ore.interp "#{shared_code}
-		p = Point(4, 8)
+		p := Point(4, 8)
 		@ += p
 		(a, b)"
 		assert_equal [4, 8], out.values
 
 		# note: Unpacks function like a stack, the most recent unpack is the one whose identifier takes precedence.
 		out = Ore.interp "#{shared_code}
-		p = Point(4, 8)
-		p2 = Point(15, 16)
+		p := Point(4, 8)
+		p2 := Point(15, 16)
 		@ += p
 		@ += p2
 		(a, b)"
 		assert_equal [15, 16], out.values
 
 		out = Ore.interp "#{shared_code}
-		p = Point(4, 8)
-		p2 = Point(15, 16)
+		p := Point(4, 8)
+		p2 := Point(15, 16)
 		@ += p
 		@ -= p2
 		(a, b)"
@@ -2141,7 +2149,7 @@ class Interpreter_Test < Base_Test
 
 	def test_html_fence_with_interpolation
 		out = Ore.interp "
-		name = 'Cooper'
+		name := 'Cooper'
 		```html
 		<h1>Welcome `name`</h1>
 		```"
@@ -2162,22 +2170,22 @@ class Interpreter_Test < Base_Test
 
 		App | Server {
 			get:// home {;
-				title = 'My Page'
+				title := 'My Page'
 				```html
 				<h1>`title`</h1>
 				```
 			}
 		}
 
-		app = App()
+		app := App()
 		app.home()"
 		assert out.include?('<h1>My Page</h1>')
 	end
 
 	def test_html_fence_multiline_with_interpolation
 		out = Ore.interp "
-		name = 'Alice'
-		count = 42
+		name := 'Alice'
+		count := 42
 		```html
 		<div>
 			<h1>Hello `name`</h1>
@@ -2231,35 +2239,31 @@ class Interpreter_Test < Base_Test
 
 	def test_manual_type_annotation_contract
 		err = assert_raises Ore::Type_Contract_Violation do
-			Ore.interp 'x: Number= 4, x = "hey"'
+			Ore.interp 'x: Number = 4, x = "hey"'
 		end
 		assert_match 'Number', err.message
 		assert_match 'String', err.message
 
 		# Fine if redeclared
-		Ore.interp 'x: Number= 4, x := "hey"'
+		Ore.interp 'x: Number = 4, x := "hey"'
 
 		err = assert_raises Ore::Type_Contract_Violation do
-			Ore.interp 'x: Number= 4, x := "hey", x = 8'
+			Ore.interp 'x: Number = 4, x := "hey", x = 8'
 		end
 		assert_match 'Number', err.message
 		assert_match 'String', err.message
 	end
 
-	def test_plain_equals_without_walrus_stays_dynamic
-		assert_equal 'anything', Ore.interp('x = 4, x = "anything", x')
-	end
-
 	def test_new_comma_nil_init
 		out = Ore.interp <<~CODE
-		    x = (abc,1)    # declares abc = nil
+		    x := (abc,1)    # declares abc = nil
 			(x, abc)
 		CODE
 		# [[nil, 1], nil]
 		assert_equal [nil, 1], out.values.first.values
 
 		out = Ore.interp <<~CODE
-		    abc=2, (abc,1),
+		    abc := 2, (abc,1),
 		CODE
 		assert_equal [2, 1], out.values
 	end
@@ -2272,7 +2276,7 @@ class Interpreter_Test < Base_Test
 		    }
 
 		    @operator : @infix 700 { hour, minute;
-		    	time = Time()
+		    	time := Time()
 		    	time.hour = hour
 		    	time.minute = minute
 		    	time
@@ -2304,7 +2308,7 @@ class Interpreter_Test < Base_Test
 		    }
 
 		    @operator $ @prefix 900 { amount;
-		    	c = Currency()
+		    	c := Currency()
 		    	c.amount = amount
 		    	c.name = 'US Dollar'
 		    	c.code = 'USD'
@@ -2321,14 +2325,14 @@ class Interpreter_Test < Base_Test
 
 	def test_operator_overload_scoped_to_function
 		out = Ore.interp <<~CODE
-		    scoped_result = compute {;
+		    scoped_result := compute {;
 		    	@operator + @infix 700 { left, right;
 		    		left * right
 		    	}
 		    	3 + 4
 		    }
 
-		    normal_result = 3 + 4
+		    normal_result := 3 + 4
 
 		    [scoped_result(), normal_result]
 		CODE
@@ -2368,12 +2372,12 @@ class Interpreter_Test < Base_Test
 
 	def test_dictionary_in_for_loops
 		out = Ore.interp <<~CODE
-		    dict = {
+		    dict := {
 		    	x = 4,
 		    	y = 8
 		    }
 
-		    collection = []
+		    collection := []
 		    for dict
 		    	collection << (at, it) # at is the string key, it is the vlaue
 		    end
@@ -2386,13 +2390,13 @@ class Interpreter_Test < Base_Test
 
 	def test_dictionary_in_for_loops_stride_is_ignored
 		out = Ore.interp <<~CODE
-		    dict = {
+		    dict := {
 		    	a = 15,
 		    	b = 16,
 				c = 23
 		    }
 
-		    collection = []
+		    collection := []
 		    for dict by 2
 		    	collection << (at, it) # at is the string key, it is the vlaue
 		    end

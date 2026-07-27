@@ -719,8 +719,14 @@ module Ore
 		end
 
 		# @param expr [Ore::Infix_Expr]
-		def interp_infix_equals expr
-			assignment_scope = scope_for_identifier expr.left
+		def interp_infix_assignment expr
+			assignment_scope = scope_for_identifier expr.left # Reminder; this returns a scope whether or not the identifier exists
+
+			# A type annotation (`x: Number = value`) is itself a declaration, so it's allowed to
+			# introduce a brand-new identifier just like `:=`, even though plain `=` otherwise
+			# requires the identifier to already exist.
+			has_type_annotation = expr.left.is_a?(Ore::Identifier_Expr) && expr.left.type
+			assignment_scope    ||= stack.last if has_type_annotation
 
 			# If using a scope operator but the scope doesn't exist, raise an error
 			if expr.left.is_a?(Ore::Identifier_Expr) && expr.left.scope_operator && assignment_scope.nil?
@@ -736,12 +742,11 @@ module Ore
 
 			# For plain identifiers (no scope operator) inside an Instance/Type body, new declarations should go to that Instance/Type, not to an enclosing scope that happens to have the same identifier. This fixes a bug that prevented HTML Layout's `title` from capturing Title's `title` declaration in examples/basic_html_page.ore.
 			if expr.left.is_a?(Ore::Identifier_Expr) && !expr.left.scope_operator
-				current_scope    = stack.last
-				assignment_scope ||= current_scope
+				current_scope = stack.last
 
 				if (current_scope.is_a?(Ore::Instance) || current_scope.is_a?(Ore::Type)) &&
 				   assignment_scope != current_scope && !current_scope.has?(expr.left.value)
-					# The identifier exists in an enclosing scope but not in the current
+					# The identifier exists in some enclosing scope but not in the current
 					# Instance/Type. Treat this as a new declaration on the current scope.
 					assignment_scope = current_scope
 				end
@@ -783,11 +788,19 @@ module Ore
 				right_value = interpret expr.right
 			end
 
+			# A Class-styled identifier (`My_Type = Other {}`) assigning a Scope value is itself a
+			# declaration, same reasoning as has_type_annotation above: `=` onto a fresh
+			# Class-styled name is how types get named/aliased, so it's allowed to introduce the
+			# identifier rather than requiring `:=` first.
+			is_class_declaration = Ore.type_of_identifier(expr.left.value) == :Identifier && right_value.is_a?(Ore::Scope)
+			assignment_scope     ||= stack.last if is_class_declaration
+
 			# Before the actual assignment, the identifier is checked for specific behavior errors based on its expression type (class, constant, variable/function)
 			case Ore.type_of_identifier expr.left.value
 			when :IDENTIFIER
-				# It can only be assigned once, so if the declaration exists, fail.
-				if assignment_scope.has? expr.left.value
+				# It can only be assigned once, so if the declaration exists, fail. An undeclared
+				# constant falls through to the Cannot_Reassign_Undeclared_Identifier check below.
+				if assignment_scope&.has? expr.left.value
 					raise Ore::Cannot_Reassign_Constant.new(expr.left, self)
 				end
 			when :Identifier
@@ -806,6 +819,11 @@ module Ore
 				end
 			end
 
+			unless assignment_scope && (assignment_scope.has?(expr.left.value) || has_type_annotation || is_class_declaration)
+				# it may not be declared using =
+				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr, self)
+			end
+
 			if expr.left.is_a?(Ore::Identifier_Expr) && expr.left.type
 				assignment_scope.type_by_identifier[expr.left.value] = expr.left.type.value
 			end
@@ -816,11 +834,41 @@ module Ore
 			return right_value
 		end
 
+		# todo; Types may be composed of multiple types, what happens in that case?
 		# @param expr [Ore::Infix_Expr]
-		def interp_infix_walrus expr
-			right_value      = interpret expr.right
-			assignment_scope = scope_for_identifier(expr.left) || stack.last
+		def interp_infix_declaration expr
+			# Only scope-operator forms (`../x`, `./x`, `.x`) target a specific scope. A plain `:=`
+			# always declares on the current scope, shadowing any identically-named identifier in an
+			# enclosing scope rather than re-declaring on it.
+			has_scope_operator = expr.left.is_a?(Ore::Identifier_Expr) && expr.left.scope_operator
+			assignment_scope   = scope_for_identifier expr.left if has_scope_operator
+
+			# If using a scope operator but the scope doesn't exist, raise an error
+			# (mirrors interp_infix_assignment).
+			if has_scope_operator && assignment_scope.nil?
+				case expr.left.scope_operator.value
+				when '.'
+					raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr, self)
+				when './'
+					raise Ore::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr, self)
+				else
+					raise Ore::Invalid_Scope_Syntax.new(expr, self)
+				end
+			end
+
+			assignment_scope ||= stack.last
+
+			right_value = if expr.right.is_a?(Ore::Directive_Expr) && expr.right.name.value == Ore::IMPORT_FILE_DIRECTIVE
+				filepath  = interpret expr.right.expression
+				new_scope = Ore::Scope.new expr.left.value
+				load_file_into_scope filepath, new_scope
+				new_scope
+			else
+				interpret expr.right
+			end
+
 			assignment_scope.declare expr.left.value, right_value
+
 			assignment_scope.type_by_identifier[expr.left.value] = type_name_to_string right_value
 			track_static_declaration assignment_scope, expr.left
 			right_value
@@ -844,7 +892,7 @@ module Ore
 			when Ore::Dictionary
 				interp_dot_dictionary expr
 			else
-				# @copypaste from #interp_dot_scope because we already interpreted expr as 'left'. If #interp_dot_scope interprets expr again, we end up with duplicate duplicate isntnatiations
+				# @copypaste from #interp_dot_scope because we already interpreted expr as 'left'. If #interp_dot_scope interprets expr again, we end up with duplicate duplicate instantiations
 
 				if expr.right.instance_of? Ore::Type_Expr
 					push_scope receiver
@@ -961,6 +1009,19 @@ module Ore
 		# @param expr [Ore::Nil_Init_Expr]
 		def interp_nil_init expr
 			# attr_accessor :operator, :left, :right
+			current_scope = stack.last
+
+			# Same shadowing fix as interp_infix_assignment: inside an Instance/Type body, a plain
+			# identifier's nil-init must declare on the current Instance/Type even if an enclosing
+			# scope (e.g. the Type, whose body already ran once at definition time) already has an
+			# identically-named identifier. Otherwise re-running `thing,` per-instance in
+			# interp_type_call finds the Type's stale copy and never declares it on the instance.
+			if (current_scope.is_a?(Ore::Instance) || current_scope.is_a?(Ore::Type)) && !current_scope.has?(expr.left.value)
+				current_scope.declare expr.left.value, interpret(expr.right)
+				track_static_declaration current_scope, expr.left
+				return current_scope.get expr.left.value
+			end
+
 			begin
 				return interpret expr.left
 			rescue # Ore::Undeclared_Identifier and ArgumentError # todo: Why `ArgumentError: empty string`. Once this is resolved, then the rescue here should explicitly catch Undeclared_Identifier, probably.
@@ -975,9 +1036,9 @@ module Ore
 		def interp_infix expr
 			case expr.operator.value
 			when '='
-				interp_infix_equals expr
+				interp_infix_assignment expr
 			when ':='
-				interp_infix_walrus expr
+				interp_infix_declaration expr
 			when '.'
 				interp_dot_infix expr
 			when '<<'
@@ -1150,6 +1211,21 @@ module Ore
 		end
 
 		def interp_call expr
+			# `X.new(...)` parses as Call_Expr(receiver: Infix_Expr(X, '.', new), arguments: [...]).
+			# Intercept it here, before evaluating the receiver, so we don't route through
+			# interp_dot_new (which eagerly builds a whole Instance for bare `X.new`) and then
+			# build a second Instance via interp_type_call below. Bare `X.new` with no call
+			# still goes through interp_dot_new untouched, since it never reaches interp_call.
+			if expr.receiver.is_a?(Ore::Infix_Expr) && expr.receiver.operator&.value == '.' && expr.receiver.right.is('new')
+				type = interpret expr.receiver.left
+
+				unless type.is_a? Ore::Type
+					raise Ore::Cannot_Initialize_Non_Type_Identifier.new(expr.receiver.left, self)
+				end
+
+				return interp_type_call type, expr
+			end
+
 			receiver = interpret expr.receiver
 
 			case receiver
@@ -1192,22 +1268,21 @@ module Ore
 			type
 		end
 
+		#
+		# Ore::Type_Expr is converted to Ore::Type in #interp_type.
+		# Ore::Instance inherits Ore::Type's @name and @types.
+		#
+		#     (See types.rb for Ore::Type and Ore::Instance declarations)
+		#     (See expressions.rb for Ore::Type_Expr declaration)
+		#
+		# - Push instance onto stack
+		# - Interpret type.expressions so the declarations are made on the instance
+		# - Keep instance on the stack
+		# - For each Ore::Func declared on instance, set `func.enclosing_scope = instance`
+		# - Interpret instance[:new], the initializer
+		# - Delete :new from instance, no longer needed
+		#
 		def interp_type_call type, expr
-			#
-			# Ore::Type_Expr is converted to Ore::Type in #interp_type.
-			# Ore::Instance inherits Ore::Type's @name and @types.
-			#
-			#     (See types.rb for Ore::Type and Ore::Instance declarations)
-			#     (See expressions.rb for Ore::Type_Expr declaration)
-			#
-			# - Push instance onto stack
-			# - Interpret type.expressions so the declarations are made on the instance
-			# - Keep instance on the stack
-			# - For each Ore::Func declared on instance, set `func.enclosing_scope = instance`
-			# - Interpret instance[:new], the initializer
-			# - Delete :new from instance, no longer needed
-			#
-
 			ruby_class = find_ruby_class_for_type type
 			instance   = ruby_class ? ruby_class.new : Ore::Instance.new(type.name)
 
@@ -1222,7 +1297,7 @@ module Ore
 					push_then_pop instance do |scope|
 						type.expressions.each do |expr|
 							# Skip static declarations - they were already executed during type definition and shouldn't be re-executed for each instance
-							if expr.is_a?(Ore::Infix_Expr) && expr.operator&.value == '=' &&
+							if expr.is_a?(Ore::Infix_Expr) && expr.operator&.value == ':=' &&
 							   expr.left.is_a?(Ore::Identifier_Expr) && expr.left.scope_operator&.value == './'
 								next
 							end
@@ -1833,7 +1908,7 @@ module Ore
 				# Standalone load is interpreted into current scope by passing the scope into runtime#load_file
 				filepath = interpret expr.expression
 				load_file_into_scope filepath, stack.last
-				# note: #load_file_into_scope returns the output but it's ignored. Assigning the value of a @use directive executres code in #interp_infix_expr
+				# note: #load_file_into_scope returns the output but it's ignored. Assigning the value of a @use directive executes code in #interp_infix_expr
 			else
 				# todo: Allow builtins to be extended by the user. Requirements would be:
 				#   1) Create type in Ore

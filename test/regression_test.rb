@@ -36,26 +36,26 @@ class Regression_Test < Base_Test
 	end
 
 	def test_dot_slash_regression
-		out = Ore.interp '.x = 123'
+		out = Ore.interp '.x := 123'
 		assert_equal 123, out
 	end
 
 	def test_look_up_tilde_slash_without_dot_slash_regression
-		out = Ore.interp '../x = 456
+		out = Ore.interp '../x := 456
 		x'
 		assert_equal 456, out
 	end
 
 	def test_look_up_tilde_slash_with_dot_slash_regression
-		out = Ore.interp '../y = 789
+		out = Ore.interp '../y := 789
 		../y'
 		assert_equal 789, out
 	end
 
 	def test_dot_slash_within_infix_regression
-		out = Ore.parse '.x? = 123'
+		out = Ore.parse '.x? := 123'
 		assert_kind_of Ore::Infix_Expr, out.first
-		assert_equal '=', out.first.operator.value
+		assert_equal ':=', out.first.operator.value
 		assert_equal 'x?', out.first.left.value
 		assert_kind_of Ore::Identifier_Expr, out.first.left
 		assert_equal '.', out.first.left.scope_operator.value
@@ -72,7 +72,7 @@ class Regression_Test < Base_Test
 	end
 
 	def test_assigning_false_value_regression
-		out = Ore.interp 'how = false
+		out = Ore.interp 'how := false
 		how'
 		assert_equal false, out
 	end
@@ -87,8 +87,8 @@ class Regression_Test < Base_Test
 		Atom {
 			new {;}
 		}
-		a = Atom()
-		b = Atom.new()
+		a := Atom()
+		b := Atom.new()
 		(a, b)'
 		refute out.values.first.has? :new
 		refute out.values.last.has? :new
@@ -96,13 +96,13 @@ class Regression_Test < Base_Test
 
 	def test_dot_new_initializer_regression
 		out = Ore.interp 'Number {
-			numerator = 8
+			numerator := 8
 
 			new { num;
 				.numerator = num
 			}
 		}
-		x = Number.new(15)
+		x := Number.new(15)
 		x.numerator'
 		assert_equal 15, out
 	end
@@ -110,13 +110,13 @@ class Regression_Test < Base_Test
 	def test_calling_member_functions
 		out = Ore.interp '
 		Number {
-			numerator = -100
+			numerator := -100
 
 			new { num;
 				.numerator = num
 			}
 		}
-		x = Number(4)
+		x := Number(4)
 		x.numerator'
 		assert_equal 4, out
 	end
@@ -124,7 +124,7 @@ class Regression_Test < Base_Test
 	def test_dot_slash_regression
 		out = Ore.interp '
 		Box {
-			kind = "NONE"
+			kind := "NONE"
 
 			new { new_kind;
 				.kind = new_kind
@@ -135,10 +135,10 @@ class Regression_Test < Base_Test
 			}
 		}
 
-		b1 = Box("Big")
-		s1 = b1.to_s()
-		b2 = Box("Small")
-		s2 = b2.to_s()
+		b1 := Box("Big")
+		s1 := b1.to_s()
+		b2 := Box("Small")
+		s2 := b2.to_s()
 		(b1, s1, b2, s2)
 		'
 		assert_instance_of Ore::Instance, out.values[0]
@@ -147,27 +147,27 @@ class Regression_Test < Base_Test
 	end
 
 	def test_identifier_lookup_regression
-		out = Ore.interp "x = 123
+		out = Ore.interp "x := 123
 		funk {;
 			../x + 2
 		}
 		funk()"
 		assert_equal 125, out
 
-		out = Ore.interp "y = 0
+		out = Ore.interp "y := 0
 		add { amount_to_add = 1;
 			../y + amount_to_add
 		}
-		(a = add(4))
+		(a := add(4))
 
 		(a, add(a * 2))"
 		assert_equal [4, 8], out.values
 
-		out = Ore.interp "y = 0
+		out = Ore.interp "y := 0
 		add { amount_to_add = 1;
 			y += amount_to_add
 		}
-		a = add(4)
+		a := add(4)
 
 		(y, a)"
 		assert_equal [4, 4], out.values
@@ -176,7 +176,7 @@ class Regression_Test < Base_Test
 			out = Ore.interp "
 			Thing {
 				id,
-				name = 'Thingy'
+				name := 'Thingy'
 
 				new { new_name = '', id = 123;
 					.name = new_name
@@ -184,8 +184,8 @@ class Regression_Test < Base_Test
 				}
 			}
 
-			t1 = Thing()
-			t2 = Thing('Thingus', 456)
+			t1 := Thing()
+			t2 := Thing('Thingus', 456)
 
 			(t1.id, t1.name, t2.id, t2.name)"
 			assert_equal [123, "", 456, "Thingus"], out.values
@@ -195,7 +195,7 @@ class Regression_Test < Base_Test
 			out = Ore.interp "
 			Thing {
 				id,
-				name = 'Thingy',
+				name := 'Thingy',
 
 				new { new_name, id;
 					.name = new_name
@@ -203,7 +203,7 @@ class Regression_Test < Base_Test
 				}
 			}
 
-			t = Thing() # This will raise
+			t := Thing() # This will raise
 			(t.id, t.name)"
 			assert_equal [456, "Thingus"], out.values
 		end
@@ -309,8 +309,8 @@ class Regression_Test < Base_Test
 		    	}
 		    }
 
-		    outer = Outer("outer_value")
-		    inner = outer.make_inner()
+		    outer := Outer("outer_value")
+		    inner := outer.make_inner()
 		    (outer.name, inner.get_name())
 		CODE
 		assert_equal "outer_value", out.values[0]
@@ -340,9 +340,9 @@ class Regression_Test < Base_Test
 		CODE
 
 		out = Ore.interp <<~CODE
-		    values = Array([1,2,3])
+		    values := Array([1,2,3])
 		    #{without_prefix}
-		    values2 = []
+		    values2 := []
 		    values.each({it;
 		    	values2.push(it)
 		    })
@@ -351,9 +351,9 @@ class Regression_Test < Base_Test
 		assert_equal [1, 2, 3], out.values
 
 		out = Ore.interp <<~CODE
-		    values = Array([1,2,3])
+		    values := Array([1,2,3])
 		    #{with_prefix}
-		    values2 = []
+		    values2 := []
 		    values.each({it;
 		    	values2.push(it)
 		    })
@@ -394,7 +394,7 @@ class Regression_Test < Base_Test
 	def test_accessing_dictionary_keys_with_dot
 		# todo: I plan to make the x inside {x} to set x to whatever x happens to evaluate to. When that happens, {x}.x should return 123!
 		out = Ore.interp <<~ORE
-		    x = 123
+		    x := 123
 		    {x}.x
 		ORE
 		assert_nil out
@@ -408,15 +408,15 @@ class Regression_Test < Base_Test
 	end
 
 	def test_ranges_with_expression
-		assert_instance_of Ore::Range, Ore.interp("x=1, 0..x")
-		assert_instance_of Ore::Range, Ore.interp("x=1, y=2, 0..(x + y)")
+		assert_instance_of Ore::Range, Ore.interp("x:=1, 0..x")
+		assert_instance_of Ore::Range, Ore.interp("x:=1, y:=2, 0..(x + y)")
 	end
 
 	# Regression: types loaded via `variable = @use 'file.ore'` were missing enclosing_scope in interp_type
 	def test_use_with_variable_can_reference_sibling_types
 		out = Ore.interp <<~ORE
-		    lib = @use 'test/fixtures/use_with_variable_sibling_types.ore'
-		    m = lib.Main_Type()
+		    lib := @use 'test/fixtures/use_with_variable_sibling_types.ore'
+		    m := lib.Main_Type()
 		    m.get_sibling_value()
 		ORE
 		assert_equal 42, out
@@ -425,8 +425,8 @@ class Regression_Test < Base_Test
 	# Regression: sibling types should also be accessible from within functions (not just type body)
 	def test_use_with_variable_can_reference_sibling_types_in_function
 		out = Ore.interp <<~ORE
-		    lib = @use 'test/fixtures/use_with_variable_sibling_types.ore'
-		    m = lib.Main_Type()
+		    lib := @use 'test/fixtures/use_with_variable_sibling_types.ore'
+		    m := lib.Main_Type()
 		    m.create_sibling_in_func()
 		ORE
 		assert_equal 42, out
@@ -443,9 +443,9 @@ class Regression_Test < Base_Test
 		# Interpreter test: chained dot + subscript read
 		out = Ore.interp <<~ORE
 		    Box {
-		        items = [10, 20, 30]
+		        items := [10, 20, 30]
 		    }
-		    b = Box()
+		    b := Box()
 		    b.items[1]
 		ORE
 		assert_equal 20, out
@@ -453,9 +453,9 @@ class Regression_Test < Base_Test
 		# Interpreter test: chained dot + subscript assignment
 		out = Ore.interp <<~ORE
 		    Box {
-		        data = {x: 1, y: 2}
+		        data := {x: 1, y: 2}
 		    }
-		    b = Box()
+		    b := Box()
 		    b.data[:z] = 3
 		    b.data[:z]
 		ORE
@@ -464,12 +464,12 @@ class Regression_Test < Base_Test
 		# Deeper chain: a.b.c[d]
 		out = Ore.interp <<~ORE
 		    Inner {
-		        values = [100, 200]
+		        values := [100, 200]
 		    }
 		    Outer {
-		        inner = Inner()
+		        inner := Inner()
 		    }
-		    o = Outer()
+		    o := Outer()
 		    o.inner.values[0]
 		ORE
 		assert_equal 100, out

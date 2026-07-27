@@ -2,7 +2,7 @@
 @use 'ore/server.ore'
 
 Inverted_Html | Html {
-	css_filter = 'invert()'
+	css_filter := 'invert()'
 }
 
 App | Server {

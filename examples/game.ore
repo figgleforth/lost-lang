@@ -1,13 +1,14 @@
 @use 'ore/database.ore'
+@use 'ore/table.ore'
 
 Position {
-	C = 0
-	LW = 1
-	RW = 2
-	LD = 3
-	RD = 4
-	G = 5
-	ANY = 6
+	C := 0
+	LW := 1
+	RW := 2
+	LD := 3
+	RD := 4
+	G := 5
+	ANY := 6
 
 }
 
@@ -27,19 +28,19 @@ Player | Table {
 	university,
 
 	# Physical
-	height_in_cm = 150
-	weight_in_kg = 75
-	hand = 0
+	height_in_cm := 150
+	weight_in_kg := 75
+	hand := 0
 
 	# Position
-	natural_position = Position.ANY
+	natural_position := Position.ANY
 	current_position,
 
 	# Game attributes
 	max_mods,
-	qualities = {}
-	chemistries = {}
-	connections = []
+	qualities := {}
+	chemistries := {}
+	connections := []
 	average_chemistry,
 	strategy_id,
 

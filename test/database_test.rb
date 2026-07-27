@@ -22,8 +22,8 @@ class Database_Test < Base_Test
 	def test_database_instance
 		out = Ore.interp <<~ORE
 		    #{DATABASE}
-			db = Database()
-		    sq = Sqlite('#{@filepath}')
+			db := Database()
+		    sq := Sqlite('#{@filepath}')
 			(db, sq)
 		ORE
 		assert_instance_of Ore::Database, out.values.first
@@ -42,7 +42,7 @@ class Database_Test < Base_Test
 	def test_database_connection_instance
 		out = Ore.interp <<~ORE
 		    #{DATABASE}
-		    db = Sqlite('#{@filepath}')
+		    db := Sqlite('#{@filepath}')
 		    @connect db
 			db.connection
 		ORE
@@ -53,9 +53,9 @@ class Database_Test < Base_Test
 	def test_database_connection_is_cached
 		out = Ore.interp <<~ORE
 		    #{DATABASE}
-		    db = Sqlite('#{@filepath}')
-		    c1 = @connect db
-		    c2 = @connect db
+		    db := Sqlite('#{@filepath}')
+		    c1 := @connect db
+		    c2 := @connect db
 		    (c1, c2)
 		ORE
 		assert_equal out.values[0].object_id, out.values[1].object_id
@@ -64,11 +64,11 @@ class Database_Test < Base_Test
 	def test_inferring_record_table_name
 		out = Ore.interp <<~ORE
 		    #{RECORD}
-			r = Table()
+			r := Table()
 			r.table_name
 
 			Thing | Table {}
-			t = Thing()
+			t := Thing()
 			t.infer_table_name_from_class!()
 			(r, t)
 		ORE
@@ -79,14 +79,14 @@ class Database_Test < Base_Test
 	def test_connect_directive_creates_database_connection
 		out = Ore.interp <<~ORE
 		    #{DATABASE}
-		    db = Sqlite('#{@filepath}')
+		    db := Sqlite('#{@filepath}')
 			db.connection
 		ORE
 		assert_nil out
 
 		out = Ore.interp <<~ORE
 		    #{DATABASE}
-		    db = Sqlite('#{@filepath}')
+		    db := Sqlite('#{@filepath}')
 			@connect db
 			db.connection
 		ORE
@@ -96,12 +96,12 @@ class Database_Test < Base_Test
 	def test_creating_table
 		out = Ore.interp <<~ORE
 		    #{DATABASE}
-		    db = Sqlite('#{@filepath}')
+		    db := Sqlite('#{@filepath}')
 			@connect db
 
-			pre_tables = db.tables()
+			pre_tables := db.tables()
 			db.create_table('users' { id: 'primary_key' })
-			post_tables = db.tables()
+			post_tables := db.tables()
 
 			(pre_tables, post_tables)
 		ORE
@@ -111,23 +111,23 @@ class Database_Test < Base_Test
 	def test_record_database_reference
 		out = Ore.interp <<~ORE
 		    #{DATABASE}, #{RECORD}
-		    db = @connect Sqlite('#{@filepath}')
+		    db := @connect Sqlite('#{@filepath}')
 
 			db.create_table('users' { id: 'primary_key', name: 'String' })
 
 			User | Table {
-				./database = db
-				table_name = 'users'
+				./database := db
+				table_name := 'users'
 			}
 
-			none = User.all()
-			cooper_id = User.create({name: 'Cooper'})
-			cooper = User.find(cooper_id)
+			none := User.all()
+			cooper_id := User.create({name: 'Cooper'})
+			cooper := User.find(cooper_id)
 
-			luna_id = User.create({name: 'Luna'})
-			luna = User.find(luna_id)
+			luna_id := User.create({name: 'Luna'})
+			luna := User.find(luna_id)
 
-			users = User.all()
+			users := User.all()
 			(none, users, cooper, luna, db.table_exists?('users'))
 		ORE
 		assert_equal 0, out.values[0].values.count
@@ -142,7 +142,7 @@ class Database_Test < Base_Test
 		refute_raises do
 			Ore.interp <<~ORE
 			    #{DATABASE}
-			    db = @connect Sqlite('#{@filepath}')
+			    db := @connect Sqlite('#{@filepath}')
 				db.create_table('things', {
 					id: 'primary_key',
 					label: 'String',
@@ -158,16 +158,16 @@ class Database_Test < Base_Test
 	def test_record_update
 		out = Ore.interp <<~ORE
 		    #{DATABASE}, #{RECORD}
-		    db = @connect Sqlite('#{@filepath}')
+		    db := @connect Sqlite('#{@filepath}')
 
 			db.create_table('users', { id: 'primary_key', name: 'String' })
 
 			User | Table {
-				./database = db
-				table_name = 'users'
+				./database := db
+				table_name := 'users'
 			}
 
-			id = User.create({name: 'Cooper'})
+			id := User.create({name: 'Cooper'})
 			User.update(id, {name: 'Cooper Updated'})
 			User.find(id)
 		ORE
@@ -177,13 +177,13 @@ class Database_Test < Base_Test
 	def test_record_find_by
 		out = Ore.interp <<~ORE
 		    #{DATABASE}, #{RECORD}
-		    db = @connect Sqlite('#{@filepath}')
+		    db := @connect Sqlite('#{@filepath}')
 
 			db.create_table('users', { id: 'primary_key', name: 'String' })
 
 			User | Table {
-				./database = db
-				table_name = 'users'
+				./database := db
+				table_name := 'users'
 			}
 
 			User.create({name: 'Cooper'})
@@ -196,13 +196,13 @@ class Database_Test < Base_Test
 	def test_record_find_by_returns_nil_when_not_found
 		out = Ore.interp <<~ORE
 		    #{DATABASE}, #{RECORD}
-		    db = @connect Sqlite('#{@filepath}')
+		    db := @connect Sqlite('#{@filepath}')
 
 			db.create_table('users', { id: 'primary_key', name: 'String' })
 
 			User | Table {
-				./database = db
-				table_name = 'users'
+				./database := db
+				table_name := 'users'
 			}
 
 			User.find_by({name: 'nobody'})
@@ -213,13 +213,13 @@ class Database_Test < Base_Test
 	def test_record_where
 		out = Ore.interp <<~ORE
 		    #{DATABASE}, #{RECORD}
-		    db = @connect Sqlite('#{@filepath}')
+		    db := @connect Sqlite('#{@filepath}')
 
 			db.create_table('items', { id: 'primary_key', name: 'String', kind: 'String' })
 
 			Item | Table {
-				./database = db
-				table_name = 'items'
+				./database := db
+				table_name := 'items'
 			}
 
 			Item.create({name: 'Apple', kind: 'fruit'})

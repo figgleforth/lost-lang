@@ -1,5 +1,5 @@
 Person {
-    ./count = 0
+    ./count := 0
 
     new {;
         ./count += 1

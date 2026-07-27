@@ -10,12 +10,12 @@ Learn about the language below, or *[click here to get started using it](getting
 ## Variables
 
 1. Must start with a lowercase letter or `_`
-2. Can be followed by comma as shorthand for `= nil`
+2. Can be followed by comma as shorthand for `:= nil`
 
 ```ore
-nothing = nil
-something = 123
-empty,  # equivalent to `empty = nil`
+nothing := nil
+something := 123
+empty,  # equivalent to `empty := nil`
 ```
 
 ## Functions
@@ -59,7 +59,7 @@ My_Class {
     }
 }
 
-instance = My_Class('some input')  #=> Initted with "some input"
+instance := My_Class('some input')  #=> Initted with "some input"
 ```
 
 ## Constants
@@ -68,9 +68,9 @@ instance = My_Class('some input')  #=> Initted with "some input"
 2. Cannot be reassigned after initial declaration
 
 ```ore
-PI = 3.14159
-MAX_SIZE = 100
-APP_NAME = 'My App'
+PI := 3.14159
+MAX_SIZE := 100
+APP_NAME := 'My App'
 ```
 
 ## Comments
@@ -93,10 +93,10 @@ multiline comment
 2. Escape with backslash to prevent interpolation
 
 ```ore
-name = 'World'
-greeting = "Hello, `name`!"  #=> "Hello, World!"
-math = "2 + 2 = `2 + 2`"    #=> "2 + 2 = 4"
-escaped = "Literal \`backticks\`"
+name := 'World'
+greeting := "Hello, `name`!"  #=> "Hello, World!"
+math := "2 + 2 = `2 + 2`"    #=> "2 + 2 = 4"
+escaped := "Literal \`backticks\`"
 ```
 
 ## Scope Operators
@@ -107,7 +107,7 @@ escaped = "Literal \`backticks\`"
 
 ```ore
 My_Class {
-    ./count = 0      # Type-level (static) variable
+    ./count := 0     # Type-level (static) variable
     value,
 
     new { value;
@@ -129,7 +129,7 @@ My_Class {
 
 ```ore
 Counter {
-    ./count = 0
+    ./count := 0
 
     ./increment {;
         count += 1
@@ -154,8 +154,8 @@ Counter.count  #=> 2
 
 ```ore
 Movable {
-    x = 0
-    y = 0
+    x := 0
+    y := 0
     move { dx, dy;
         x += dx
         y += dy
@@ -163,16 +163,16 @@ Movable {
 }
 
 Drawable {
-    color = 'black'
+    color := 'black'
     draw {; "Drawing in `color`" }
 }
 
 # Combine types
 Sprite | Movable | Drawable {
-    name = 'sprite'
+    name := 'sprite'
 }
 
-s = Sprite()
+s := Sprite()
 s.move(10, 5)
 s.draw()
 ```
@@ -208,21 +208,21 @@ end
 3. `elwhile` chains another loop when prior condition becomes false
 
 ```ore
-i = 0
+i := 0
 while i < 5
     @puts i
     i += 1
 end
 
-j = 0
+j := 0
 until j == 5
     @puts j
     j += 1
 end
 
 # Chained loops with elwhile
-x = 0
-y = 0
+x := 0
+y := 0
 while x < 4
     x += 1
 elwhile y > -8
@@ -262,19 +262,19 @@ end
 4. `count` counts where body is truthy
 
 ```ore
-doubled = for [1, 2, 3] map
+doubled := for [1, 2, 3] map
     it * 2
 end  #=> [2, 4, 6]
 
-evens = for [1, 2, 3, 4, 5] select
+evens := for [1, 2, 3, 4, 5] select
     it % 2 == 0
 end  #=> [2, 4]
 
-odds = for [1, 2, 3, 4, 5] reject
+odds := for [1, 2, 3, 4, 5] reject
     it % 2 == 0
 end  #=> [1, 3, 5]
 
-even_count = for [1, 2, 3, 4, 5, 6] count
+even_count := for [1, 2, 3, 4, 5, 6] count
     it % 2 == 0
 end  #=> 3
 ```
@@ -308,8 +308,8 @@ Sibling scopes are checked before the current scope during identifier lookup, ma
 
 ```ore
 Vector {
-    x = 0
-    y = 0
+    x := 0
+    y := 0
 }
 
 # Auto-unpack in parameters
@@ -317,7 +317,7 @@ magnitude { @vec;
     (x ** 2 + y ** 2).sqrt()  # Access x, y directly
 }
 
-v = Vector()
+v := Vector()
 v.x = 3
 v.y = 4
 magnitude(v)  #=> 5
@@ -333,7 +333,7 @@ magnitude(v)  #=> 5
 2. Access elements with subscript or dot notation
 
 ```ore
-arr = [1, 2, 3, 4, 5]
+arr := [1, 2, 3, 4, 5]
 arr[0]              #=> 1
 arr.0               #=> 1 (dot notation)
 
@@ -357,7 +357,7 @@ arr.filter({ x; x > 2 })
 3. Access with subscript `dict[:key]`
 
 ```ore
-dict = {x: 10, y: 20}
+dict := {x: 10, y: 20}
 dict[:x]            #=> 10
 dict[:z] = 30       # Assignment
 
@@ -374,7 +374,7 @@ dict.fetch(:missing, 'default')
 ## Strings
 
 ```ore
-s = 'Hello, World!'
+s := 'Hello, World!'
 s.length            #=> 13
 s.upcase()          #=> 'HELLO, WORLD!'
 s.downcase()        #=> 'hello, world!'
@@ -393,7 +393,7 @@ s.empty?()          #=> false
 ## Numbers
 
 ```ore
-n = 42
+n := 42
 n.abs()             # Absolute value
 n.floor()           # Round down
 n.ceil()            # Round up
@@ -428,7 +428,7 @@ end
 ```ore
 @use 'ore/file_system.ore'
 
-content = File_System.read('./file.txt')
+content := File_System.read('./file.txt')
 File_System.write_string_to_file('./out.txt', 'Hello!')
 ```
 
@@ -502,7 +502,7 @@ App | Server {
 
     # Query strings: /search?q=term
     get://search {;
-        query = request.query[:q]
+        query := request.query[:q]
         "Searching for `query`"
     }
 }
@@ -512,8 +512,8 @@ App | Server {
 
 ```ore
 post://login {;
-    username = request.body[:username]
-    password = request.body[:password]
+    username := request.body[:username]
+    password := request.body[:password]
 
     if authenticate(username, password)
         response.redirect('/dashboard')
@@ -537,7 +537,7 @@ get://api/data {;
 ```ore
 @use 'ore/database.ore'
 
-db = Sqlite('./data/app.db')
+db := Sqlite('./data/app.db')
 @connect db
 
 db.create_table('users', {
@@ -560,14 +560,14 @@ db.delete_table('users')
 @use 'ore/record.ore'
 
 User | Record {
-    ./database = ../db
-    table_name = 'users'
+    ./database := ../db
+    table_name := 'users'
 }
 
 # CRUD operations
 User.create({name: 'Alice', email: 'alice@example.com'})
-users = User.all()        #=> Array of Dictionaries
-user = User.find(1)       #=> Dictionary
+users := User.all()       #=> Array of Dictionaries
+user := User.find(1)      #=> Dictionary
 User.delete(1)
 ```
 
@@ -581,21 +581,21 @@ User.delete(1)
 @use 'ore/html.ore'
 
 Card | Div {
-    css_padding = '1rem'
-    css_border_radius = '8px'
-    css_background_color = '#fff'
+    css_padding := '1rem'
+    css_border_radius := '8px'
+    css_background_color := '#fff'
 
-    html_class = 'card'
-    html_data_value = 42
+    html_class := 'card'
+    html_data_value := 42
     html_aria_label,
 }
 
 Link | A {
     html_href = '#'
-    html_target = '_blank'
+    html_target := '_blank'
 }
 
-page = Html([
+page := Html([
     Head(Title('My Page'))
     Body([
         H1('Welcome')
@@ -638,7 +638,8 @@ page = Html([
 ### Assignment
 
 ```ore
-=             # Basic assignment
+:=            # Declaration — introduces a new identifier, infers and locks its type
+=             # Assignment — requires the identifier to already be declared
 += -= *= /=   # Compound assignment
 &&= ||=       # Logical compound
 <<= >>=       # Shift compound
@@ -653,6 +654,6 @@ page = Html([
 undefined_var,    #=> nil
 undefined_var     #=> nil
 
-existing = 42
+existing := 42
 existing,         #=> 42 (unchanged)
 ```

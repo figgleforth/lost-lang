@@ -5,10 +5,10 @@
 
 ```Page components```
 Page_Layout | Html {
-	css_filter = 'invert()'
-	css_font_size = '1.6em'
-	css_font_family = 'monospace'
-	css_padding = '3.2em'
+	css_filter := 'invert()'
+	css_font_size := '1.6em'
+	css_font_family := 'monospace'
+	css_padding := '3.2em'
 
 	render {;
 		[Head(Title("Tasks")), Body(children)]
@@ -56,8 +56,8 @@ List_Of_Tasks | Ul {
 }
 
 New_Task_Form | Form {
-	html_action = '/new'
-	html_method = 'POST'
+	html_action := '/new'
+	html_method := 'POST'
 
 	render {;
 		[
@@ -71,26 +71,26 @@ New_Task_Form | Form {
 }
 
 Input_Field | Textarea {
-	html_type = 'text'
-	html_name = 'task'
-	html_placeholder = 'Enter task text...'
+	html_type := 'text'
+	html_name := 'task'
+	html_placeholder := 'Enter task text...'
 }
 
 Submit_Button | Button {
-	html_type = 'submit'
+	html_type := 'submit'
 
 	render {; 'Add Task' }
 }
 
 ```Database```
-db = Sqlite('./temp/task_app.db') # Sqlite composes with Database
+db := Sqlite('./temp/task_app.db') # Sqlite composes with Database
 
 # db = @connect Sqlite(...) is also valid
 @connect db  # => calls Database#create_connection!
 
 Task | Table {
-	./database = ../db # Must set the database in order for Task query methods to work
-	table_name = 'tasks'
+	./database := ../db # Must set the database in order for Task query methods to work
+	table_name := 'tasks'
 }
 
 if db.table_exists?('tasks')
@@ -114,7 +114,7 @@ Task.create({text: "Build admin dashboard"})
 ```Server```
 Tasks_Controller {
 	./home {;
-		tasks = Task.all()
+		tasks := Task.all()
 		Page_Layout([
 			H2('My Tasks'),
 			New_Task_Form(),
@@ -124,22 +124,22 @@ Tasks_Controller {
 	}
 
 	./create_task {;
-		id = Task.create({text: request.body.task })
+		id := Task.create({text: request.body.task })
 		# You can call response.redirect("/") to manually set the destination, or call the named route functions:
 		# home()
 		get_task(id)
 	}
 
 	get_task { id;
-		task = Task.find(id.to_i())
+		task := Task.find(id.to_i())
 		Page_Layout(Single_Task(task))
 	}
 }
 
 App | Server | Tasks_Controller {
-	port = 80
+	port := 80
 
-	controller = Tasks_Controller()
+	controller := Tasks_Controller()
 
 	get:// controller.home # to controller instance
 
@@ -159,6 +159,6 @@ App | Server | Tasks_Controller {
 	}
 }
 
-app = App()
+app := App()
 
 @start app

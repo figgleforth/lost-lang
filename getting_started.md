@@ -50,8 +50,8 @@ Greet('Ore').greeting()
 - Gradual typing — opt in as needed
 	- Static type checking at parse time for literal mismatches (`x: String = 99`)
 	- Call site argument types checked against typed function signatures (`add(123, 'boo')`, `add { a: Number, b: NUmber }`)
-	- Runtime type contracts via `:=` where type is inferred and enforced on future assignments (`x := 123`)
-	- Plain `=` behaves dynamic without reassignment restrictions
+	- `:=` declares a new identifier; `=` is pure assignment and requires the identifier to already exist
+	- Runtime type contracts via `:=` where type is inferred and enforced on future `=` assignments (`x := 123`)
 - Naming conventions replace keywords
 	- `Capitalize` classes
 	- `lowercase` variables and functions
@@ -87,7 +87,7 @@ Greet('Ore').greeting()
 	- Base composable `Record` type with `all()`, `find()`, `create()`, `delete()` methods
 	- Database operations via `Database` type
 	- Schema definition with dictionaries
-	- Static database linking with `./database = ../db`
+	- Static database linking with `./database := ../db`
 - HTML rendering with `Dom` composition
 	- Compose HTML with built-in HTML DOM elements (`Dom`, `Html`, `Body`, `Div`, `H1`, etc)
 	- Declare `html_` prefixed attributes for HTML attributes (`html_href`, `html_class`)
@@ -124,18 +124,17 @@ Annotations on variables whose values aren't known statically (e.g. the result o
 
 #### Runtime Type Contracts
 
-`:=` infers a type from the right hand side and locks the variable to that type for future `=` assignments. Plain `=` without a prior `:=` or annotation stays fully dynamic.
+`:=` declares a new identifier and infers a type from the right hand side, locking the variable to that type for future `=` assignments. Plain `=` never declares — it only assigns to an identifier that's already been declared (via `:=`, a `: Type` annotation, or another declaration form).
 
 ```ore
-x := 4        # x is now a Number
+x := 4        # declares x — now a Number
 x = 8         # ok — same type
 x = 'hello'   # Type_Contract_Violation — Number expected, got String
 
 x := 'hello'  # re-initialize — x is now a String
 x = 'world'   # ok
 
-y = 4
-y = 'hello'   # ok — no contract, fully dynamic
+y = 4         # Cannot_Reassign_Undeclared_Identifier — y was never declared
 ```
 
 #### Variables
@@ -143,29 +142,29 @@ y = 'hello'   # ok — no contract, fully dynamic
 ```
 # Comments start with a hash
 
-nothing,            # Syntactic sugar for "nothing = nil"
-something = true
-okay_too = 42,      # Comma allowed as expression separator
+nothing,            # Syntactic sugar for "nothing := nil"
+something := true
+okay_too := 42,     # Comma allowed as expression separator
 
 # Strings can be single or double quoted, and interpolated with backticks
-LANG_NAME = "ore-lang"
-version   = '0.0.0'
-lines     = 4_815
-header    = "`LANG_NAME` v`version`"   # "ore-lang v0.0.0"
-footer    = 'Lines of code: `lines`'   # "Lines of code: 4815"
+LANG_NAME := "ore-lang"
+version   := '0.0.0'
+lines     := 4_815
+header    := "`LANG_NAME` v`version`"   # "ore-lang v0.0.0"
+footer    := 'Lines of code: `lines`'   # "Lines of code: 4815"
 
 # Ranges
-inclusive_range   = 0..2
-exclusive_range   = 2><5
-l_exclusive_range = 5>.7
-r_exclusive_range = 7.<9
+inclusive_range   := 0..2
+exclusive_range   := 2><5
+l_exclusive_range := 5>.7
+r_exclusive_range := 7.<9
 
 # Data containers
-tuples = (header, footer)
-arrays = [inclusive_range, exclusive_range]
+tuples := (header, footer)
+arrays := [inclusive_range, exclusive_range]
 
 # Dictionaries can be initialized in multiple ways, commas and values are optional
-dict = {}                       # {}
+dict := {}                      # {}
 dict = {x y}                    # {x: nil, y: nil}
 dict = {u, v}                   # {u: nil, v: nil}
 dict = { a:0 b=1 c}             # {a: 0, b: 1, c: nil}
@@ -224,7 +223,7 @@ Repo('figgleforth', 'ore-lang').to_s() # "figgleforth/ore-lang"
 
 ```ore
 # For loops iterate over arrays, ranges, and other iterables
-result = []
+result := []
 for [1, 2, 3, 4, 5]
 	result << it  # it is the current iteration value
 end
@@ -249,21 +248,21 @@ for [1, 2, 3, 4, 5, 6, 7, 8] each by 4,2
 end
 
 # Ranges work too
-sum = 0
+sum := 0
 for 1..10
 	sum += it
 end
 # sum = 55
 
 # Access iteration index with `at`
-indexed = []
+indexed := []
 for ['a', 'b', 'c']
 	indexed << "`at`: `it`"
 end
 # indexed = ["0: a", "1: b", "2: c"]
 
 # Loop control with skip and stop
-evens = []
+evens := []
 for 1..10
 	if it % 2 != 0
 		skip  # Continue to next iteration
@@ -294,16 +293,16 @@ add { @vec;
 	x + y  # Access vec.x and vec.y directly without vec. prefix
 }
 
-v = Vector(3, 4)
+v := Vector(3, 4)
 add(v)  # 7
 
 # Manual sibling scope control
 multiply { factor;
-	v1 = Vector(5, 10)
+	v1 := Vector(5, 10)
 	@ += v1  # Add v1's members to sibling scope
 
-	result_x = x * factor  # Access x directly
-	result_y = y * factor  # Access y directly
+	result_x := x * factor  # Access x directly
+	result_y := y * factor  # Access y directly
 
 	@ -= v1  # Remove v1 from sibling scope
 
@@ -321,8 +320,8 @@ multiply(2)  # Vector(10, 20)
 @use './some_dir/users.ore'
 
 # Use loaded classes and functions
-user = User('Alice', 'alice@example.com')
-formatted = format_name(user.name)
+user := User('Alice', 'alice@example.com')
+formatted := format_name(user.name)
 ```
 
 #### Database & ORM
@@ -332,7 +331,7 @@ formatted = format_name(user.name)
 @use 'ore/record.ore'
 
 # Create and connect to database
-db = Sqlite('./temp/blog.db')
+db := Sqlite('./temp/blog.db')
 @connect db
 
 # Create table with schema
@@ -344,8 +343,8 @@ db.create_table('posts', {
 
 # Define model by composing with Record
 Post | Record {
-	./database = ../db     # Link to static ..database declaration
-	table_name = 'posts'
+	./database := ../db    # Link to static ..database declaration
+	table_name := 'posts'
 }
 
 # Create records
@@ -353,8 +352,8 @@ Post.create({title: "Hello Ore", body: "Building web apps is fun!"})
 Post.create({title: "Databases", body: "SQLite integration works!"})
 
 # Query records
-posts = Post.all()         # Fetch all posts
-post = Post.find(1)        # Find by ID
+posts := Post.all()        # Fetch all posts
+post := Post.find(1)       # Find by ID
 
 # Access record data (returns Dictionary)
 post[:title]               # "Hello Ore"
@@ -394,8 +393,8 @@ API_Server | Server {
 }
 
 # Both servers run concurrently in background threads
-app = Web_App(8080)
-api = API_Server(3000)
+app := Web_App(8080)
+api := API_Server(3000)
 @start app
 @start api
 ```
@@ -457,11 +456,11 @@ Adding HTML and CSS attributes:
 @use 'ore/html.ore'
 
 My_Div | Dom {
-	html_element = 'p'
-	html_class = 'my_class'
-	html_id = 'my_id'
-	css_background_color = 'black'
-	css_color = 'white'
+	html_element := 'p'
+	html_class := 'my_class'
+	html_id := 'my_id'
+	css_background_color := 'black'
+	css_color := 'white'
 }
 
 # => <p class='my_class' id='my_id' style='background-color:black;color:white;'></p>
@@ -488,7 +487,7 @@ add_one { n; n + 1 }
 Currency { amount, name, code, }
 
 @operator $ @prefix 900 { amount;
-	c = Currency()
+	c := Currency()
 	c.amount = amount
 	c.name = 'US Dollar'
 	c.code = 'USD'
@@ -501,7 +500,7 @@ $42  # => Currency(amount: 42, name: 'US Dollar', code: 'USD')
 Time { hour, minute, period, }
 
 @operator : @infix 700 { hour, minute;
-	t = Time()
+	t := Time()
 	t.hour = hour
 	t.minute = minute
 	t

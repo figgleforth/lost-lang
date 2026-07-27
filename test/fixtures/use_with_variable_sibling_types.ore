@@ -4,18 +4,18 @@
 # 2. Instantiating sibling type inside a function (create_sibling_in_func)
 
 Sibling_Type {
-	value = 42
+	value := 42
 }
 
 Main_Type {
-	sibling = Sibling_Type()
+	sibling := Sibling_Type()
 
 	get_sibling_value {;
 		sibling.value
 	}
 
 	create_sibling_in_func {;
-		s = Sibling_Type()
+		s := Sibling_Type()
 		s.value
 	}
 }

@@ -10,11 +10,11 @@
 # definition. These changes are appended to Button's expressions, so
 # all future Button instances will inherit them.
 @cd Button
-	css_filter = 'invert()'
+	css_filter := 'invert()'
 @cd ..
 
 H2 | H2 {
-	css_color = 'black'
+	css_color := 'black'
 }
 
 # Counter is a Div component with reactive state.
@@ -22,14 +22,14 @@ H2 | H2 {
 # a reference to this Counter instance. This keeps the instance alive
 # in memory, allowing state to persist across requests.
 Counter | Div {
-	html_id = 'counter'  # Used by dom.js to target this element for updates
-	button = Button("Increment Count!")
-	count = 0  # Reactive state - persists in memory between clicks
+	html_id := 'counter'  # Used by dom.js to target this element for updates
+	button := Button("Increment Count!")
+	count := 0  # Reactive state - persists in memory between clicks
 
 	# This handler mutates the Counter instance's state.
 	# After execution, the server automatically re-renders the Counter
 	# and sends the updated HTML back to the browser.
-	increment = {;
+	increment := {;
 		count += 1
 	}
 
@@ -42,20 +42,20 @@ Counter | Div {
 	# @cd with an instance (lowercase) modifies just that specific instance,
 	# not the type. Here we're styling this particular button.
 	@cd button
-		css_background_color = 'red'
-		css_color = 'white'
-		css_font_weight = 700
-		css_border_radius = '0.5rem'
-		css_padding = '0.5rem'
-		css_font_size = '1.3em'
-		onclick = increment  # Registers handler in runtime.onclick_handlers
+		css_background_color := 'red'
+		css_color := 'white'
+		css_font_weight := 700
+		css_border_radius := '0.5rem'
+		css_padding := '0.5rem'
+		css_font_size := '1.3em'
+		onclick := increment  # Registers handler in runtime.onclick_handlers
 	@cd ..
 }
 
 # Page wraps the Counter in an Html element.
 # Note: Each Page() call creates a new Counter instance.
 Page | Div {
-	counter = Counter()
+	counter := Counter()
 
 	render {;
 		counter
@@ -65,7 +65,7 @@ Page | Div {
 # App is the server that handles HTTP requests.
 # The get:// route returns a Page, which renders the Counter.
 App | Server {
-	page = Page()
+	page := Page()
 	get:// home {;
 		Body(page)
 	}

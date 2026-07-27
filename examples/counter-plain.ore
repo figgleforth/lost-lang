@@ -6,12 +6,12 @@
 
 # Counter component with in-memory state
 Counter | Div {
-	html_id = 'counter'  # Target element for DOM updates
-	button = Button("Increment Count!")
-	count = 0  # State persists between clicks
+	html_id := 'counter'  # Target element for DOM updates
+	button := Button("Increment Count!")
+	count := 0  # State persists between clicks
 
 	# Onclick handler - mutates state, triggers re-render
-	increment = {;
+	increment := {;
 		count += 1
 	}
 
@@ -24,7 +24,7 @@ Counter | Div {
 
 # Server with a single route
 App | Server {
-	counter = Counter()
+	counter := Counter()
 	get:// home {;
 		Html(counter)
 	}

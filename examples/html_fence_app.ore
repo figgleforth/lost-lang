@@ -3,7 +3,7 @@
 
 App | Server {
 	get:// home {;
-		name = 'Cooper'
+		name := 'Cooper'
 		```html
 		<h1>Welcome to |name|'s webpage</h1>
 		```

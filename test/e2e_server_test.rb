@@ -35,7 +35,7 @@ class E2E_Server_Test < Minitest::Test
 		    	}
 		    }
 
-		    app = Web_App()
+		    app := Web_App()
 		ORE
 
 		@interpreter    = Ore::Interpreter.new
@@ -78,7 +78,7 @@ class E2E_Server_Test < Minitest::Test
 		    	}
 		    }
 
-		    app = Web_App()
+		    app := Web_App()
 		ORE
 
 		@interpreter    = Ore::Interpreter.new
@@ -111,7 +111,7 @@ class E2E_Server_Test < Minitest::Test
 		    	}
 		    }
 
-		    app = Web_App()
+		    app := Web_App()
 		ORE
 
 		@interpreter    = Ore::Interpreter.new
@@ -153,8 +153,8 @@ class E2E_Server_Test < Minitest::Test
 		    	}
 		    }
 
-		    a = Server_A(#{port_a})
-		    b = Server_B(#{port_b})
+		    a := Server_A(#{port_a})
+		    b := Server_B(#{port_b})
 		ORE
 
 		interpreter = Ore::Interpreter.new

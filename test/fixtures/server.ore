@@ -4,5 +4,5 @@ Web_App | Server {
     }
 }
 
-app = Web_App()
+app := Web_App()
 @start app

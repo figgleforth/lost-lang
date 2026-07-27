@@ -6,8 +6,8 @@ Server_B | Server {
   get://b {; "From Server B" }
 }
 
-a = Server_A(8080)
-b = Server_B(8081)
+a := Server_A(8080)
+b := Server_B(8081)
 
 @start a
 @start b
