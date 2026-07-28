@@ -4,14 +4,14 @@ require 'json'
 
 module Ore
 	class Interpreter
-		attr_accessor :input, :lexer, :parser, :load_standard_library, :stack, :route_function_handlers_by_route_name, :servers, :dom_onclick_function_handlers, :dom_input_elements, :cached_expressions_by_filepath, :cached_source_by_filename, :last_output
+		attr_accessor :input, :lexer, :parser, :load_standard_library, :stack, :route_functions_by_route_name, :servers, :dom_onclick_function_handlers, :dom_input_elements, :cached_expressions_by_filepath, :cached_source_by_filename, :last_output
 
 		def initialize
-			@cached_expressions_by_filepath        = {} # {filepath: [Ore::Expression]}
-			@cached_source_by_filename             = {} # {filepath: String}
-			@dom_input_elements                    = {} # {element_hash: Ore::Instance} for inputs/textareas
-			@dom_onclick_function_handlers         = {} # {handler_hash: Ore::Func}
-			@route_function_handlers_by_route_name = {} # {route: Ore::Route}
+			@cached_expressions_by_filepath = {} # {filepath: [Ore::Expression]}
+			@cached_source_by_filename      = {} # {filepath: String}
+			@dom_input_elements             = {} # {element_hash: Ore::Instance} for inputs/textareas
+			@dom_onclick_function_handlers  = {} # {handler_hash: Ore::Func}
+			@route_functions_by_route_name  = {} # {route: Ore::Route}
 
 			@load_standard_library = true
 			@input                 = [] # [Ore::Expression]
@@ -1363,11 +1363,6 @@ module Ore
 				expr.is_a? Ore::Param_Expr
 			end
 
-			if expr.arguments.count > params.count
-				# todo: Proper error
-				raise "Arguments given, no params declared #{expr.inspect}"
-			end
-
 			# Evaluate arguments in caller's scope (before pushing function scopes)
 			arg_values     = expr.arguments.map { |arg| interpret arg }
 			func.arguments = arg_values
@@ -1405,7 +1400,7 @@ module Ore
 
 			result = nil
 			body.each do |e|
-				next if e.is_a? Ore::Param_Expr
+				next if e.is_a? Ore::Param_Expr # Or just remove Param expressions from
 
 				result = interpret e
 				break if result.is_a? Ore::Return
@@ -1457,7 +1452,7 @@ module Ore
 				enclosing_type.routes[route_key] = route
 			end
 
-			@route_function_handlers_by_route_name[route_key] = route
+			@route_functions_by_route_name[route_key] = route
 			stack.last.declare route_key, route
 
 			route
@@ -1830,7 +1825,7 @@ module Ore
 				value
 			when 'assert'
 				condition = interpret expr.expression
-				raise "assert failed #{expr.inspect}" unless condition
+				raise Ore::Assert_Triggered.new(expr, self) unless condition
 			when 'ruby'
 				# The @ruby directive evaluates to the result of calling the ruby Ruby method
 				func_scope = stack.last
