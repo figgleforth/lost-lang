@@ -1364,8 +1364,13 @@ module Ore
 			end
 
 			# Evaluate arguments in caller's scope (before pushing function scopes)
-			arg_values     = expr.arguments.map { |arg| interpret arg }
-			func.arguments = arg_values
+			arg_values = expr.arguments.map { |arg| interpret arg }
+
+			# note: `func` is the single, shared Func object registered when the function was declared. Pushing it directly as the call frame (as this used to do) meant every invocation declared its params onto that same shared object, so recursive/repeated calls stomped on each other's param values. Each call gets its own fresh scope instead.
+			call_scope                 = Ore::Func.new func.name
+			call_scope.expressions     = func.expressions
+			call_scope.enclosing_scope = func.enclosing_scope
+			call_scope.arguments       = arg_values
 
 			# Push type scope if calling an instance method (instance methods need access to type-level declarations)
 			# Also push the type's enclosing_scope so sibling types can be found
@@ -1375,7 +1380,7 @@ module Ore
 				push_scope type # Push the Type
 			end
 			push_scope func.enclosing_scope
-			push_scope func
+			push_scope call_scope
 
 			params.each_with_index do |param, i|
 				value = if i < arg_values.length
@@ -1389,12 +1394,12 @@ module Ore
 				stack.last.declare param.name.value, value
 
 				if param.unpack && value.is_a?(Ore::Instance)
-					func.sibling_scopes << value
+					call_scope.sibling_scopes << value
 				end
 			end
 
-			body = func.expressions - params
-			if func.name == 'assert'
+			body = call_scope.expressions - params
+			if call_scope.name == 'assert'
 				raise Ore::Assert_Triggered.new(expr, self) unless interpret(body.first) == true # Just to be explicit.
 			end
 
@@ -1406,7 +1411,7 @@ module Ore
 				break if result.is_a? Ore::Return
 			end
 
-			Ore.assert pop_scope == func
+			Ore.assert pop_scope == call_scope
 			Ore.assert pop_scope == func.enclosing_scope
 
 			if func.enclosing_scope.is_a?(Ore::Instance) && func.enclosing_scope.enclosing_scope

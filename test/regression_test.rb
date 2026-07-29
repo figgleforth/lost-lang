@@ -473,4 +473,42 @@ class Regression_Test < Base_Test
 		ORE
 		assert_equal 100, out
 	end
+
+	# Regression: interp_func_body used to push the single, shared Func object (registered once at declaration time) as the call frame for every invocation. Two calls to the same function overlapping in time (e.g. tree recursion, where a function calls itself twice and combines the results) stomped on each other's param bindings, since they were all declaring onto the same shared scope. Each call now gets a fresh scope, so recursive calls stay isolated.
+	def test_tree_recursion_does_not_share_call_frame
+		out = Ore.interp <<~ORE
+		    fib { n;
+		        if n <= 1
+		            n
+		        else
+		            fib(n - 1) + fib(n - 2)
+		        end
+		    }
+		    [fib(0), fib(1), fib(2), fib(3), fib(4), fib(5), fib(10)]
+		ORE
+		assert_equal [0, 1, 1, 2, 3, 5, 55], out.values
+	end
+
+	# Same bug, but through an instance method, which pushes an extra type/instance scope around the (previously) shared Func frame.
+	def test_tree_recursion_does_not_share_call_frame_on_instance_method
+		out = Ore.interp <<~ORE
+		    Counter {
+		        n,
+
+		        new { n;
+					./n = n
+				}
+
+		        fib {;
+		            if n <= 1
+		                n
+		            else
+		                Counter(n - 1).fib() + Counter(n - 2).fib()
+		            end
+		        }
+		    }
+		    Counter(10).fib()
+		ORE
+		assert_equal 55, out
+	end
 end
