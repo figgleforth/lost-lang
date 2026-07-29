@@ -20,11 +20,11 @@ For example:
 How many strings are nice?
 ```
 
-ILLEGAL = ['ab', 'cd', 'pq', 'xy']
-VOWELS = 'aeiou'
+ILLEGAL := ['ab', 'cd', 'pq', 'xy']
+VOWELS := 'aeiou'
 
 has_three_vowels? { input;
-	vowels = 0
+	vowels := 0
 	for input.chars()
 		vowels += 1 if VOWELS.include?(it)
 		return true if vowels >= 3
@@ -33,7 +33,7 @@ has_three_vowels? { input;
 }
 
 has_double_letter? { input;
-	chars = input.chars()
+	chars := input.chars()
 	for chars
 		if at < chars.length() - 1
 			return true if chars[at] == chars[at + 1]
@@ -46,13 +46,13 @@ has_forbidden? { input;
 	input.include?('ab') or input.include?('cd') or input.include?('pq') or input.include?('xy')
 }
 
-input = File_System.read('examples/aoc/2015/05/input.txt').split('\n')
+input := File_System.read('examples/aoc/2015/05/input.txt').split('\n')
 
-total = 0
+total := 0
 for input
-	a = has_three_vowels?(it)
-	b = has_double_letter?(it)
-	c = has_forbidden?(it)
+	a := has_three_vowels?(it)
+	b := has_double_letter?(it)
+	c := has_forbidden?(it)
 
 	if a and b and !c
 		total += 1

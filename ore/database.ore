@@ -12,10 +12,10 @@ Database {
 Sqlite | Database {
 	new { url;
 		adapter = 'sqlite'
-		.url = url
+		./url = url
 	}
 
-	./local { url = './test/fixtures/sqlite_test.db';
+	../local { url = './test/fixtures/sqlite_test.db';
 		Sqlite(url)
 	}
 }

@@ -210,7 +210,7 @@ module Ore
 			while chars? && symbol? && !%w(' " { } ( ) ).include?(curr)
 				it << eat
 
-				break if (Ore::SCOPE_OPERATORS - ['.']).include? it # note: This needs to break on all known operators except plain '.' because '.' is part of other identifiers like `..`, so we need to be able to capture other operators that include dot.
+				break if Ore::SCOPE_OPERATORS.include? it
 			end
 			it
 		end

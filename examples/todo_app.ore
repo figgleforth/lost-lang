@@ -19,7 +19,7 @@ Single_Task | Div {
 	task,
 
 	new { task = 'New Task';
-		.task = task
+		./task = task
 	}
 
 	render {;
@@ -32,8 +32,8 @@ Task_Item | Li {
 	text,
 
 	new { task;
-		.text = task[:text]
-		.id   = task[:id]
+		./text = task[:text]
+		./id   = task[:id]
 	}
 
 	render {;
@@ -45,7 +45,7 @@ List_Of_Tasks | Ul {
 	tasks,
 
 	new { tasks = [];
-		.tasks = tasks
+		./tasks = tasks
 	}
 
 	render {;
@@ -89,7 +89,7 @@ db := Sqlite('./temp/task_app.db') # Sqlite composes with Database
 @connect db  # => calls Database#create_connection!
 
 Task | Table {
-	./database := ../db # Must set the database in order for Task query methods to work
+	../database := ~/db # Must set the database in order for Task query methods to work
 	table_name := 'tasks'
 }
 
@@ -113,7 +113,7 @@ Task.create({text: "Build admin dashboard"})
 
 ```Server```
 Tasks_Controller {
-	./home {;
+	../home {;
 		tasks := Task.all()
 		Page_Layout([
 			H2('My Tasks'),
@@ -123,7 +123,7 @@ Tasks_Controller {
 		])
 	}
 
-	./create_task {;
+	../create_task {;
 		id := Task.create({text: request.body.task })
 		# You can call response.redirect("/") to manually set the destination, or call the named route functions:
 		# home()

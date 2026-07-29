@@ -24,49 +24,48 @@ class Regression_Test < Base_Test
 	end
 
 	def test_dot_slashes_regression
-		ds  = Ore.parse '.abc'
-		dds = Ore.parse './def'
+		ds  = Ore.parse './abc'
+		dds = Ore.parse '../def'
 		assert_kind_of Ore::Identifier_Expr, ds.first
 		assert_kind_of Ore::Identifier_Expr, dds.first
 
-		ds = Ore.parse '.abc'
 		assert_kind_of Ore::Identifier_Expr, ds.last
-		assert_equal '.', ds.last.scope_operator.value
+		assert_equal './', ds.last.scope_operator.value
 		assert_equal 'abc', ds.last.value
 	end
 
 	def test_dot_slash_regression
-		out = Ore.interp '.x := 123'
+		out = Ore.interp './x := 123'
 		assert_equal 123, out
 	end
 
 	def test_look_up_tilde_slash_without_dot_slash_regression
-		out = Ore.interp '../x := 456
+		out = Ore.interp '~/x := 456
 		x'
 		assert_equal 456, out
 	end
 
 	def test_look_up_tilde_slash_with_dot_slash_regression
-		out = Ore.interp '../y := 789
-		../y'
+		out = Ore.interp '~/y := 789
+		~/y'
 		assert_equal 789, out
 	end
 
 	def test_dot_slash_within_infix_regression
-		out = Ore.parse '.x? := 123'
+		out = Ore.parse './x? := 123'
 		assert_kind_of Ore::Infix_Expr, out.first
 		assert_equal ':=', out.first.operator.value
 		assert_equal 'x?', out.first.left.value
 		assert_kind_of Ore::Identifier_Expr, out.first.left
-		assert_equal '.', out.first.left.scope_operator.value
+		assert_equal './', out.first.left.scope_operator.value
 	end
 
 	def test_scope_operators_regression
-		out = Ore.parse '.this_instance'
+		out = Ore.parse './this_instance'
 		assert_kind_of Ore::Identifier_Expr, out.first
 		assert_equal 1, out.count
 
-		out = Ore.parse './class_scope'
+		out = Ore.parse '../class_scope'
 		assert_kind_of Ore::Identifier_Expr, out.first
 		assert_equal 1, out.count
 	end
@@ -99,7 +98,7 @@ class Regression_Test < Base_Test
 			numerator := 8
 
 			new { num;
-				.numerator = num
+				./numerator = num
 			}
 		}
 		x := Number.new(15)
@@ -113,7 +112,7 @@ class Regression_Test < Base_Test
 			numerator := -100
 
 			new { num;
-				.numerator = num
+				./numerator = num
 			}
 		}
 		x := Number(4)
@@ -127,7 +126,7 @@ class Regression_Test < Base_Test
 			kind := "NONE"
 
 			new { new_kind;
-				.kind = new_kind
+				./kind = new_kind
 			}
 
 			to_s {;
@@ -149,14 +148,14 @@ class Regression_Test < Base_Test
 	def test_identifier_lookup_regression
 		out = Ore.interp "x := 123
 		funk {;
-			../x + 2
+			~/x + 2
 		}
 		funk()"
 		assert_equal 125, out
 
 		out = Ore.interp "y := 0
 		add { amount_to_add = 1;
-			../y + amount_to_add
+			~/y + amount_to_add
 		}
 		(a := add(4))
 
@@ -179,8 +178,8 @@ class Regression_Test < Base_Test
 				name := 'Thingy'
 
 				new { new_name = '', id = 123;
-					.name = new_name
-					.id = id
+					./name = new_name
+					./id = id
 				}
 			}
 
@@ -198,8 +197,8 @@ class Regression_Test < Base_Test
 				name := 'Thingy',
 
 				new { new_name, id;
-					.name = new_name
-					.id = id
+					./name = new_name
+					./id = id
 				}
 			}
 
@@ -289,7 +288,7 @@ class Regression_Test < Base_Test
 		    	name,
 
 		    	new { name;
-		    		.name = name
+		    		./name = name
 		    	}
 
 		    	make_inner {;
@@ -301,7 +300,7 @@ class Regression_Test < Base_Test
 		    	name,
 
 		    	new { name;
-		    		.name = name
+		    		./name = name
 		    	}
 
 		    	get_name {;
@@ -332,7 +331,7 @@ class Regression_Test < Base_Test
 		with_prefix = <<~CODE
 		    Array | Array {
 		        each { func;
-		        	for .values
+		        	for ./values
 		        		func(it)
 		        	end
 		        }
@@ -366,11 +365,11 @@ class Regression_Test < Base_Test
 		refute_raises Ore::Missing_Ruby_Proxy_Declaration do
 			Ore.interp <<~ORE
 			    Thing {
-			    	./abc,
-			    	./def {;}
+			    	../abc,
+			    	../def {;}
 			    }
 
-			    	Thing.abc
+			    Thing.abc
 			ORE
 		end
 

@@ -19,8 +19,8 @@ Layout | Html {
 	css_font_size := '1.2em'
 
 	new { title, body_content;
-		.title = title
-		.body_content = body_content
+		./title = title
+		./body_content = body_content
 	}
 
 	render {;
@@ -57,8 +57,8 @@ Feature_Section | Dom {
 	items,
 
 	new { heading, items;
-		.heading = heading
-		.items = items
+		./heading = heading
+		./items = items
 	}
 
 	render {;
@@ -74,7 +74,7 @@ Feature_Item | Dom {
 	text,
 
 	new { text;
-		.text = text
+		./text = text
 	}
 
 	render {;
@@ -87,7 +87,7 @@ Page_Content | Div {
 	snippet,
 
 	new { snippet;
-		.snippet = snippet
+		./snippet = snippet
 	}
 
 	render {;
@@ -160,7 +160,7 @@ readme_snippet := "Hello {
 	subject,
 
 	new { subject;
-		.subject = subject
+		./subject = subject
 	}
 
 	output {;

@@ -191,16 +191,16 @@ Each scope can have **sibling scopes
 
 Ore provides three scope operators for explicit scope access:
 
-- `../identifier` - Access global scope
-- `.identifier` - Access current instance scope only
-- `./identifier` - Access current type scope only
+- `~/identifier` - Access global scope
+- `./identifier` - Access current instance scope only
+- `../identifier` - Access current type scope only
 
 **Identifier Search Behavior:**
 
 - `identifier` (no operator) - Searches through all scopes in the stack from current to global, including checking for proxies methods
-- `.identifier` - Only searches the current instance scope (does not fall back to global)
-- `./identifier` - Only searches the current type scope
-- `../identifier` - Only searches the global scope
+- `./identifier` - Only searches the current instance scope (does not fall back to global)
+- `../identifier` - Only searches the current type scope
+- `~/identifier` - Only searches the global scope
 
 **Privacy Convention:**
 
@@ -208,24 +208,24 @@ Identifiers starting with `_` are considered private by convention (e.g., `_priv
 
 **Validation:**
 
-- Scope operators cannot be followed by literals (e.g., `..123` is a parse error)
-- Using `.` outside an instance context raises `Cannot_Use_Instance_Scope_Operator_Outside_Instance`
-- Using `./` outside a type context raises `Cannot_Use_Type_Scope_Operator_Outside_Type`
+- Scope operators cannot be followed by literals (e.g., `../123` is a parse error)
+- Using `./` outside an instance context raises `Cannot_Use_Instance_Scope_Operator_Outside_Instance`
+- Using `../` outside a type context raises `Cannot_Use_Type_Scope_Operator_Outside_Type`
 
 ## Static Declarations
 
-Type-level (static) members are declared using the `./` scope operator:
+Type-level (static) members are declared using the `../` scope operator:
 
 ```ore
 Person {
-    ./count := 0      # Static variable shared across all instances
+    ../count := 0      # Static variable shared across all instances
 
-    ./increment {;  # Static method
+    ../increment {;  # Static method
         count += 1
     }
 
     init {;
-        ./count += 1  # Access static from instance method
+        ../count += 1  # Access static from instance method
     }
 }
 
@@ -237,7 +237,7 @@ Person.increment()   # Call static method on type => 2
 **Implementation Details:**
 
 - Static declarations are tracked in `type.static_declarations` set
-- Instance methods can access type-level variables via `..` operator
+- Instance methods can access type-level variables via `../` operator
 - When calling instance methods, the interpreter pushes both the type scope and instance scope onto the stack
 - Instances are linked to their types via `instance.enclosing_scope = type`
 - Static functions and variables are declared on the Type scope
@@ -257,7 +257,7 @@ Built-in types like `Server`, `Record`, and `Dom` are composed this way:
 
 ```ore
 Web_App | Server { get:// {; "Hello" } }
-Post | Record { ./database := ../db; table_name := 'posts' }
+Post | Record { ../database := ~/db; table_name := 'posts' }
 Layout | Dom { render {; Html([Body("Hello")]) } }
 ```
 
@@ -688,7 +688,7 @@ The `Record` type provides ActiveRecord-style ORM functionality:
 @use 'ore/record.ore'
 
 User | Record {
-    ./database := ../db     # Set database (static declaration)
+    ../database := ~/db     # Set database (static declaration)
     table_name := 'users'
 }
 ```
@@ -730,7 +730,7 @@ db.create_table('posts', {
 
 # Define model
 Post | Record {
-    ./database := ../db
+    ../database := ~/db
     table_name := 'posts'
 }
 

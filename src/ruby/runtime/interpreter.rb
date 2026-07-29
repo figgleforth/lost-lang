@@ -146,13 +146,13 @@ module Ore
 			end
 
 			case expr.scope_operator&.value
-			when '../' # global
+			when '~/' # global
 				stack.first
-			when './' # underlying type within context, aka accessing a static declaration
+			when '../' # underlying type within context, aka accessing a static declaration
 				stack.reverse_each.find do |scope|
 					scope.instance_of? Ore::Type
 				end
-			when '.' # instance within context, aka self, this, etc
+			when './' # instance within context, aka self, this, etc
 				stack.reverse_each.find do |scope|
 					scope.is_a? Ore::Instance
 				end
@@ -214,7 +214,7 @@ module Ore
 		end
 
 		def track_static_declaration scope, ident_expr
-			return unless ident_expr.is_a?(Ore::Identifier_Expr) && ident_expr.scope_operator&.value == './'
+			return unless ident_expr.is_a?(Ore::Identifier_Expr) && ident_expr.scope_operator&.value == '../'
 			scope.static_declarations ||= Set.new
 			scope.static_declarations.add ident_expr.value.to_s
 		end
@@ -641,9 +641,9 @@ module Ore
 				end
 			else
 				# When scope is nil, errors must be raised
-				if expr.scope_operator&.value == './'
+				if expr.scope_operator&.value == '../'
 					raise Ore::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr, self)
-				elsif expr.scope_operator&.value == '.'
+				elsif expr.scope_operator&.value == './'
 					raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr, self)
 				else
 					raise Ore::Undeclared_Identifier.new(expr, self)
@@ -731,9 +731,9 @@ module Ore
 			# If using a scope operator but the scope doesn't exist, raise an error
 			if expr.left.is_a?(Ore::Identifier_Expr) && expr.left.scope_operator && assignment_scope.nil?
 				case expr.left.scope_operator.value
-				when '.'
-					raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr, self)
 				when './'
+					raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr, self)
+				when '../'
 					raise Ore::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr, self)
 				else
 					raise Ore::Invalid_Scope_Syntax.new(expr, self)
@@ -847,9 +847,9 @@ module Ore
 			# (mirrors interp_infix_assignment).
 			if has_scope_operator && assignment_scope.nil?
 				case expr.left.scope_operator.value
-				when '.'
-					raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr, self)
 				when './'
+					raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr, self)
+				when '../'
 					raise Ore::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr, self)
 				else
 					raise Ore::Invalid_Scope_Syntax.new(expr, self)
@@ -1298,12 +1298,12 @@ module Ore
 						type.expressions.each do |expr|
 							# Skip static declarations - they were already executed during type definition and shouldn't be re-executed for each instance
 							if expr.is_a?(Ore::Infix_Expr) && expr.operator&.value == ':=' &&
-							   expr.left.is_a?(Ore::Identifier_Expr) && expr.left.scope_operator&.value == './'
+							   expr.left.is_a?(Ore::Identifier_Expr) && expr.left.scope_operator&.value == '../'
 								next
 							end
 
 							if expr.is_a?(Ore::Func_Expr) && expr.name.is_a?(Ore::Identifier_Expr) &&
-							   expr.name.scope_operator&.value == './'
+							   expr.name.scope_operator&.value == '../'
 								next
 							end
 

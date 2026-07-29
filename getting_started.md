@@ -62,9 +62,9 @@ Greet('Ore').greeting()
 	- `~` Difference - discard right side declarations
 	- `^` Symmetric Difference - discard shared declarations
 - Scope operators for explicit access
-	- `.identifier` accesses instance scope only, like `self.identifier`
-	- `./identifier` accesses type/static scope, like `self.class.identifier`
-	- `../identifier` accesses global scope
+	- `./identifier` accesses instance scope only, like `self.identifier`
+	- `../identifier` accesses type/static scope, like `self.class.identifier`
+	- `~/identifier` accesses global scope
 - First-class functions and classes
 - Data containers `Array`, `Tuple`, `Dictionary`
 - Loops like `for`, `while`, and `until`
@@ -87,7 +87,7 @@ Greet('Ore').greeting()
 	- Base composable `Record` type with `all()`, `find()`, `create()`, `delete()` methods
 	- Database operations via `Database` type
 	- Schema definition with dictionaries
-	- Static database linking with `./database := ../db`
+	- Static database linking with `../database := ~/db`
 - HTML rendering with `Dom` composition
 	- Compose HTML with built-in HTML DOM elements (`Dom`, `Html`, `Body`, `Div`, `H1`, etc)
 	- Declare `html_` prefixed attributes for HTML attributes (`html_href`, `html_class`)
@@ -343,7 +343,7 @@ db.create_table('posts', {
 
 # Define model by composing with Record
 Post | Record {
-	./database := ../db    # Link to static ..database declaration
+	../database := ~/db    # Link to static ../database declaration
 	table_name := 'posts'
 }
 

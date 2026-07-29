@@ -15,16 +15,16 @@ Your puzzle answer was 1598415.
 ```
 
 surface_area { sides;
-	l = sides.0
-	w = sides.1
-	h = sides.2
+	l := sides.0
+	w := sides.1
+	h := sides.2
 
 	2*l*w + 2*w*h + 2*h*l
 }
 
 # Place the sides into an array, sort by size leaving us with the two smallest sides at the front of the array
 smallest_side_area { sides;
-	sorted = sides.sort()
+	sorted := sides.sort()
 	sorted.0 * sorted.1
 }
 
@@ -39,10 +39,10 @@ input_to_array_of_sides { input;
 	})
 }
 
-total = 0
-input = File_System.read('examples/aoc/2015/02/input.txt')
+total := 0
+input := File_System.read('examples/aoc/2015/02/input.txt')
 for input.split("\n")
-	sides = input_to_array_of_sides(it)
+	sides := input_to_array_of_sides(it)
 	total += total_wrapping_paper_needed(sides)
 end
 

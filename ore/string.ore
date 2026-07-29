@@ -8,7 +8,7 @@ String {
 	ord, # Integer ordinal of the first character
 
 	new { value = '';
-		.value = value
+		./value = value
 	}
 
 	downcase {; @ruby }

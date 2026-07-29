@@ -10,7 +10,7 @@ class Server_Test < Base_Test
 		    Server {
 		    	port,
 		    	new { port = 3000;
-		    		.port = port
+		    		./port = port
 		    	}
 		    }
 
@@ -27,7 +27,7 @@ class Server_Test < Base_Test
 		    Server {
 		    	port,
 		    	new { port = 3001;
-		    		.port = port
+		    		./port = port
 		    	}
 		    }
 
@@ -50,7 +50,7 @@ class Server_Test < Base_Test
 		    Server {
 		    	port,
 		    	new { port = 3002;
-		    		.port = port
+		    		./port = port
 		    	}
 		    }
 
@@ -78,7 +78,7 @@ class Server_Test < Base_Test
 		    Server {
 		    	port,
 		    	new { port = 8888;
-		    		.port = port
+		    		./port = port
 		    	}
 		    }
 		    app := Server()
@@ -100,7 +100,7 @@ class Server_Test < Base_Test
 		    Server {
 		    	port,
 		    	new { port = 3003;
-		    		.port = port
+		    		./port = port
 		    	}
 		    }
 
@@ -128,7 +128,7 @@ class Server_Test < Base_Test
 		    Server {
 		    	port,
 		    	new { port = 3004;
-		    		.port = port
+		    		./port = port
 		    	}
 		    }
 
@@ -166,7 +166,7 @@ class Server_Test < Base_Test
 		    Server {
 		    	port,
 		    	new { port = 3005;
-		    		.port = port
+		    		./port = port
 		    	}
 		    }
 

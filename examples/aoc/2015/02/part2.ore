@@ -13,7 +13,7 @@ How many total feet of ribbon should they order?
 ```
 
 smallest_perimeter { sides;
-	sorted = sides.sort()
+	sorted := sides.sort()
 	sorted.0 + sorted.0 + sorted.1 + sorted.1
 }
 # smallest_perimeter([2,3,4]) == 10
@@ -29,10 +29,10 @@ input_to_array_of_sides { input;
 	})
 }
 
-total = 0
-input = File_System.read('examples/aoc/2015/02/input.txt')
+total := 0
+input := File_System.read('examples/aoc/2015/02/input.txt')
 for input.split("\n")
-	sides = input_to_array_of_sides(it)
+	sides := input_to_array_of_sides(it)
 	total += smallest_perimeter(sides)
 	total += perfect_bow(sides)
 end

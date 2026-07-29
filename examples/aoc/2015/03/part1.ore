@@ -14,15 +14,15 @@ For example:
 - ^v^v^v^v^v delivers a bunch of presents to some very lucky children at only 2 houses.
 ```
 
-input = File_System.read('examples/aoc/2015/03/input.txt')
+input := File_System.read('examples/aoc/2015/03/input.txt')
 
 # "x.y": num_presents
-visited = {}
+visited := {}
 visited["0.0"] = 1 # For the house Santa starts at
 
 # starting location
-x = 0
-y = 0
+x := 0
+y := 0
 
 for input
 	if it == '^'
@@ -35,7 +35,7 @@ for input
 		x += 1
 	end
 
-	key = "`x`.`y`"
+	key := "`x`.`y`"
 	if visited.has_key?(key)
 		visited[key] += 1
 	else

@@ -101,42 +101,42 @@ escaped := "Literal \`backticks\`"
 
 ## Scope Operators
 
-1. `.` accesses current instance scope only
-2. `./` accesses current type/class scope only
-3. `../` accesses global scope
+1. `./` accesses current instance scope only
+2. `../` accesses current type/class scope only
+3. `~/` accesses global scope
 
 ```ore
 My_Class {
-    ./count := 0     # Type-level (static) variable
+    ../count := 0     # Type-level (static) variable
     value,
 
     new { value;
-        .value = value   # Instance variable (like this.value)
-        ./count += 1     # Access static from instance
+        ./value = value   # Instance variable (like this.value)
+        ../count += 1     # Access static from instance
     }
 
     get_global {;
-        ../PI  # Access global scope constants
+        ~/PI  # Access global scope constants
     }
 }
 ```
 
 ## Static Declarations
 
-1. Use `./` to declare type-level (static) members
+1. Use `../` to declare type-level (static) members
 2. Shared across all instances
 3. Accessed on the type itself: `Type.member`
 
 ```ore
 Counter {
-    ./count := 0
+    ../count := 0
 
-    ./increment {;
+    ../increment {;
         count += 1
     }
 
     new {;
-        ./count += 1
+        ../count += 1
     }
 }
 
@@ -554,13 +554,13 @@ db.delete_table('users')
 ## Record ORM
 
 1. Compose with `Record` type
-2. Set static `./database` and instance `table_name`
+2. Set static `../database` and instance `table_name`
 
 ```ore
 @use 'ore/record.ore'
 
 User | Record {
-    ./database := ../db
+    ../database := ~/db
     table_name := 'users'
 }
 

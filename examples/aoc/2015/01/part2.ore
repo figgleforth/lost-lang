@@ -12,9 +12,9 @@ What is the position of the character that causes Santa to first enter the basem
 Your puzzle answer was 1795.
 ```
 
-floor = 0
-index = 0
-input = File_System.read('examples/aoc/2015/01/input.txt')
+floor := 0
+index := 0
+input := File_System.read('examples/aoc/2015/01/input.txt')
 for input
 	if it == "("
 		floor += 1

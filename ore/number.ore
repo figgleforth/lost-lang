@@ -4,11 +4,11 @@ Number {
 	type,
 
 	new { num;
-		.numerator = num
-		.denominator = 1
+		./numerator = num
+		./denominator = 1
 	}
 
-	./rand { max = 1; @ruby }
+	../rand { max = 1; @ruby }
 
 	clamp { min, max; @ruby }
 	to_s {; @ruby }

@@ -30,7 +30,7 @@ module Ore
 	COMPARISON_OPERATORS        = %w(<=> == === != !== <= >= < > =~ !~)
 	INFIX_ARITHMETIC_OPERATORS  = %w(+ - * ** / % << >> ^ & |)
 	RANGE_OPERATORS             = %w(.. .< >. ><)
-	SCOPE_OPERATORS             = %w(. ./ ../)
+	SCOPE_OPERATORS             = %w(~/ ./ ../)
 	DOT_ACCESS_OPERATORS        = %w(. .?)
 	TYPE_COMPOSITION_OPERATORS  = %w(| & ~ ^) # Union, Intersection, Removal, Symmetric Difference
 	ANY_IDENTIFIER              = %i(identifier Identifier IDENTIFIER)
@@ -54,7 +54,8 @@ module Ore
 		== === != !== <= >= < >
 		! ? ?? !! && || & | << >>
 		.. >. .< >< <=>
-		@ ../ ./
+		@
+		~/ ./ ../
 		``` #
 
 		for

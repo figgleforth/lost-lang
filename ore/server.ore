@@ -20,7 +20,7 @@ Server {
 	port,
 
 	new { port = 8080;
-		.port = port
+		./port = port
 	}
 
 	ok200 {;

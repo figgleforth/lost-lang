@@ -110,8 +110,8 @@ class Lexer_Test < Base_Test
 		assert_equal %I(Identifier operator delimiter delimiter), out.map(&:type)
 		assert_equal 4, out.count
 
-		out = Ore.lex 'numbers =;'
-		assert_equal %I(identifier operator), out.map(&:type)
+		out = Ore.lex 'numbers,'
+		assert_equal %I(identifier delimiter), out.map(&:type)
 		assert_equal 2, out.count
 
 		out = Ore.lex 'number: Number = 1'
@@ -170,11 +170,11 @@ class Lexer_Test < Base_Test
 		assert_equal %I(number operator number delimiter number operator number delimiter number operator number delimiter number operator number), out.map(&:type)
 		assert_equal 15, out.count
 
-		out = Ore.lex '.this_instance'
+		out = Ore.lex './this_instance'
 		assert_equal %I(operator identifier), out.map(&:type)
 		assert_equal 2, out.count
 
-		out = Ore.lex './class_scope'
+		out = Ore.lex '../class_scope'
 		assert_equal %I(operator identifier), out.map(&:type)
 		assert_equal 2, out.count
 	end
@@ -237,13 +237,13 @@ class Lexer_Test < Base_Test
 		assert_equal [:Identifier, :delimiter, :delimiter], out.map(&:type)
 
 		out = Ore.lex 'Transform {
-		 	position =;
-		 	rotation =;
+		 	position,
+		 	rotation,
 		 }'
 		assert_equal [
 			             :Identifier, :delimiter, :delimiter,
-			             :identifier, :operator, :delimiter,
-			             :identifier, :operator, :delimiter,
+			             :identifier, :delimiter, :delimiter,
+			             :identifier, :delimiter, :delimiter,
 			             :delimiter
 		             ], out.map(&:type)
 

@@ -19,21 +19,21 @@ Vec2 {
 	y,
 
 	new {x, y;
-		.x = x
-		.y = y
+		./x = x
+		./y = y
 	}
 }
 
-input = File_System.read('examples/aoc/2015/03/input.txt')
+input := File_System.read('examples/aoc/2015/03/input.txt')
 
 # "x.y": num_presents
-visited = {}
+visited := {}
 visited["0.0"] = 2 # One for each santa
 
 # starting locations
-santa1 = Vec2(0,0)
-santa2 = Vec2(0,0)
-robo_santa = false
+santa1 := Vec2(0,0)
+santa2 := Vec2(0,0)
+robo_santa := false
 
 for input
 	robo_santa = !robo_santa
@@ -64,7 +64,7 @@ for input
 		end
 	end
 
-	key = if robo_santa
+	key := if robo_santa
 		"`santa2.x`.`santa2.y`"
 	else
 		"`santa1.x`.`santa1.y`"

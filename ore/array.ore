@@ -2,7 +2,7 @@ Array {
 	values,
 
 	new { values;
-		.values = values
+		./values = values
 	}
 
 	push { item; @ruby }

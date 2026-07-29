@@ -2,7 +2,7 @@ Greet {
 	subject,
 
 	new { subject;
-		.subject = subject
+		./subject = subject
 	}
 
 	greeting {;

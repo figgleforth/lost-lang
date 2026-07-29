@@ -20,9 +20,9 @@ For example:
 # OK xyxy (xy at positions 0 and 2)
 # OK aabcdaa (aa at positions 0 and 5)
 two_pairs? { input;
-	chars = input.chars()
+	chars := input.chars()
 	for 0..(chars.length() - 2)
-		pair = "`chars[at]``chars[at + 1]`"
+		pair := "`chars[at]``chars[at + 1]`"
 		# Look for same pair starting at position at+2 or later (non-overlapping)
 		for (at + 2)..(chars.length() - 2)
 			if "`chars[it]``chars[it + 1]`" == pair
@@ -34,7 +34,7 @@ two_pairs? { input;
 }
 
 repeat_with_gap? { input;
-	chars = input.chars()
+	chars := input.chars()
 	for 0..(chars.length() - 3)  # Need at least 3 chars from current position
 		if chars[at] == chars[at + 2]
 			return true
@@ -47,8 +47,8 @@ nice? { input;
 	two_pairs?(input) and repeat_with_gap?(input)
 }
 
-input = File_System.read('examples/aoc/2015/05/input.txt').split('\n')
-total = 0
+input := File_System.read('examples/aoc/2015/05/input.txt').split('\n')
+total := 0
 
 for input
 	total += 1 if nice?(it)

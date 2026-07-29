@@ -26,14 +26,14 @@ class Type_Checker_Test < Base_Test
 	end
 
 	def test_unannotated_assignment_is_not_checked
-		refute_type_error { Ore.type_check "x = 123" }
-		refute_type_error { Ore.type_check "x = 'hello'" }
-		refute_type_error { Ore.type_check "x = :sym" }
+		refute_type_error { Ore.type_check "x := 123" }
+		refute_type_error { Ore.type_check "x := 'hello'" }
+		refute_type_error { Ore.type_check "x := :sym" }
 	end
 
 	def test_unknown_rhs_is_skipped
 		# Identifier on RHS with unknown type, so no error. todo: Maybe print a warning?
-		refute_type_error { Ore.type_check "y = 1, x: Number = y" }
+		refute_type_error { Ore.type_check "y := 1, x: Number = y" }
 	end
 
 	# --- Mismatches at top level ---

@@ -166,7 +166,7 @@ class Parser_Test < Base_Test
 	end
 
 	def test_other
-		out = Ore.parse 'numbers = 4815'
+		out = Ore.parse 'numbers := 4815'
 		assert_kind_of Ore::Infix_Expr, out.first
 		assert_kind_of Ore::Number_Expr, out.first.right
 		assert_equal 1, out.count
@@ -176,7 +176,7 @@ class Parser_Test < Base_Test
 		assert_kind_of Ore::Identifier_Expr, out.first.left
 		assert_equal '=', out.first.operator.value
 
-		out = Ore.parse 'Type = {}'
+		out = Ore.parse 'Type := {}'
 		assert_kind_of Ore::Infix_Expr, out.first
 		assert_kind_of Ore::Identifier_Expr, out.first.left
 		assert_kind_of Ore::Circumfix_Expr, out.first.right
@@ -278,13 +278,13 @@ class Parser_Test < Base_Test
 	end
 
 	def test_scope_operators
-		out = Ore.parse '.this_instance'
+		out = Ore.parse './this_instance'
 		assert_kind_of Ore::Identifier_Expr, out.first
-		assert_equal '.', out.first.scope_operator.value
+		assert_equal './', out.first.scope_operator.value
 
-		out = Ore.parse '../global_scope'
+		out = Ore.parse '~/global_scope'
 		assert_kind_of Ore::Identifier_Expr, out.first
-		assert_equal '../', out.first.scope_operator.value
+		assert_equal '~/', out.first.scope_operator.value
 	end
 
 	def test_functions
@@ -374,9 +374,9 @@ class Parser_Test < Base_Test
 				return false
 			end
 
-			slice = remainder.slice(0, sequence.count)
+			slice := remainder.slice(0, sequence.count)
 			slice.{;
-				expected = sequence[at]
+				expected := sequence[at]
 
 				if expected === Array
 					expected.any? {;
@@ -746,23 +746,7 @@ class Parser_Test < Base_Test
 			assert_instance_of Ore::Route_Expr, out.first
 			assert_equal 'get', out.first.http_method.value
 			assert_equal "something", out.first.path
-
-			# out = Ore.parse_code 'put://"book/:id" replace_book {id >}'
-			# assert_equal 1, out.count
-			# assert_instance_of Ore::Route_Expr, out.first
-			# assert_equal 'put', out.first.http_method.value
-			# assert_equal "book/:id", out.first.path.value
-			#
-			# out = Ore.parse_code 'patch://"thing/:id" update_thing'
-			# assert_equal 1, out.count
-			# assert_instance_of Ore::Route_Expr, out.first
-			# assert_equal 'patch', out.first.http_method.value
-			# assert_equal "thing/:id", out.first.path.value
 		end
-
-		# assert_raises Invalid_Http_Directive_Handler do
-		# 	Ore.parse_code '#post "whatever/:id" 1234'
-		# end
 
 		out = Ore.parse '@pretend_method "endpoint" {;}'
 		assert_equal 2, out.count
