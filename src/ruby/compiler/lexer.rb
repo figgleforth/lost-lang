@@ -306,10 +306,6 @@ module Ore
 							it.type = :operator
 						end
 
-					elsif curr == '.' && peek == '.' && peek(2) == '.'
-						it.type  = :delimiter
-						it.value = "#{eat}#{eat}#{eat}"
-
 					elsif curr == '.' && peek == '/'
 						it.type  = :operator
 						it.value = "#{eat}#{eat}"

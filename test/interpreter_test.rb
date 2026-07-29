@@ -228,7 +228,7 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_inclusive_range
-		out = Ore.interp '4..42'
+		out = Ore.interp '4...42'
 		assert_instance_of Ore::Range, out
 		assert_equal 4..42, out
 		assert out.include? 4
@@ -237,7 +237,7 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_right_exclusive_range
-		out = Ore.interp '4.<42'
+		out = Ore.interp '4..<42'
 		assert_instance_of Ore::Range, out
 		assert_equal 4...42, out
 		assert out.include? 4
@@ -246,7 +246,7 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_left_exclusive_range
-		out = Ore.interp '4>.42'
+		out = Ore.interp '4>..42'
 		assert_instance_of Ore::Range, out
 		assert_equal 5..42, out
 		refute out.include? 4
@@ -255,7 +255,7 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_left_and_right_exclusive_range
-		out = Ore.interp '4><42'
+		out = Ore.interp '4>.<42'
 		assert_instance_of Ore::Range, out
 		assert_equal 5...42, out
 		refute out.include? 4
@@ -265,7 +265,7 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_empty_left_and_right_exclusive_range
-		out = Ore.interp '0><0'
+		out = Ore.interp '0>.<0'
 		assert_equal 1...0, out
 		refute out.include? -1
 		refute out.include? 0
@@ -1283,19 +1283,19 @@ class Interpreter_Test < Base_Test
 		two := []
 		three := []
 
-		for 1..5
+		for 1...5
 			zero << it
 		end
 
-		for 1><5
+		for 1>.<5
 			one << it
 		end
 
-		for 1>.5
+		for 1>..5
 			two << it
 		end
 
-		for 1.<5
+		for 1..<5
 			three << it
 		end
 
@@ -1363,12 +1363,12 @@ class Interpreter_Test < Base_Test
 		out = Ore.interp "
 		result := []
 
-		for 0..10
+		for 0...10
 			skip if it == 4
 
 			if it % 2 == 0
 				result << 'START `it`'
-				for 0..10
+				for 0...10
 					result << it
 					stop if it == 2
 				end

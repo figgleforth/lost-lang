@@ -15,7 +15,6 @@ Learn about the language below, or *[click here to get started using it](getting
 ```ore
 nothing := nil
 something := 123
-empty,  # equivalent to `empty := nil`
 ```
 
 ## Functions
@@ -244,7 +243,7 @@ for [1, 2, 3]
     @puts at      # Current index
 end
 
-for 1..5
+for 1...5
     @puts it      # 1, 2, 3, 4, 5
 end
 
@@ -407,18 +406,18 @@ n.clamp(0, 100)     # Clamp to range
 
 ## Ranges
 
-1. `..` inclusive range
-2. `.<` exclusive end
-3. `>.` exclusive start
-4. `><` exclusive both
+1. `...` inclusive range
+2. `..<` exclusive end
+3. `>..` exclusive start
+4. `>.<` exclusive both
 
 ```ore
-1..5        #=> 1, 2, 3, 4, 5  (inclusive)
-1.< 5       #=> 1, 2, 3, 4     (exclusive end)
->. 1 5      #=> 2, 3, 4, 5     (exclusive start)
->< 1 5      #=> 2, 3, 4        (exclusive both)
+1...5      #=> 1, 2, 3, 4, 5  (inclusive)
+1..<5      #=> 1, 2, 3, 4     (exclusive end)
+1>..5      #=> 2, 3, 4, 5     (exclusive start)
+1>.<5      #=> 2, 3, 4        (exclusive both)
 
-for 1..10
+for 1...10
     @puts it
 end
 ```

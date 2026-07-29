@@ -1109,13 +1109,13 @@ module Ore
 					start  = interpret expr.left
 					finish = interpret expr.right
 					case expr.operator.value
-					when '..'
+					when '...'
 						Ore::Range.new start, finish
-					when '.<'
+					when '..<'
 						Ore::Range.new start, finish, exclude_end: true
-					when '>.'
+					when '>..'
 						Ore::Range.new start + 1, finish
-					when '><'
+					when '>.<'
 						Ore::Range.new start + 1, finish, exclude_end: true
 					end
 

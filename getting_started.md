@@ -16,7 +16,7 @@ Greet {
 	subject,
 
 	new { subject;
-		.subject = subject
+		./subject = subject
 	}
 
 	greeting {;
@@ -142,7 +142,7 @@ y = 4         # Cannot_Reassign_Undeclared_Identifier — y was never declared
 ```
 # Comments start with a hash
 
-nothing,            # Syntactic sugar for "nothing := nil"
+nothing := nil
 something := true
 okay_too := 42,     # Comma allowed as expression separator
 
@@ -154,10 +154,10 @@ header    := "`LANG_NAME` v`version`"   # "ore-lang v0.0.0"
 footer    := 'Lines of code: `lines`'   # "Lines of code: 4815"
 
 # Ranges
-inclusive_range   := 0..2
-exclusive_range   := 2><5
-l_exclusive_range := 5>.7
-r_exclusive_range := 7.<9
+inclusive_range   := 0...2
+exclusive_range   := 2>.<5
+l_exclusive_range := 5>..7
+r_exclusive_range := 7..<9
 
 # Data containers
 tuples := (header, footer)

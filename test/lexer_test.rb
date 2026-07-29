@@ -142,23 +142,23 @@ class Lexer_Test < Base_Test
 		assert_equal %I(number operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex '1..2'
+		out = Ore.lex '1...2'
 		assert_equal %I(number operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex '3.0..4.0'
+		out = Ore.lex '3.0...4.0'
 		assert_equal %I(number operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex '3.<4'
+		out = Ore.lex '3..<4'
 		assert_equal %I(number operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex '5>.6'
+		out = Ore.lex '5>..6'
 		assert_equal %I(number operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex '7><8'
+		out = Ore.lex '7>.<8'
 		assert_equal %I(number operator number), out.map(&:type)
 		assert_equal 3, out.count
 
@@ -166,7 +166,7 @@ class Lexer_Test < Base_Test
 		assert_equal %I(identifier delimiter IDENTIFIER delimiter number delimiter string), out.map(&:type)
 		assert_equal 7, out.count
 
-		out = Ore.lex '1..2, 3.<4, 5>.6, 7><8'
+		out = Ore.lex '1...2, 3..<4, 5>..6, 7>.<8'
 		assert_equal %I(number operator number delimiter number operator number delimiter number operator number delimiter number operator number), out.map(&:type)
 		assert_equal 15, out.count
 

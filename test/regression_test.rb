@@ -407,8 +407,8 @@ class Regression_Test < Base_Test
 	end
 
 	def test_ranges_with_expression
-		assert_instance_of Ore::Range, Ore.interp("x:=1, 0..x")
-		assert_instance_of Ore::Range, Ore.interp("x:=1, y:=2, 0..(x + y)")
+		assert_instance_of Ore::Range, Ore.interp("x:=1, 0...x")
+		assert_instance_of Ore::Range, Ore.interp("x:=1, y:=2, 0...(x + y)")
 	end
 
 	# Regression: types loaded via `variable = @use 'file.ore'` were missing enclosing_scope in interp_type

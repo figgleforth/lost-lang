@@ -18,7 +18,7 @@ module Ore
 		+ - ^ * ** / % ~ == === ? . .?
 		= := : ||= &&= **= <<= >>= += -= *= |= /= %= &= ^=
 		&& || & | << >>
-		.. >. .< ><
+		... >.. ..< >.<
 		!= <= >= < > <=> < >
 		and or
 	)
@@ -29,7 +29,7 @@ module Ore
 	COMPOUND_OPERATORS          = %w(||= &&= **= <<= >>= += -= *= |= /= %= &= ^=)
 	COMPARISON_OPERATORS        = %w(<=> == === != !== <= >= < > =~ !~)
 	INFIX_ARITHMETIC_OPERATORS  = %w(+ - * ** / % << >> ^ & |)
-	RANGE_OPERATORS             = %w(.. .< >. ><)
+	RANGE_OPERATORS             = %w(... ..< >.. >.<)
 	SCOPE_OPERATORS             = %w(~/ ./ ../)
 	DOT_ACCESS_OPERATORS        = %w(. .?)
 	TYPE_COMPOSITION_OPERATORS  = %w(| & ~ ^) # Union, Intersection, Removal, Symmetric Difference
@@ -53,7 +53,7 @@ module Ore
 		= := ||= &&= **= <<= >>= += -= *= |= /= %= &= ^=
 		== === != !== <= >= < >
 		! ? ?? !! && || & | << >>
-		.. >. .< >< <=>
+		... >.. ..< >.< <=>
 		@
 		~/ ./ ../
 		``` #
@@ -123,7 +123,7 @@ module Ore
 		              '**=' => 90,
 
 		              # Ranges
-		              '..' => 80, '.<' => 80, '>.' => 80, '><' => 80,
+		              '...' => 80, '..<' => 80, '>..' => 80, '>.<' => 80,
 
 		              # Keywords
 		              'return' => 70,

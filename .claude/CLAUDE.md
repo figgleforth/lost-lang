@@ -366,16 +366,16 @@ double { n; n * 2 }
 
 ## Ranges
 
-Four range operators, all built on the same `..`/`.<`/`>.`/`><` family (`RANGE_OPERATORS` in `constants.rb`, handled in `interp_infix` in `interpreter.rb`):
+Four range operators, all built on the same `...`/`..<`/`>..`/`>.<` family (`RANGE_OPERATORS` in `constants.rb`, handled in `interp_infix` in `interpreter.rb`):
 
 ```ore
-1..5    # inclusive:        1, 2, 3, 4, 5
-1.< 5   # exclusive end:     1, 2, 3, 4
->. 1 5  # exclusive start:      2, 3, 4, 5
->< 1 5  # exclusive both:       2, 3, 4
+1...5  # inclusive:         1, 2, 3, 4, 5
+1..<5  # exclusive end:     1, 2, 3, 4
+1>..5  # exclusive start:      2, 3, 4, 5
+1>.<5  # exclusive both:       2, 3, 4
 ```
 
-`.<` trims the end, `>.`/`><` bump the start by 1 — implemented as `Ore::Range.new(start, finish, exclude_end: bool)` with `start`/`start + 1` depending on operator.
+`..<` trims the end, `>..`/`>.<` bump the start by 1 — implemented as `Ore::Range.new(start, finish, exclude_end: bool)` with `start`/`start + 1` depending on operator.
 
 ## Built-in Types and Intrinsic Methods
 

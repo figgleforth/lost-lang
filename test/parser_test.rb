@@ -219,47 +219,47 @@ class Parser_Test < Base_Test
 	end
 
 	def test_ranges
-		out = Ore.parse '1..2'
+		out = Ore.parse '1...2'
 		assert_kind_of Ore::Infix_Expr, out.first
 		assert_kind_of Ore::Number_Expr, out.first.left
-		assert_equal '..', out.first.operator.value
+		assert_equal '...', out.first.operator.value
 		assert_kind_of Ore::Number_Expr, out.first.right
 		assert_equal 1, out.first.left.value
 		assert_equal 2, out.first.right.value
 
-		out = Ore.parse '3.0..4.0'
+		out = Ore.parse '3.0...4.0'
 		assert_kind_of Ore::Number_Expr, out.first.left
 		assert_kind_of Ore::Infix_Expr, out.first
-		assert_equal '..', out.first.operator.value
+		assert_equal '...', out.first.operator.value
 		assert_kind_of Ore::Number_Expr, out.first.right
 		assert_equal 3.0, out.first.left.value
 		assert_equal 4.0, out.first.right.value
 
-		out = Ore.parse '3.<4'
+		out = Ore.parse '3..<4'
 		assert_kind_of Ore::Number_Expr, out.first.left
 		assert_kind_of Ore::Infix_Expr, out.first
-		assert_equal '.<', out.first.operator.value
+		assert_equal '..<', out.first.operator.value
 		assert_kind_of Ore::Number_Expr, out.first.right
 		assert_equal 3, out.first.left.value
 		assert_equal 4, out.first.right.value
 
-		out = Ore.parse '5>.6'
+		out = Ore.parse '5>..6'
 		assert_kind_of Ore::Number_Expr, out.first.left
 		assert_kind_of Ore::Infix_Expr, out.first
-		assert_equal '>.', out.first.operator.value
+		assert_equal '>..', out.first.operator.value
 		assert_kind_of Ore::Number_Expr, out.first.right
 		assert_equal 5, out.first.left.value
 		assert_equal 6, out.first.right.value
 
-		out = Ore.parse '7><8'
+		out = Ore.parse '7>.<8'
 		assert_kind_of Ore::Number_Expr, out.first.left
 		assert_kind_of Ore::Infix_Expr, out.first
-		assert_equal '><', out.first.operator.value
+		assert_equal '>.<', out.first.operator.value
 		assert_kind_of Ore::Number_Expr, out.first.right
 		assert_equal 7, out.first.left.value
 		assert_equal 8, out.first.right.value
 
-		out = Ore.parse '1..2, 3.<4, 5>.6, 7><8'
+		out = Ore.parse '1...2, 3..<4, 5>..6, 7>.<8'
 		assert_equal 4, out.count
 		out.each do
 			assert_kind_of Ore::Infix_Expr, it
