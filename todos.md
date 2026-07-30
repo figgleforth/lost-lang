@@ -1,5 +1,7 @@
  - [ ] Replace all `# todo: Proper error` placeholders scattered through `src/runtime/interpreter.rb` — real error types needed instead of generic ones.
  - [ ] Stride overlap for `for x by n,overlap` — `getting_started.md` documents `for x reject by 2,1` / `for x each by 3,1` style overlapping chunks, but the parser doesn't support the second stride argument yet (`src/compiler/parser.rb`: "Currently `stride` doesn't support option to overlap elements"). This was meant to be implemented, not just aspirational docs — needs the parser to accept `by <stride>,<overlap>` and the interpreter's chunking (`each_slice` today) to respect the overlap instead of using non-overlapping slices.
+ - [ ] An opertor for checking AST types. For example, `func{;} ==== Func_Expr`. I'm only using four equals to illustrate.
+ - [ ] `help {expr;}` or `@help` that accepts any expression and returns information about the Type, primitive, function, etc. Literally any expression should be able to be described given its AST. You even have access to the live values so the information can be dynamic to reflect what the user is actually asking about.
 
 **Bugs:**
 - [ ] Tuple-in-tuple has infinite members — `((), true).0.1`, `.0.2`, `.0.3`... all return a Tuple instead of erroring past the actual length.

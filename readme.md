@@ -9,12 +9,14 @@ Learn about the language below, or *[click here to get started using it](getting
 
 ## Variables
 
-1. Must start with a lowercase letter or `_`
-2. Can be followed by comma as shorthand for `:= nil`
+1. Must start with a lowercase letter or `_`.
+2. Can end with `!` or `?`
 
 ```ore
 nothing := nil
-something := 123
+something: Number = 123
+_private_thing := "Yes"
+tested? := false
 ```
 
 ## Functions
@@ -41,6 +43,8 @@ add { a, b;
     a + b
 }
 add(4, 8)  #=> 12
+
+_privately_do { x, y, z; }
 ```
 
 ## Recursion
