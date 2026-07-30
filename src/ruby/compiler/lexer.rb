@@ -310,6 +310,11 @@ module Ore
 						it.type  = :operator
 						it.value = "#{eat}#{eat}"
 
+					elsif curr == '.' && peek == '?'
+						# Again I'm special casing for `.?` which is my version of Ruby's `&.`
+						it.type  = :operator
+						it.value = "#{eat}#{eat}"
+
 					elsif symbol?(curr)
 						it.type = :operator
 						if %w(. | & ).include? curr

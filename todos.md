@@ -1,5 +1,4 @@
-- [ ] Replace all `# todo: Proper error` placeholders scattered through `src/runtime/interpreter.rb` — real error types needed instead of generic ones.
-- [ ] Nil-safe access — `x.?method` should return nil instead of raising when `x` is nil.
+ - [ ] Replace all `# todo: Proper error` placeholders scattered through `src/runtime/interpreter.rb` — real error types needed instead of generic ones.
 - [ ] `src/runtime/interpreter.rb` — array `<<` is special-cased in the interpreter instead of being a real operator declaration on `Array`; revisit once operator declarations exist.
 - [ ] Stride overlap for `for x by n,overlap` — `getting_started.md` documents `for x reject by 2,1` / `for x each by 3,1` style overlapping chunks, but the parser doesn't support the second stride argument yet (`src/compiler/parser.rb`: "Currently `stride` doesn't support option to overlap elements"). This was meant to be implemented, not just aspirational docs — needs the parser to accept `by <stride>,<overlap>` and the interpreter's chunking (`each_slice` today) to respect the overlap instead of using non-overlapping slices.
 
@@ -41,3 +40,4 @@
 - [x] A trailing `#` comment on the last line of a function or program body silently becomes the return value instead of being discarded. Repro: `add { a, b; a + b  # sum them }` then `add(4, 8)` returns the comment `"sum them"` instead of `12`
 - [x] Add extra period in the middle of range operators .. -> ...
 - [x] `Array#map` crashes if the anonymous function doesn't explicitly declare `it`/`at` as params (`arr.map({; it * 2 })` fails; `arr.map({it, at; it * 2})` works) — documented inline in `ore/array.ore`.
+- [x] Nil-safe access — `x.?method` should return nil instead of raising when `x` is nil.

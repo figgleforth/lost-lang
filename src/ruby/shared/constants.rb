@@ -47,7 +47,7 @@ module Ore
 
 	# It's been a while, but I believe this RESERVED list must be maintained. The other declarations above are helpers for comparisons while this contains every reserved symbols and identifiers.
 	RESERVED = %w(
-		[ { ( , _ . .. ) } ]
+		[ { ( , _ . .? .. ) } ]
 		: ;
 		+ - * ** / % ~
 		= := ||= &&= **= <<= >>= += -= *= |= /= %= &= ^=

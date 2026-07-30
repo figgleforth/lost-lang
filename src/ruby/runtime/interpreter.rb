@@ -910,7 +910,18 @@ module Ore
 				check_dot_access_permissions! receiver, expr.right.value, expr
 
 				push_scope receiver
-				result = interpret expr.right
+
+				# Here I'm special casing for `.?` which is my version of Ruby's `&.`
+				result = case expr.operator.value
+				when '.'
+					interpret expr.right
+				when '.?'
+					begin
+						interpret expr.right
+					rescue Ore::Undeclared_Identifier
+						nil
+					end
+				end
 				pop_scope
 				result
 			end
@@ -1041,7 +1052,7 @@ module Ore
 				interp_infix_assignment expr
 			when ':='
 				interp_infix_declaration expr
-			when '.'
+			when '.', '.?'
 				interp_dot_infix expr
 			when '<<'
 				# todo: This was implemented sometime when I first got arrays working, but it shouldn't be special-cased like this. Once operator declarations work then this can be declared on Array as `<< {iten > .values.push(item) }`
