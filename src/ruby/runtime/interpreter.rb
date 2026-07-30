@@ -31,7 +31,9 @@ module Ore
 				@stack << global
 			end
 			@lexer.input  = source_code
-			@parser.input = @lexer.output # Tokens
+			@parser.input = @lexer.output.reject do |lexeme|
+				%I(comment).include? lexeme.type # The interpreter doesn't care about these
+			end
 			@input        = @parser.output # Expressions
 
 			@last_output = output
@@ -1404,7 +1406,7 @@ module Ore
 			end
 
 			result = nil
-			body.each do |e|
+			body.compact.each do |e|
 				next if e.is_a? Ore::Param_Expr # Or just remove Param expressions from
 
 				result = interpret e
@@ -2028,6 +2030,7 @@ module Ore
 				end
 
 			else
+				pp expr
 				raise Ore::Interpret_Expr_Not_Implemented.new(expr, self)
 			end
 		end

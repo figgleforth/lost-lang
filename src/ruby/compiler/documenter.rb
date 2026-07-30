@@ -10,7 +10,7 @@ module Ore
 		def output
 			input.map do |expr|
 				case expr
-				when Ore::Comment_Expr, Ore::Fence_Expr, Ore::String_Expr
+				when Ore::Comment_Expr
 					expr.value
 				else
 					nil

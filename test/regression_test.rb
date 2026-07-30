@@ -511,4 +511,14 @@ class Regression_Test < Base_Test
 		ORE
 		assert_equal 55, out
 	end
+
+	# The comment string value was being returned by the Interpreter lol. 
+	def test_comment_as_last_expression_bug
+		out = Ore.interp "
+			add { a, b;
+				a + b # sum me
+			}
+			add(4, 8)"
+		refute_kind_of Ore::String_Expr, out
+	end
 end

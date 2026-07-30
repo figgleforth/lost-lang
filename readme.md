@@ -43,6 +43,46 @@ add { a, b;
 add(4, 8)  #=> 12
 ```
 
+## Recursion
+
+A named function is registered in its enclosing scope as it's declared, so it can call itself.
+
+```ore
+factorial { n;
+    if n == 0 or n == 1
+        1
+    else
+        n * factorial(n - 1)
+    end
+}
+factorial(8)  #=> 40320
+
+fib { n;
+    if n <= 1
+        n
+    else
+        fib(n - 1) + fib(n - 2)
+    end
+}
+fib(10)  #=> 55
+
+fizz_buzz { n;
+    if n % 15 == 0
+        'FizzBuzz'
+    elif n % 3 == 0
+        'Fizz'
+    elif n % 5 == 0
+        'Buzz'
+    else
+        n.to_s()
+    end
+}
+
+for 1...15
+    @puts fizz_buzz(it)
+end
+```
+
 ## Classes
 
 1. Must start with an uppercase character
@@ -174,6 +214,42 @@ Sprite | Movable | Drawable {
 s := Sprite()
 s.move(10, 5)
 s.draw()
+```
+
+Composition chains, so `~` can remove a trait that was mixed in earlier in the same chain:
+
+```ore
+Flying { can_fly := true }
+Swimming { can_swim := true }
+
+Duck | Flying | Swimming { name := 'duck' }
+d := Duck()
+d.can_fly     #=> true
+d.can_swim    #=> true
+
+Ostrich | Duck ~ Flying { name := 'ostrich' }
+o := Ostrich()
+o.can_swim    #=> true
+o.can_fly     #=> raises Ore::Undeclared_Identifier
+```
+
+A type can even compose with itself, to extend or override a built-in type's own behavior:
+
+```ore
+Array | Array {
+    each { func;
+        for ./values   # ./values reaches the original Array's own values, despite `each` itself now being redefined
+            func(it)
+        end
+    }
+}
+
+values := Array([1, 2, 3])
+doubled := []
+values.each({ it;
+    doubled.push(it * 2)
+})
+doubled  #=> [2, 4, 6]
 ```
 
 ## Conditionals
@@ -324,6 +400,32 @@ magnitude(v)  #=> 5
 # Manual sibling scope control
 @ += some_instance   # Add members to scope
 @ -= some_instance   # Remove from scope
+```
+
+An unpacked instance stays visible to functions defined after the unpack, even nested ones:
+
+```ore
+Point {
+    a := 0
+    b := 0
+
+    new { a, b;
+        ./a = a
+        ./b = b
+    }
+}
+
+outer {;
+    p := Point(23, 42)
+    @ += p
+
+    inner {;
+        a + b   # a, b resolved from p via the sibling scope, despite being nested inside outer
+    }
+
+    inner()
+}
+outer()  #=> 65
 ```
 
 ## Arrays
@@ -642,6 +744,83 @@ page := Html([
 += -= *= /=   # Compound assignment
 &&= ||=       # Logical compound
 <<= >>=       # Shift compound
+```
+
+## Operator Overloading
+
+1. Declare with `@operator`, a symbol or identifier, a fixity (`@infix`, `@prefix`, `@postfix`), a precedence number, and a function body
+2. Overloads are stored as regular functions in the declaring scope, so they can be scoped to a single function without leaking out
+3. Precedence controls how overloaded operators combine with each other and with built-ins
+
+```ore
+# Redefine + only inside this function — everywhere else, + still adds
+scoped := compute {;
+    @operator + @infix 700 { left, right;
+        left * right
+    }
+    3 + 4
+}
+
+3 + 4      #=> 7 (unaffected outside)
+scoped()   #=> 12
+
+# Build a pipeline operator
+@operator -> @infix 300 { left, right;
+    right(left)
+}
+
+double { n; n * 2 }
+add_fifteen { n; n + 15 }
+
+4 -> double -> add_fifteen  #=> 23
+
+# Invent new literal syntax
+Time { hour, minute, period, }
+
+@operator : @infix 700 { hour, minute;
+    t := Time()
+    t.hour = hour
+    t.minute = minute
+    t
+}
+
+@operator pm @postfix 600 { left: Time;
+    left.period = 'pm'
+    left
+}
+
+11:22pm  #=> Time(hour: 11, minute: 22, period: 'pm')
+
+# Or a prefix operator that builds a value from a bare literal
+Currency { amount, name, code, }
+
+@operator $ @prefix 900 { amount;
+    c := Currency()
+    c.amount = amount
+    c.name = 'US Dollar'
+    c.code = 'USD'
+    c
+}
+
+$42  #=> Currency(amount: 42, name: 'US Dollar', code: 'USD')
+```
+
+## Runtime Type Contracts
+
+1. `:=` infers a type from its right-hand side and locks the identifier to it
+2. Subsequent `=` assignments are checked against that locked type; `:=` again re-infers and re-locks
+3. A mismatch raises `Ore::Type_Contract_Violation`, not the static type checker's `Type_Mismatch`
+
+```ore
+x := 4        # declares x, infers Number, locks x to that type
+x = 8         # ok — same type
+x = 'hello'   # raises Ore::Type_Contract_Violation ("expected Number, got String")
+
+x := 4
+x := 'hello'  # fine — re-declaring with := re-infers and re-locks the type
+x             #=> 'hello'
+
+y = 4         # raises Ore::Cannot_Reassign_Undeclared_Identifier — y was never declared
 ```
 
 ## Nil Initialization

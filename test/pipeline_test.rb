@@ -24,12 +24,11 @@ class Pipeline_Test < Base_Test
 		code = <<~CODE
 		    # a comment
 		    1 + 1 # another comment
-		    ```a fence!```
 		CODE
 		lexemes     = Ore::Lexer.new(code).output
 		expressions = Ore::Parser.new(lexemes).output
 		result      = Ore::Documenter.new(expressions).output
-		assert_equal ['a comment', 'another comment', 'a fence!'], result.map(&:value)
+		assert_equal ['a comment', 'another comment'], result.map(&:value)
 	end
 
 	def test_type_checker

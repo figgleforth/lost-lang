@@ -16,6 +16,7 @@ module Ore
 			end
 		end
 
+		# note; this was a stupid idea
 		def is compare
 			if compare.is_a? Symbol
 				compare == type

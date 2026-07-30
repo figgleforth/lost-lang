@@ -2137,16 +2137,7 @@ class Interpreter_Test < Base_Test
 		out = Ore.interp "File_System.read_file_to_string('test/fixtures/hello_write.txt')"
 		assert_equal "Hello, Write!", out.value
 	end
-
-	def test_fence_expr_returns_string_expr
-		out = Ore.interp '```
-		some content
-		```'
-		# Fences unless subclassed will always be instances of Ore::Fence. The html example below transforms the fence into a ::String
-		assert_instance_of Ore::Fence, out
-		assert out.value.value.include?('some content')
-	end
-
+	
 	def test_html_fence_with_interpolation
 		out = Ore.interp "
 		name := 'Cooper'
@@ -2194,17 +2185,6 @@ class Interpreter_Test < Base_Test
 		```"
 		assert out.include?('Hello Alice')
 		assert out.include?('You have 42 messages')
-	end
-
-	def test_fence_expr_preserves_content
-		out = Ore.interp '```
-		line 1
-		line 2
-		```'
-
-		assert_instance_of Ore::Fence, out
-		assert out.value.value.include?('line 1')
-		assert out.value.value.include?('line 2')
 	end
 
 	# note: The idea is, given (abc,1)

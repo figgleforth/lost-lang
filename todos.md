@@ -39,4 +39,5 @@
 - [ ] `src/runtime/error_formatter.rb` — doesn't display source code properly, unclear how to get the source string at that point.
 - [ ] `src/runtime/errors.rb` — a case that's silently not printing anything to stdout.
 - [ ] `src/runtime/interpreter.rb` — a `rescue` is catching `ArgumentError` broadly instead of the specific `Undeclared_Identifier` it's meant for; root cause of the `ArgumentError: empty string` case was never tracked down.
+- [x] A trailing `#` comment on the last line of a function or program body silently becomes the return value instead of being discarded. Repro: `add { a, b; a + b  # sum them }` then `add(4, 8)` returns the comment `"sum them"` instead of `12`
 - [x] Add extra period in the middle of range operators .. -> ...
