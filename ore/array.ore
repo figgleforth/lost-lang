@@ -85,7 +85,6 @@ Array {
 		end
 	}
 
-	# todo; Validate whether the precedence is even used.
 	@operator << @infix 600 { left, right;
 		left.append(right)
 		right
