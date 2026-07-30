@@ -714,11 +714,34 @@ page := Html([
 ### Comparison
 
 ```ore
-== !=         # Equality
-=== !==       # Strict equality
-< <= > >=     # Relational
-<=>           # Spaceship (three-way)
-=~ !~         # Regex match
+== !=             # Equality
+< <= > >=         # Relational
+<=>               # Spaceship (three-way)
+=~ !~             # Regex match
+=== !==           # Composed-type-set equality
+>== ==<           # Composed-type-set superset (and its mirror)
+=/=               # Composed-type-set disjointness
+```
+
+`===`, `!==`, `>==`, `==<`, and `=/=` compare a type or instance's *composed types* — its own name plus everything it's picked up via `|`/`&`/`~`/`^` — rather than comparing values:
+
+```ore
+Flying { can_fly := true }
+Swimming { can_swim := true }
+
+Duck | Flying | Swimming { name := 'duck' }
+Fish | Swimming { name := 'fish' }
+
+Duck === Duck          #=> true  (identical composed types)
+Duck === Fish          #=> false (Duck also composes Flying)
+Duck !== Fish          #=> true
+
+Duck >== Swimming      #=> true  (Duck composes with at least Swimming)
+Swimming >== Duck      #=> false
+Swimming ==< Duck      #=> true  (==< is >== with the operands flipped)
+
+Duck =/= Fish          #=> false (both compose Swimming — not disjoint)
+Flying =/= Swimming    #=> true  (share nothing)
 ```
 
 ### Logical

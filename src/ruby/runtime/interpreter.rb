@@ -1108,9 +1108,33 @@ module Ore
 					end
 
 				elsif COMPARISON_OPERATORS.include? expr.operator.value
+					# note; I'm special casing these because they don't behave like the traditional == and != in Ruby.
 					left  = interpret expr.left
 					right = interpret expr.right
-					left.send expr.operator.value, right
+
+					case expr.operator.value
+					when '=/='
+						# They share absolutely no types
+						!left.types.any? do |type|
+							right.types.include? type
+						end
+					when '==='
+						left.types == right.types
+					when '!=='
+						left.types != right.types
+					when '>=='
+						# Is expr.left a superset of expr.right
+						right.types.all? do |type|
+							left.types.include? type
+						end
+					when '==<'
+						# Is expr.right a superset of expr.left
+						left.types.all? do |type|
+							right.types.include? type
+						end
+					else
+						left.send expr.operator.value, right
+					end
 
 				elsif COMPOUND_OPERATORS.include? expr.operator.value
 					# (a += b)  ==>  (a = (a + b))

@@ -261,6 +261,35 @@ Post | Record { ../database := ~/db; table_name := 'posts' }
 Layout | Dom { render {; Html([Body("Hello")]) } }
 ```
 
+## Type Comparison Operators
+
+Five operators compare the *composed-type sets* of Types and Instances (a type's own name plus every type it has composed via `|`/`&`/`~`/`^`), handled in the `COMPARISON_OPERATORS` branch of `interp_infix` in `interpreter.rb`:
+
+- `===` - exact type-set equality
+- `!==` - negation of `===`
+- `>==` - is left a superset of right (left composes with at least everything right does)
+- `==<` - is right a superset of left (mirror of `>==` with operands reversed: `A ==< B` ≡ `B >== A`)
+- `=/=` - disjoint: the two share no composed types at all
+
+Only `>==` (superset) carries genuinely new information — `==<` is `>==` with swapped operands, and `===` is mutual `>==` in both directions (`(A >== B) && (B >== A)`); `!==` is just `!(A === B)`. The other three exist purely for readability at the call site, the same reason most languages ship both `<=`/`>=` alongside `==`/`!=` despite one being derivable from the other.
+
+```ore
+Flying { can_fly := true }
+Swimming { can_swim := true }
+
+Duck | Flying | Swimming { name := 'duck' }
+Fish | Swimming { name := 'fish' }
+
+Duck === Duck          #=> true  (identical composed-type sets)
+Duck === Fish          #=> false (Duck also composes Flying)
+Duck !== Fish          #=> true
+Duck >== Swimming      #=> true  (Duck composes with at least Swimming)
+Swimming >== Duck      #=> false (Swimming doesn't compose Duck's extra types)
+Swimming ==< Duck      #=> true  (mirror of the line above)
+Duck =/= Fish          #=> false (both compose Swimming, so they're not disjoint)
+Flying =/= Swimming    #=> true  (share nothing)
+```
+
 ## Identifier Naming Conventions
 
 The language enforces naming conventions through the helper functions:

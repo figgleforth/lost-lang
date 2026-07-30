@@ -2386,4 +2386,85 @@ class Interpreter_Test < Base_Test
 		assert_equal 3, out.values.count
 		assert_equal [Ore::Tuple.new([:a, 15]), Ore::Tuple.new([:b, 16]), Ore::Tuple.new([:c, 23])], out.values
 	end
+
+	def test_type_comparison_operators
+		shared = <<~CODE
+		    Num {}
+		CODE
+		out = Ore.interp <<~CODE
+			#{shared}
+		    Left | Num {}
+		    Right | Num {}
+			l := Left()
+			r := Right()
+			(Left === Right, Left === Left, l === r, l === l)
+		CODE
+		assert_equal [false, true, false, true], out.values
+
+		out = Ore.interp <<~CODE
+			#{shared}
+		    Left | Num {}
+		    Right | Num {}
+			l := Left()
+			r := Right()
+			(Left !== Right, Right !== Right, l !== r, r !== r)
+		CODE
+		assert_equal [true, false, true, false], out.values
+
+		# Siblings that only share a common composed base (Num) are NOT comparable via >==/==< -- neither one's types are a subset of theother's, even though they overlap. This is what distinguishes >==/==< from a plain "do these share any composed type" check.
+		out = Ore.interp <<~CODE
+			#{shared}
+		    Left | Num {}
+		    Right | Num {}
+			l := Left()
+			r := Right()
+			(Left >== Right, Right >== Left, l >== r, r >== l)
+		CODE
+		assert_equal [false, false, false, false], out.values
+
+		out = Ore.interp <<~CODE
+			#{shared}
+		    Left | Num {}
+		    Right | Num {}
+			l := Left()
+			r := Right()
+			(Left ==< Right, Right ==< Left, l ==< r, r ==< l)
+		CODE
+		assert_equal [false, false, false, false], out.values
+
+		# `A >== B` is true when A's composed types are a superset of B's -- i.e. A composes with at least everything B does. Left composes Num, so Left has "at least" Num, but not the other way around.
+		out = Ore.interp <<~CODE
+			#{shared}
+		    Left | Num {}
+			l := Left()
+			n := Num()
+			(Left >== Num, Num >== Left, Left >== Left, l >== n, n >== l)
+		CODE
+		assert_equal [true, false, true, true, false], out.values
+
+		# ==< mirrors >== with the operands' roles reversed.
+		out = Ore.interp <<~CODE
+			#{shared}
+		    Left | Num {}
+			l := Left()
+			n := Num()
+			(Num ==< Left, Left ==< Num, Left ==< Left, n ==< l, l ==< n)
+		CODE
+		assert_equal [true, false, true, true, false], out.values
+
+		# `A =/= B` is true when A and B share no composed types at all. A/B share nothing. Left/Right both compose Num, so they're not disjoint even though neither composes the other. Left/Num aren't disjoint either, since Left composes Num directly.
+		out = Ore.interp <<~CODE
+			#{shared}
+		    A {}
+		    B {}
+		    Left | Num {}
+		    Right | Num {}
+			a := A()
+			b := B()
+			l := Left()
+			r := Right()
+			(A =/= B, A =/= A, Left =/= Right, Left =/= Num, a =/= b, l =/= r, l =/= Num)
+		CODE
+		assert_equal [true, false, false, false, true, false, false], out.values
+	end
 end
