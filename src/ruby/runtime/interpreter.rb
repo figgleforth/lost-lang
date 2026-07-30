@@ -1294,7 +1294,7 @@ module Ore
 			type.enclosing_scope = stack.last
 
 			ore_name = "Ore::#{expr.name.value}"
-			defined  = Object.const_defined? ore_name
+			defined  = expr.name.value[0] != '_' && Object.const_defined?(ore_name) # note; #const_defined? does not allow underscore as the first character, hence the underscore check.
 			link_instance_to_type type, expr.name.value if defined
 
 			type.types ||= []
