@@ -23,7 +23,7 @@ module Ore
 			return connection[name.to_sym] if proxy_table_exists? name
 
 			connection.create_table name.to_sym do
-				columns_ore_dict.dict.each do |col, type|
+				columns_ore_dict.hash.each do |col, type|
 					col = col.to_sym
 
 					case type

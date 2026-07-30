@@ -38,23 +38,23 @@ module Ore
 		end
 
 		def proxy_find_by ore_dict
-			record = table.where(ore_dict.dict).first
+			record = table.where(ore_dict.hash).first
 			record ? Ore::Dictionary.new(record) : nil
 		end
 
 		def proxy_where ore_dict
-			records      = table.where(ore_dict.dict).all
+			records      = table.where(ore_dict.hash).all
 			dictionaries = records.map { |hash| Ore::Dictionary.new hash }
 			Ore::Array.new dictionaries
 		end
 
 		def proxy_create ore_dict
 			# todo: Return self, or a hash of the inserted row. By default, table#insert returns the id of the inserted row
-			table.insert ore_dict.dict
+			table.insert ore_dict.hash
 		end
 
 		def proxy_update id, ore_dict
-			table.where(id: id).update ore_dict.dict
+			table.where(id: id).update ore_dict.hash
 		end
 
 		def proxy_delete id

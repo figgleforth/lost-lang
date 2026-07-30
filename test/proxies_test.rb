@@ -113,7 +113,7 @@ class ProxiesTest < Base_Test
 		refute Ore.interp("{x: 1}.empty?()")
 
 		out = Ore.interp("d := {x: 1, y: 2}, d.clear(), d")
-		assert_equal({}, out.dict)
+		assert_equal({}, out.hash)
 
 		assert_equal 1, Ore.interp("{x: 1}.fetch(:x, 0)")
 		assert_equal 0, Ore.interp("{x: 1}.fetch(:y, 0)")
@@ -125,7 +125,7 @@ class ProxiesTest < Base_Test
 		refute Ore.interp("{x: 1, y: 2}.has_key?(:z)")
 
 		out = Ore.interp("d := {x: 1, y: 2, z: 3}, d.delete(:y), d")
-		assert_equal({ x: 1, z: 3 }, out.dict)
+		assert_equal({ x: 1, z: 3 }, out.hash)
 
 		assert_equal 3, Ore.interp("{x: 1, y: 2, z: 3}.count()")
 		assert_equal 0, Ore.interp("{}.count()")

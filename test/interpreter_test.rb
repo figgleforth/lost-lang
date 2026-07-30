@@ -350,61 +350,61 @@ class Interpreter_Test < Base_Test
 	def test_empty_dictionary
 		out = Ore.interp '{}'
 		assert_kind_of Ore::Dictionary, out
-		assert_equal out.dict, {}
+		assert_equal out.hash, {}
 	end
 
 	def test_create_dictionary_with_identifiers_as_keys_without_commas
 		out = Ore.interp '{a b c}'
-		assert_equal %i(a b c), out.dict.keys
-		out.dict.values.each do |value|
+		assert_equal %i(a b c), out.hash.keys
+		out.hash.values.each do |value|
 			assert_instance_of NilClass, value
 		end
 	end
 
 	def test_create_dictionary_with_identifiers_as_keys_with_commas
 		out = Ore.interp '{a, b}'
-		out.dict.values.each do |value|
+		out.hash.values.each do |value|
 			assert_instance_of NilClass, value
 		end
 	end
 
 	def test_create_dictionary_with_keys_and_values_with_mixed_infix_notation
 		out = Ore.interp '{ x:0 y=1 z}'
-		refute_instance_of NilClass, out.dict.values.first
-		refute_instance_of NilClass, out.dict.values[1]
-		assert_instance_of NilClass, out.dict.values.last
+		refute_instance_of NilClass, out.hash.values.first
+		refute_instance_of NilClass, out.hash.values[1]
+		assert_instance_of NilClass, out.hash.values.last
 	end
 
 	def test_create_dictionary_with_keys_and_values_with_mixed_infix_notation_and_commas
 		out = Ore.interp '{ x:4, y=8, z}'
-		assert_equal 4, out.dict.values.first
-		assert_equal 8, out.dict.values[1]
-		assert_instance_of NilClass, out.dict.values.last
+		assert_equal 4, out.hash.values.first
+		assert_equal 8, out.hash.values[1]
+		assert_instance_of NilClass, out.hash.values.last
 	end
 
 	def test_create_dictionary_with_local_value
 		out = Ore.interp 'x:=4, y:=2, { x=x, y=y }'
-		assert_equal out.dict, { x: 4, y: 2 }
+		assert_equal out.hash, { x: 4, y: 2 }
 	end
 
 	def test_symbol_as_dictionary_keys
 		out = Ore.interp '{ :x = 1 }'
-		assert_equal out.dict, { x: 1 }
+		assert_equal out.hash, { x: 1 }
 	end
 
 	def test_string_as_dictionary_keys
 		out = Ore.interp '{ "x" = 1 }'
-		assert_equal out.dict, { x: 1 }
+		assert_equal out.hash, { x: 1 }
 	end
 
 	def test_colon_as_dictionary_infix_operator
 		out = Ore.interp 'x := 123, { x: x }'
-		assert_equal out.dict, { x: 123 }
+		assert_equal out.hash, { x: 123 }
 	end
 
 	def test_equals_as_dictionary_infix_operator
 		out = Ore.interp 'x := 123, { x = x }'
-		assert_equal out.dict, { x: 123 }
+		assert_equal out.hash, { x: 123 }
 	end
 
 	def test_dictionary_keys
@@ -2137,7 +2137,7 @@ class Interpreter_Test < Base_Test
 		out = Ore.interp "File_System.read_file_to_string('test/fixtures/hello_write.txt')"
 		assert_equal "Hello, Write!", out.value
 	end
-	
+
 	def test_html_fence_with_interpolation
 		out = Ore.interp "
 		name := 'Cooper'

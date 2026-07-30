@@ -105,7 +105,7 @@ class Database_Test < Base_Test
 
 			(pre_tables, post_tables)
 		ORE
-		assert_equal [[], [:users]], out.values.map { |ore_array| ore_array.get('values').values }
+		assert_equal [[], [:users]], out.values.map { |ore_array| ore_array.get('values') }
 	end
 
 	def test_record_database_reference
@@ -132,9 +132,9 @@ class Database_Test < Base_Test
 		ORE
 		assert_equal 0, out.values[0].values.count
 		assert_equal 2, out.values[1].values.count
-		assert_equal [{ id: 1, name: 'Cooper' }, { id: 2, name: 'Luna' }], out.values[1].values.map(&:dict)
-		assert_equal({ id: 1, name: 'Cooper' }, out.values[2].dict)
-		assert_equal({ id: 2, name: 'Luna' }, out.values[3].dict)
+		assert_equal [{ id: 1, name: 'Cooper' }, { id: 2, name: 'Luna' }], out.values[1].values.map(&:hash)
+		assert_equal({ id: 1, name: 'Cooper' }, out.values[2].hash)
+		assert_equal({ id: 2, name: 'Luna' }, out.values[3].hash)
 		assert out.values.last
 	end
 
@@ -171,7 +171,7 @@ class Database_Test < Base_Test
 			User.update(id, {name: 'Cooper Updated'})
 			User.find(id)
 		ORE
-		assert_equal 'Cooper Updated', out.dict[:name]
+		assert_equal 'Cooper Updated', out.hash[:name]
 	end
 
 	def test_record_find_by
@@ -190,7 +190,7 @@ class Database_Test < Base_Test
 			User.create({name: 'Luna'})
 			User.find_by({name: 'Luna'})
 		ORE
-		assert_equal({ id: 2, name: 'Luna' }, out.dict)
+		assert_equal({ id: 2, name: 'Luna' }, out.hash)
 	end
 
 	def test_record_find_by_returns_nil_when_not_found
@@ -229,7 +229,7 @@ class Database_Test < Base_Test
 			Item.where({kind: 'fruit'})
 		ORE
 		assert_equal 2, out.values.count
-		assert_equal ['Apple', 'Banana'], out.values.map { |d| d.dict[:name] }
+		assert_equal ['Apple', 'Banana'], out.values.map { |d| d.hash[:name] }
 	end
 
 	def test_number_rand

@@ -8,9 +8,15 @@ module Ruby_Proxies
 	end
 
 	def proxy_delegate object_name
+		@proxy_delegate_name = object_name.to_s
+
 		define_method "_proxy_delegate_" do |*args|
 			send object_name
 		end
+	end
+
+	def proxy_delegate_name
+		@proxy_delegate_name
 	end
 
 	def proxy method_name, as: method_name

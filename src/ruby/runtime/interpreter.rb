@@ -763,10 +763,17 @@ module Ore
 					raise Ore::Too_Many_Subscript_Expressions.new(expr.left, self)
 				end
 				# note: I'm interpreting only the first expression of left.expression.expressions as the key because the brackets are a Circumfix_Expr which uses an array to store the values.
-				receiver      = interpret expr.left.receiver
-				key           = interpret expr.left.expression.expressions.first
-				receiver[key] = interpret expr.right
-				return receiver[key] # note: Intentionally returning the value here because the code starting with the directive check runs to the end of the method. todo: Imrpove?
+				receiver = interpret expr.left.receiver
+				key      = interpret expr.left.expression.expressions.first
+				value    = interpret expr.right
+
+				if receiver.is_a? Ore::Dictionary
+					receiver.proxy_set key, value
+					return receiver.proxy_get key
+				else
+					receiver[key] = value
+					return receiver[key] # note: Intentionally returning the value here because the code starting with the directive check runs to the end of the method. todo: Imrpove?
+				end
 			end
 
 			# Handle dot assignment
@@ -959,7 +966,7 @@ module Ore
 			when expr.right.is(Ore::Array_Index_Expr)
 				expr.right.indices_in_order.reduce(scope) do |current, index|
 					raise Ore::Invalid_Dot_Infix_Left_Operand.new(expr, self) unless current.is_a?(Ore::Array)
-					current.get index
+					current.proxy_get index
 				end
 
 			else
@@ -980,12 +987,12 @@ module Ore
 
 			if expr.right.is_a? Ore::Identifier_Expr
 				key_sym = expr.right.value.to_sym
-				if dict.dict.has_key?(key_sym)
-					return dict.dict[key_sym]
+				if dict.hash.has_key?(key_sym)
+					return dict.hash[key_sym]
 				end
 			end
 
-			# todo: Handle the case when dictionary keys shadow one of the builtin dictionary functions. Ideally check the dict scope first, then dict.dict, but manually check the scope instead of using #interpret because #interpret will look up the stack so the identifier may be found and evaluated despite not existing in dictionary.dict or dictionary the built-in.
+			# todo: Handle the case when dictionary keys shadow one of the builtin dictionary functions. Ideally check the dict scope first, then dict.hash, but manually check the scope instead of using #interpret because #interpret will look up the stack so the identifier may be found and evaluated despite not existing in dictionary.dict or dictionary the built-in.
 			push_scope dict
 			result = interpret expr.right
 			pop_scope
@@ -1177,9 +1184,9 @@ module Ore
 				end
 				link_instance_to_type array, 'Array'
 
-				# Make values accessible as an Ore identifier - point to the array itself so `for values` works
+				# Make values accessible as an Ore identifier (`for values`, `arr.values`), sharing the same list object as the real backing store so mutations (push/pop/etc) stay in sync.
 				array.values                 = values
-				array.declarations['values'] = array
+				array.declarations['values'] = values
 
 				array
 			when '()'
@@ -1199,12 +1206,12 @@ module Ore
 			when '{}'
 				expr.expressions.reduce(Ore::Dictionary.new) do |dict, it|
 					if it.is_a? Ore::Identifier_Expr
-						dict[it.value.to_sym] = nil
+						dict.proxy_set it.value.to_sym, nil
 					elsif it.is_a? Ore::Infix_Expr
 						case it.operator.value
 						when ':', '='
 							if it.left.is_a?(Ore::Identifier_Expr) || it.left.is_a?(Ore::Symbol_Expr) || it.left.is_a?(Ore::String_Expr)
-								dict[it.left.value.to_sym] = interpret it.right
+								dict.proxy_set it.left.value.to_sym, interpret(it.right)
 							else
 								# The left operand should be allowed to be any hashable object. It's too early in the project to consider hashing but this'll be a good reminder.
 								raise Ore::Invalid_Dictionary_Key.new(it, self)
@@ -1671,7 +1678,7 @@ module Ore
 				values = case collection
 
 				when Ore::Dictionary
-					collection.dict
+					collection.hash
 				when Ore::Array
 					collection.values
 
@@ -1941,7 +1948,7 @@ module Ore
 			case receiver
 			when Ore::Dictionary, Ore::Array
 				key = interpret expr.expression.expressions.first
-				receiver[key]
+				receiver.proxy_get key
 			when Ore::Nil
 				# todo: What should happen when subscripting nil? A warning of some kind maybe?
 				nil

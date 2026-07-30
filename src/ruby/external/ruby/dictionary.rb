@@ -1,15 +1,15 @@
 module Ore
 	class Dictionary < Instance
 		extend Ruby_Proxies
-		attr_accessor :dict
+		attr_accessor :hash
 
-		def initialize dict = nil
+		def initialize hash = nil
 			super 'Dictionary'
-			@dict         = dict || {}
-			@declarations = {}
+			@hash                 = hash || {}
+			@declarations['hash'] = @hash
 		end
 
-		proxy_delegate 'dict'
+		proxy_delegate 'hash'
 		proxy :has_key?
 		proxy :delete
 		proxy :count
@@ -19,25 +19,25 @@ module Ore
 		proxy :clear
 		proxy :fetch
 
-		def proxy_merge other_dict
-			dict.merge other_dict.dict
+		def proxy_merge other_hash
+			hash.merge other_hash.hash
 		end
 
-		def [] key
-			dict[key.to_sym] || declarations[key.to_sym]
+		# note; To prevent Scope#[] or Scope#get from missing out on the actual location of the hash. Standard members still call through to [] and get. I'm manually calling these proxy methods in some places. @copypaste from array.rb
+		def proxy_get key
+			hash[key.to_sym]
 		end
 
-		def []= key, value
-			dict[key.to_sym]         = value
-			declarations[key.to_sym] = value
+		def proxy_set key, value
+			hash[key.to_sym] = value
 		end
 
 		def == other
-			dict == other&.dict
+			hash == other&.hash
 		end
 
 		def to_s
-			dict.inspect
+			hash.inspect
 		end
 	end
 end

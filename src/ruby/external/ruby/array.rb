@@ -7,7 +7,7 @@ module Ore
 		def initialize values = []
 			super 'Array'
 			@values                 = values || []
-			@declarations['values'] = self
+			@declarations['values'] = @values
 		end
 
 		proxy_delegate 'values'
@@ -27,8 +27,13 @@ module Ore
 		proxy :include?
 		proxy :empty?
 
+		# note; To prevent Scope#[] or Scope#get from missing out on the actual location of the array elements. Standard members still call through to [] and get. I'm manually calling these proxy methods in some places.
 		def proxy_get index
-			get index
+			values[index]
+		end
+
+		def proxy_set index, value
+			values[index] = value
 		end
 
 		def proxy_random
@@ -42,11 +47,6 @@ module Ore
 		def proxy_flatten depth = -1
 			ruby_array = values.map { |v| v.is_a?(Ore::Array) ? v.values : v }
 			Ore::Array.new ruby_array.flatten depth
-		end
-
-		def get key
-			# note: This is required because Instance extends Scope whose [] method reads from @declarations
-			key.is_a?(Integer) ? values[key] : super(key) # super being a Scope that also takes a key
 		end
 
 		def == other
