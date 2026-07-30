@@ -105,3 +105,15 @@ Alternate syntax to consider
 	c
 }
 ```
+
+
+``` FYI, You might think this would work, but ( is a reserved symbol and cannot be used in operator overloading.
+
+Test {
+	@operator () @postfix 500 { left;
+		left()
+	}
+}
+
+Test() # Error: An operator can only by an :operator or :identifier. Your `(` is :delimiter.
+```

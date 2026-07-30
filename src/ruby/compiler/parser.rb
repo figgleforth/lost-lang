@@ -646,12 +646,9 @@ module Ore
 
 				# Here I'm intercepting when an @operator directive is found, so that I can prebuild a special expression for operator overloads. Just FYI, this massive if body ends with a return statement,
 				if expr.value == 'operator'
-					unless curr? %i(operator identifier)
-						raise "@operator directive requires an operator identifier made of symbols. Hold shift and press some numbers... rules tbd!"
-					end
 					op_lexeme            = eat # Eat the :operator or :identifier token directly. Going through parse_expression would apply custom fixity rules that are pre-registered and would misparse the operator in its own declaration.
 					unless %i(operator identifier).include? op_lexeme.type
-						raise "An operator can only by an operator or identifier.. what a stupid message."
+						raise "An operator can only by an :operator or :identifier. Your `#{op_lexeme.value}` is :#{op_lexeme.type}. Maybe it's reserved. todo; Better message!"
 					end
 					operator_expr        = Ore::Operator_Expr.new op_lexeme
 					directive.expression = operator_expr
