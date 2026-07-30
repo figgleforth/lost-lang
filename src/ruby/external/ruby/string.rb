@@ -18,7 +18,7 @@ module Ore
 		proxy :downcase
 		proxy :split
 		proxy :slice!, as: :slice
-		proxy :strip,  as: :trim
+		proxy :strip, as: :trim
 		proxy :lstrip, as: :trim_left
 		proxy :rstrip, as: :trim_right
 		proxy :chars

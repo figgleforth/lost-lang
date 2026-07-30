@@ -13,7 +13,7 @@ String {
 
 	downcase {; @ruby }
 	upcase {; @ruby }
-	split { delimiter = nil; @ruby } # todo: Without the default nil value, .split() fails
+	split { delimiter = nil; @ruby }
     slice { substr; @ruby }
     trim {; @ruby }
 	trim_left {; @ruby }

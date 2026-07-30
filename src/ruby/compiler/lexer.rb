@@ -126,7 +126,7 @@ module Ore
 			last_token = tokens.reverse.find { |t| t.type != :whitespace }
 			return true if last_token.nil?
 
-			# After operators or opening delimiters, lex as negative number nut NOT after closing delimiters like ')' which would be subtraction: (x)-1
+			# After operators or opening delimiters, lex as negative number but NOT after closing delimiters like ')' which would be subtraction: (x)-1
 			if last_token.type == :delimiter
 				return !%w<) ] }>.include?(last_token.value)
 			end
