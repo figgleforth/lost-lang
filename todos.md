@@ -20,7 +20,7 @@
 - [ ] Update? `src/compiler/lexer.rb` — operators are still allowed to start/end with `` ' " { } ( ) `` and should be disallowed.
 
 **Language design loose ends:**
-- [ ] `test/regression_test.rb` — plan to make bare `{x}` implicitly set `x` if it's declared in the scope, so `{x}.x` returns `123`.
+- [ ] `test/regression_test.rb` — plan to make bare `{x}` implicitly set `x` if it's declared in the scope, so `x=123, {x}` should set x to 123.
 - [ ] `src/shared/constants.rb` — `UNPACK_OPERATOR = '@'` collides conceptually with `Ore::BUILTIN_OPERATOR` (also `@`); pick a distinct symbol for one of them.
 - [ ] `src/runtime/interpreter.rb` — sibling scopes are assumed read-only; assumption was never actually double-checked.
 - [ ] `src/runtime/interpreter.rb` — builtins aren't user-extensible yet; a rough shape of the requirements exists in some comment but nothing's implemented.
@@ -43,3 +43,4 @@
 - [x] Nil-safe access — `x.?method` should return nil instead of raising when `x` is nil.
 - [x] Validate whether the precedence is even used when declaring an operator. Yes, it is.
 - [x] `src/runtime/interpreter.rb` — array `<<` is special-cased in the interpreter instead of being a real operator declaration on `Array`; revisit once operator declarations exist.
+- [x] Add Type set comparison operators
