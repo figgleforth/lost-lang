@@ -1054,22 +1054,6 @@ module Ore
 				interp_infix_declaration expr
 			when '.', '.?'
 				interp_dot_infix expr
-			when '<<'
-				# todo: This was implemented sometime when I first got arrays working, but it shouldn't be special-cased like this. Once operator declarations work then this can be declared on Array as `<< {iten > .values.push(item) }`
-				left  = maybe_instance interpret expr.left
-				right = interpret expr.right
-
-				if left.is_a?(Ore::Array)
-					left.values << right
-				else
-					begin
-						# todo: I don't like generic approach because the type of `left` is unknown at this moment.
-						left.send expr.operator.value, right
-					rescue
-						# todo: Proper error
-						raise "Unsupported << operator for #{expr.inspect}"
-					end
-				end
 			else
 				# We're checking for operator overloads first, then the default operator functionality is the fallback. Operator overloads are normal functions that take its operands as arguments, declared on the stack. We're looking them up as if they were regular named functions.
 				overload_func = stack.reverse_each.find do |s|
@@ -1082,6 +1066,7 @@ module Ore
 					return interp_func_body overload_func, call
 				end
 
+				# note; Huge case/when each of which is the last value returned by this method, so basically a big return switch
 				if expr.left.value == Ore::BUILTIN_OPERATOR # todo: Choose a different name for this, and a different character to use. @ is now gonna be exclusively "builtin" operator.
 					case expr.operator.value
 					when '+='
@@ -1099,7 +1084,21 @@ module Ore
 				elsif INFIX_ARITHMETIC_OPERATORS.include? expr.operator.value
 					left  = maybe_instance interpret expr.left
 					right = maybe_instance interpret expr.right
-					left.send expr.operator.value, right
+
+					# If left (or left's type) declares this operator via @operator, call it like a regular function with (left, right) as arguments. Falls back to left.enclosing_scope (the Type) because shorthand-constructed instances (array/string/dict literals, e.g. `[1, 2, 3]`) never get the type's own declarations copied down onto themselves the way `Array(...)`-style construction does (see #interp_type_call) -- this mirrors the same fallback #interp_identifier already does for regular method calls like `arr.push(...)`.
+					overload_func = if left.is_a?(Ore::Scope) && left.has?(expr.operator.value)
+						left.get expr.operator.value
+					elsif left.is_a?(Ore::Scope) && left.enclosing_scope.is_a?(Ore::Type) && left.enclosing_scope.has?(expr.operator.value)
+						left.enclosing_scope.get expr.operator.value
+					end
+
+					if overload_func.is_a? Ore::Func
+						call           = Ore::Call_Expr.new
+						call.arguments = [expr.left, expr.right]
+						interp_func_body overload_func, call
+					else
+						left.send expr.operator.value, right
+					end
 
 				elsif COMPARISON_OPERATORS.include? expr.operator.value
 					left  = interpret expr.left

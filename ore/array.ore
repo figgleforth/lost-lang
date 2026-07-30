@@ -6,6 +6,8 @@ Array {
 	}
 
 	push { item; @ruby }
+	append := push
+
 	random {; @ruby }
 	pop {; @ruby }
 	shift {; @ruby }
@@ -81,5 +83,10 @@ Array {
 		for values
 			func(it)
 		end
+	}
+
+	@operator << @infix 600 { left, right;
+		left.append(right)
+		right
 	}
 }

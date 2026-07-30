@@ -1,5 +1,7 @@
 package ore
 
+// note; All builtins in Odin are lowercased, leaving me to define all my types as is in the package: String, etc. That's exciting
+
 import os "core:os"
 import fmt "core:fmt"
 import mem "core:mem"

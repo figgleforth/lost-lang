@@ -46,7 +46,7 @@ module Ore
 
 		def get key
 			# note: This is required because Instance extends Scope whose [] method reads from @declarations
-			key.is_a?(Integer) ? values[key] : super
+			key.is_a?(Integer) ? values[key] : super(key) # super being a Scope that also takes a key
 		end
 
 		def == other
