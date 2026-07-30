@@ -1403,6 +1403,7 @@ module Ore
 			func.name            = expr.lexeme
 			func.enclosing_scope = stack.last
 			func.expressions     = expr.expressions
+			func.return_type     = expr.type&.value
 
 			if func.name&.value
 				stack.last.declare func.name.value, func
@@ -1475,7 +1476,16 @@ module Ore
 				pop_scope if type.enclosing_scope # Pop the Type's enclosing scope
 			end
 
-			result.is_a?(Ore::Return) ? result.value : result
+			return_value = result.is_a?(Ore::Return) ? result.value : result
+
+			if func.return_type
+				actual_type = type_name_to_string return_value
+				if actual_type != func.return_type
+					raise Ore::Type_Contract_Violation.new(expr, func.return_type, actual_type, self)
+				end
+			end
+
+			return_value
 		end
 
 		# @param expr [Ore::Route_Expr]

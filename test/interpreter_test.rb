@@ -2507,4 +2507,37 @@ class Interpreter_Test < Base_Test
 		CODE
 		assert_equal 'hi', out
 	end
+
+	def test_function_return_type_enforcement
+		# Declared return type matches what's actually returned.
+		out = Ore.interp <<~CODE
+			identity: Number { a; a }
+			identity(5)
+		CODE
+		assert_equal 5, out
+
+		# Declared return type doesn't match the actual value.
+		error = assert_raises Ore::Type_Contract_Violation do
+			Ore.interp <<~CODE
+				identity: Number { a; 'not a number' }
+				identity(5)
+			CODE
+		end
+		assert_equal 'Number', error.contract
+		assert_equal 'String', error.actual
+
+		# No declared return type — nothing is checked, any value is fine.
+		out = Ore.interp <<~CODE
+			identity { a; 'anything' }
+			identity(5)
+		CODE
+		assert_equal 'anything', out
+
+		# Signature-only declarations have no body, so there's nothing to enforce against — declaring one must not raise.
+		out = Ore.interp <<~CODE
+			double: Number{Number;}
+			'ok'
+		CODE
+		assert_equal 'ok', out
+	end
 end
