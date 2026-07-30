@@ -93,7 +93,7 @@ My_Class {
     input,
     
     new { input;
-        .input = input  # .input is equivalent to this.input or self.input
+        ./input = input  # ./input is equivalent to this.input or self.input
         @puts 'Initted with "`input`"'
     }
 }
@@ -114,17 +114,10 @@ APP_NAME := 'My App'
 
 ## Comments
 
-1. Single-line comments use `#`
-2. Multiline comments use triple backticks
-
-````ore
+```ore
 # This is a single-line comment
-
+# It's now a multi-line comment
 ```
-This is a
-multiline comment
-```
-````
 
 ## String Interpolation
 
@@ -150,7 +143,7 @@ My_Class {
     value,
 
     new { value;
-        ./value = value   # Instance variable (like this.value)
+        ./value = value   # Instance variable (like this.value or self.value)
         ../count += 1     # Access static from instance
     }
 
@@ -362,8 +355,8 @@ end  #=> 3
 
 ```ore
 for items
-    skip if it.invalid    # Continue to next
-    stop if it.last       # Break out
+    skip if it.this     # Continue to next
+    stop if it.that     # Break out
 end
 
 find_first { predicate;
@@ -563,7 +556,7 @@ File_System.write_string_to_file('./out.txt', 'Hello!')
 
 App | Server {
     new {;
-        .port = 3000
+        ./port = 3000
     }
 
     get:// {;
@@ -823,15 +816,15 @@ x             #=> 'hello'
 y = 4         # raises Ore::Cannot_Reassign_Undeclared_Identifier — y was never declared
 ```
 
-## Nil Initialization
+## Shorthand Nil-Initialization
 
-1. Trailing comma declares variable as nil if undefined
-2. Returns existing value if already defined
+Trailing comma declares variable as nil if undefined. 
 
 ```ore
-undefined_var,    #=> nil
-undefined_var     #=> nil
+Type {
+	# equivalent to `undefined_var := nil`
+	undefined_var,	
+}
 
-existing := 42
-existing,         #=> 42 (unchanged)
+here_too,   # here_too := nil
 ```
