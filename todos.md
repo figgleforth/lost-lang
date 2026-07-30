@@ -1,7 +1,8 @@
  - [ ] Replace all `# todo: Proper error` placeholders scattered through `src/runtime/interpreter.rb` — real error types needed instead of generic ones.
  - [ ] Stride overlap for `for x by n,overlap` — `getting_started.md` documents `for x reject by 2,1` / `for x each by 3,1` style overlapping chunks, but the parser doesn't support the second stride argument yet (`src/compiler/parser.rb`: "Currently `stride` doesn't support option to overlap elements"). This was meant to be implemented, not just aspirational docs — needs the parser to accept `by <stride>,<overlap>` and the interpreter's chunking (`each_slice` today) to respect the overlap instead of using non-overlapping slices.
- - [ ] An opertor for checking AST types. For example, `func{;} ==== Func_Expr`. I'm only using four equals to illustrate.
+ - [ ] An operator for checking AST types. For example, `func{;} ==== Func_Expr`. I'm only using four equals to illustrate.
  - [ ] `help {expr;}` or `@help` that accepts any expression and returns information about the Type, primitive, function, etc. Literally any expression should be able to be described given its AST. You even have access to the live values so the information can be dynamic to reflect what the user is actually asking about.
+ - [ ] Switch statement / pattern matching — to be able@help to make a help{expr;} function that can be used to inspect expressions.
 
 **Bugs:**
 - [ ] Tuple-in-tuple has infinite members — `((), true).0.1`, `.0.2`, `.0.3`... all return a Tuple instead of erroring past the actual length.
@@ -16,12 +17,20 @@
 - [ ] Table associations (`belongs_to`/`has_many`) — needed the moment `Player` needs a `Team`.
 - [ ] jsonb-like column support.
 - [ ] Related to issue #75 (ORM improvements) but that issue is specifically about migrations — associations/jsonb are a separate, currently unfiled, gap.
+- [ ] No JSON encode/decode exposed to Ore — `require 'json'` only used internally for parsing POST bodies (`interpreter.rb`).
+- [ ] No outbound HTTP client — Ore can serve requests but can't make them.
+- [ ] No `ENV`/config access — only I/O primitive is `File_System`.
+- [ ] No in-Ore testing/assert facility — Minitest only tests the interpreter itself.
 
 **Parser robustness:**
 - [ ] `src/compiler/parser.rb` — a comma is discarded instead of implying a tuple in `#complete_expression` (possibly related to #78, tuple unpacking).
 - [ ] Update? `src/compiler/lexer.rb` — operators are still allowed to start/end with `` ' " { } ( ) `` and should be disallowed.
 
 **Language design loose ends:**
+- [ ] `@valid` directive — validate whether a call would type-check without actually invoking it, e.g. `@valid identity(123)` #=> true, `@valid identity("1")` #=> false.
+  1. Param-type + arity validity first — both have partial groundwork already (`Missing_Argument` already covers too-few args; too-many args currently pass through silently and would need new handling).
+  2. Need functions to have return-type annotation syntax in order to fully implement
+- [ ] Related idea, tabled for now: an operator to structurally match a function's param signature against a shape, e.g. `add ==== {Number, Number;}`.
 - [ ] `test/regression_test.rb` — plan to make bare `{x}` implicitly set `x` if it's declared in the scope, so `x=123, {x}` should set x to 123.
 - [ ] `src/shared/constants.rb` — `UNPACK_OPERATOR = '@'` collides conceptually with `Ore::BUILTIN_OPERATOR` (also `@`); pick a distinct symbol for one of them.
 - [ ] `src/runtime/interpreter.rb` — sibling scopes are assumed read-only; assumption was never actually double-checked.

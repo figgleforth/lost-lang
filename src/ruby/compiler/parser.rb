@@ -256,10 +256,8 @@ module Ore
 
 			if curr?(:identifier) || curr?(SCOPE_OPERATORS)
 				func.name = parse_identifier_expr
-
-				if curr? ':' and eat ':'
-					func.type = eat(:Identifier)
-				end
+				# parse_identifier_expr already consumes a trailing `: Type` itself (used for variable annotations too), storing it on the identifier — pull it up onto the func so the return type lives where the rest of this method expects it.
+				func.type = func.name.type if func.name.type
 			end
 
 			func.lexeme = func.name&.lexeme
@@ -267,27 +265,33 @@ module Ore
 			reduce_newlines
 
 			until curr? Ore::FUNCTION_DELIMITER
-				param        = Ore::Param_Expr.new
+				param = Ore::Param_Expr.new
 
 				if curr? Ore::UNPACK_OPERATOR
 					eat Ore::UNPACK_OPERATOR
 					param.unpack = true
 				end
 
-				if curr? :identifier, :identifier
-					param.label = eat(:identifier)
-					param.name  = eat(:identifier)
+				if func.type && (curr?(:Identifier) || curr?(:IDENTIFIER))
+					# Bare type, no name — only meaningful when a return type was declared (identifier: Type { ... }), same shape a bare signature literal's params use, e.g. `double: Number{Number;}`.
+					param.type   = eat
+					param.lexeme = param.type
 				else
-					param.name = eat(:identifier)
-				end
-				param.lexeme = param.name
+					if curr? :identifier, :identifier
+						param.label = eat(:identifier)
+						param.name  = eat(:identifier)
+					else
+						param.name = eat(:identifier)
+					end
+					param.lexeme = param.name
 
-				if curr? ':' and eat ':'
-					param.type = eat(:Identifier)
-				end
+					if curr? ':' and eat ':'
+						param.type = eat(:Identifier)
+					end
 
-				if curr? '=' and eat '='
-					param.default = parse_expression
+					if curr? '=' and eat '='
+						param.default = parse_expression
+					end
 				end
 
 				func.expressions << param
@@ -306,13 +310,34 @@ module Ore
 			# func.expressions = func.expressions #.compact #.uniq # bug, The first Param is twice in the array, with the same object_id. Dedupe it for now. Figure out the real issue later.
 			eat '}'
 
+			# A declared return type with no real body (just params) is a signature-only declaration, e.g. `double: Number{Number;}` — same concept as a bare signature literal, just self-declaring under a name instead of being anonymous.
+			if func.type && func.expressions.all? { |e| e.is_a? Ore::Param_Expr }
+				sig        = Ore::Func_Signature_Expr.new
+				sig.name   = func.name
+				sig.type   = func.type
+				sig.lexeme = func.lexeme
+				sig.params = func.expressions
+				return copy_location sig, start
+			end
+
 			func
 			copy_location func, start
 		end
 
 		def parse_type_decl
-			# bug, When parsing `Identifier {;}`. :Identifier_function
-			# todo, The | TYPE_COMPOSITION_OPERATOR is currently only working in #parse_type_decl. I can peek until end of line, if I see another | then it's a circumfix. However if there are more |s then maybe we can presume the expression type like this:
+			# Looks at the tokens immediately after the `{` we just ate.
+			# Hits `;` first  -> it's a signature literal (String{Number;})
+			# Hits `{` first  -> a nested method, so this is a real type body
+			# Hits `}` first  -> empty body, also a real type body
+			def signature_literal?
+				remainder.each do |t|
+					return true if t.value == Ore::FUNCTION_DELIMITER
+					return false if t.value == '{' || t.value == '}'
+				end
+				false
+			end
+
+			# todo; The | TYPE_COMPOSITION_OPERATOR is currently only working in #parse_type_decl. I can peek until end of line, if I see another | then it's a circumfix. However if there are more |s then maybe we can presume the expression type like this:
 			#
 			#   1 | = composition
 			#   2 | = circumfix
@@ -337,6 +362,10 @@ module Ore
 			eat '{'
 			reduce_newlines
 
+			if signature_literal?
+				return parse_signature_literal it.name, start
+			end
+
 			until curr?(:delimiter) && curr?('}') # note: Added explicit check for delimiter because there was a bug where a comment whose value is simply "}" was evaluating to true in this condition, leaving the parser with an unhandled } todo: Maybe #curr? should always return false if it detects a comment?
 				it.expressions << parse_expression
 				reduce_newlines
@@ -348,6 +377,48 @@ module Ore
 
 			it
 			copy_location it, start
+		end
+
+		# Parses a bare function-type/signature literal, e.g. `String{Number;}` or `String{a: Number;}`. Called from #parse_type_decl once #signature_literal? has confirmed the `{` we just ate is followed by a param list and `;` rather than a real type body. There's no body to parse — just params and the return type (the Type name #parse_type_decl already ate).
+		def parse_signature_literal type_lexeme, start
+			func        = Ore::Func_Signature_Expr.new
+			func.type   = type_lexeme
+			func.lexeme = type_lexeme
+			func.params = []
+
+			until curr? Ore::FUNCTION_DELIMITER
+				param = Ore::Param_Expr.new
+
+				if curr?(:Identifier) || curr?(:IDENTIFIER)
+					# Bare type, no name: String{Number;}
+					param.type   = eat
+					param.lexeme = param.type
+				else
+					if curr? :identifier, :identifier
+						param.label = eat(:identifier)
+						param.name  = eat(:identifier)
+					else
+						param.name = eat(:identifier)
+					end
+					param.lexeme = param.name
+
+					if curr? ':' and eat ':'
+						param.type = eat(:Identifier)
+					end
+
+					raise Ore::Invalid_Func_Signature.new(param.name) unless param.type
+				end
+
+				func.params << param
+				eat if curr? ','
+				reduce_newlines
+			end
+
+			eat Ore::FUNCTION_DELIMITER
+			reduce_newlines
+			eat '}'
+
+			copy_location func, start
 		end
 
 		def parse_comment

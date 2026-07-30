@@ -2467,4 +2467,44 @@ class Interpreter_Test < Base_Test
 		CODE
 		assert_equal [true, false, false, false, true, false, false], out.values
 	end
+
+	def test_function_signatures
+		out = Ore.interp 'Num_To_Str := String{Number;}'
+		assert_kind_of Ore::Func_Signature, out
+		assert_equal ['Number'], out.param_types
+		assert_equal 'String', out.return_type
+
+		# Named + typed param — the name is discarded, only the type survives.
+		out = Ore.interp 'String{a: Number;}'
+		assert_equal ['Number'], out.param_types
+		assert_equal 'String', out.return_type
+
+		# Zero-arg signature.
+		out = Ore.interp 'String{;}'
+		assert_equal [], out.param_types
+		assert_equal 'String', out.return_type
+
+		# Bare and named+typed params can mix in the same param list.
+		out = Ore.interp 'String{Number, a: Number;}'
+		assert_equal %w(Number Number), out.param_types
+		assert_equal 'String', out.return_type
+
+		# Named param with no type annotation is a malformed signature — every param slot in a signature literal must carry a type.
+		assert_raises Ore::Invalid_Func_Signature do
+			Ore.interp 'String{a;}'
+		end
+
+		# Bare as a top-level expression, not just as the RHS of :=.
+		out = Ore.interp 'String{Number;}'
+		assert_kind_of Ore::Func_Signature, out
+
+		# Regression: an ordinary Type declaration with a method must still parse as a real type, not get misdetected as a signature literal — this is exactly the shape #signature_literal?'s lookahead has to get right (a `;` inside a nested method's braces isn't a signature).
+		out = Ore.interp <<~CODE
+		    Person {
+		    	greet {; "hi" }
+		    }
+		    Person().greet()
+		CODE
+		assert_equal 'hi', out
+	end
 end

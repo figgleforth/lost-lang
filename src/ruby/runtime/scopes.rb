@@ -89,7 +89,7 @@ module Ore
 			delegate_name = self.class.respond_to?(:proxy_delegate_name) && self.class.proxy_delegate_name
 
 			if delegate_name && key.to_s == delegate_name
-				delegate_value          = value.respond_to?(key) ? value.send(key) : value
+				delegate_value = value.respond_to?(key) ? value.send(key) : value
 				send "#{key}=", delegate_value
 				@declarations[key.to_s] = delegate_value
 			else

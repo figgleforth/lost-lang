@@ -81,6 +81,10 @@ module Ore
 		attr_accessor :http_method, :path, :expression, :param_names # The expression can be a function or an identifier
 	end
 
+	class Func_Signature_Expr < Expression
+		attr_accessor :signature, :params, :name
+	end
+
 	class Directive_Expr < Expression
 		attr_accessor :name, :expression
 	end

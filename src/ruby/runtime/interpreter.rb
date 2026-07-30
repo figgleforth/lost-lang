@@ -1386,6 +1386,18 @@ module Ore
 			instance
 		end
 
+		def interp_func_signature expr
+			param_types = expr.params.map do |param|
+				param.type&.value
+			end
+
+			signature = Ore::Func_Signature.new param_types, expr.type&.value
+
+			stack.last.declare expr.name.value, signature if expr.name&.value
+
+			signature
+		end
+
 		def interp_func expr
 			func                 = Ore::Func.new expr.lexeme
 			func.name            = expr.lexeme
@@ -2012,6 +2024,9 @@ module Ore
 
 			when Ore::Func_Expr
 				interp_func expr
+
+			when Ore::Func_Signature_Expr
+				interp_func_signature expr
 
 			when Ore::Composition_Expr
 				interp_composition expr
