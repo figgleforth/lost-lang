@@ -173,4 +173,7 @@ module Ore
 
 	class Invalid_Func_Signature < Error
 	end
+
+	class Cannot_Call_Func_Signature < Error
+	end
 end

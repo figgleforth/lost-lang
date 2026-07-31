@@ -256,9 +256,10 @@ module Ore
 
 			if curr?(:identifier) || curr?(SCOPE_OPERATORS)
 				func.name = parse_identifier_expr
-				# parse_identifier_expr already consumes a trailing `: Type` itself (used for variable annotations too), storing it on the identifier — pull it up onto the func so the return type lives where the rest of this method expects it.
-				func.type = func.name.type if func.name.type
 			end
+
+			# parse_identifier_expr already consumes a trailing `: Type` itself (used for variable annotations too) and stores it on the identifier. Kept separate from func.type (only the inline `-> Type` form below sets that) so func.type's mere presence after the loop tells us whether `->` was used, with no extra flag — a real function's return type must live inside its body via `-> Type`, never on the outside via this `name: Type { }` prefix, which is only valid for a signature (no real body, and not combined with an inline `-> Type` either).
+			prefix_return_type = func.name&.type
 
 			func.lexeme = func.name&.lexeme
 			eat '{'
@@ -278,7 +279,7 @@ module Ore
 					param.unpack = true
 				end
 
-				if func.type && (curr?(:Identifier) || curr?(:IDENTIFIER))
+				if prefix_return_type && (curr?(:Identifier) || curr?(:IDENTIFIER))
 					# Bare type, no name — only meaningful when a return type was declared (identifier: Type { ... }), same shape a bare signature literal's params use, e.g. `double: Number{Number;}`.
 					param.type   = eat
 					param.lexeme = param.type
@@ -316,8 +317,17 @@ module Ore
 			# func.expressions = func.expressions #.compact #.uniq # bug, The first Param is twice in the array, with the same object_id. Dedupe it for now. Figure out the real issue later.
 			eat '}'
 
+			has_real_body = func.expressions.any? { |e| !e.is_a?(Ore::Param_Expr) }
+
+			# `name: Type { }` is only ever valid as a signature — no real body, and not combined with an inline `-> Type` either (func.type being set here means `->` was used, since it's the only thing that ever sets it during the loop).
+			if prefix_return_type && (has_real_body || func.type)
+				raise Ore::Invalid_Func_Signature.new(prefix_return_type)
+			end
+
+			func.type ||= prefix_return_type
+
 			# A declared return type with no real body (just params) is a signature-only declaration, e.g. `double: Number{Number;}` — same concept as a bare signature literal, just self-declaring under a name instead of being anonymous.
-			if func.type && func.expressions.all? { |e| e.is_a? Ore::Param_Expr }
+			if func.type && !has_real_body
 				sig        = Ore::Func_Signature_Expr.new
 				sig.name   = func.name
 				sig.type   = func.type
@@ -326,7 +336,6 @@ module Ore
 				return copy_location sig, start
 			end
 
-			func
 			copy_location func, start
 		end
 

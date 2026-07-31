@@ -843,6 +843,40 @@ x             #=> 'hello'
 y = 4         # raises Ore::Cannot_Reassign_Undeclared_Identifier — y was never declared
 ```
 
+## Function Signatures
+
+1. `Type{Param, Param;}` is a signature — a value describing a function's shape (its param types and return type), with no implementation
+2. A real function always declares its own return type inside its body, with `-> Type` at the end of its param list — `name: Type { }` on the outside is reserved for signatures only, never a real implementation
+3. Assigning a function to a signature-typed identifier checks its actual shape, not just a name — mismatches raise `Ore::Type_Contract_Violation`, the same runtime type contract `:=` uses
+4. Any function with a declared return type is checked on every call — what it actually returns has to match, signature or not
+
+```ore
+Currency_Formatter := String{Number;}    # takes a Number, returns a String
+
+format_usd { cents: Number -> String;
+    "$" + (cents / 100.0).to_s()
+}
+
+format_eur { cents: Number -> String;
+    "E" + (cents / 100.0).to_s()
+}
+
+formatter: Currency_Formatter = format_usd
+formatter(1050)               #=> "$10.5"
+
+formatter = format_eur        # ok — same shape: (Number) -> String
+formatter(1050)               #=> "E10.5"
+
+formatter = { cents; cents }  # raises Ore::Type_Contract_Violation — wrong shape
+```
+
+A declared return type is enforced on its own, with no signature involved:
+
+```ore
+lying { a -> Number; 'not a number' }
+lying(5)   # raises Ore::Type_Contract_Violation — declared Number, actually returned String
+```
+
 ## Shorthand Nil-Initialization
 
 Trailing comma declares variable as nil if undefined. 

@@ -275,12 +275,19 @@ module Ore
 			end
 		end
 
-		# If `name` is bound to an Ore::Func_Signature anywhere on the stack, return it. Otherwise nil — meaning `name` is an ordinary nominal type name (e.g. 'Number').
+		# If `name` is already an Ore::Func_Signature, return it as-is (an inline signature has no name to look up). Otherwise, if it's bound to one anywhere on the stack, return that. Otherwise nil — meaning `name` is an ordinary nominal type name (e.g. 'Number').
 		def resolve_func_signature name
+			return name if name.is_a? Ore::Func_Signature
 			return nil unless name
 			found = stack.reverse_each.find { |scope| scope.has? name }
 			value = found&.get(name)
 			value.is_a?(Ore::Func_Signature) ? value : nil
+		end
+
+		# @param expr [Ore::Func_Signature_Expr]
+		def build_func_signature expr
+			param_types = expr.params.map { |param| param.type&.value }
+			Ore::Func_Signature.new param_types, expr.type&.value
 		end
 
 		# Readable description of a value's shape for Type_Contract_Violation messages — a func-like value's param/return types if it has them, otherwise its plain type name.
@@ -741,10 +748,9 @@ module Ore
 		def interp_infix_assignment expr
 			assignment_scope = scope_for_identifier expr.left # Reminder; this returns a scope whether or not the identifier exists
 
-			# A type annotation (`x: Number = value`) is itself a declaration, so it's allowed to
-			# introduce a brand-new identifier just like `:=`, even though plain `=` otherwise
-			# requires the identifier to already exist.
-			has_type_annotation = expr.left.is_a?(Ore::Identifier_Expr) && expr.left.type
+			# A type annotation (`x: Number = value`) is itself a declaration, so it's allowed to introduce a brand-new identifier just like `:=`, even though plain `=` otherwise requires the identifier to already exist. An inline signature (`x: Type{Param;} = value`) is the same idea — expr.left is a Func_Signature_Expr instead of a plain annotated Identifier_Expr, but it's just as self-declaring.
+			has_type_annotation = (expr.left.is_a?(Ore::Identifier_Expr) && expr.left.type) ||
+			                      expr.left.is_a?(Ore::Func_Signature_Expr)
 			assignment_scope    ||= stack.last if has_type_annotation
 
 			# If using a scope operator but the scope doesn't exist, raise an error
@@ -837,8 +843,12 @@ module Ore
 			when :identifier
 				if assignment_scope
 					# If the left side of the expression was declared with a type annotation, the type of `right_value` is enforced here.
-					# `expr.left.type` covers the first, self-declaring assignment (the annotation is right here on this expression); the recorded type_by_identifier value covers every reassignment after that, once the annotation itself is gone.
-					type      = expr.left.type&.value || assignment_scope.type_by_identifier[expr.left.value]
+					# `expr.left.type` covers the first, self-declaring assignment (the annotation is right here on this expression); the recorded type_by_identifier value covers every reassignment after that, once the annotation itself is gone. An inline signature (Func_Signature_Expr) supplies its own type directly, since it has no name to look up.
+					type      = if expr.left.is_a? Ore::Func_Signature_Expr
+						build_func_signature expr.left
+					else
+						expr.left.type&.value || assignment_scope.type_by_identifier[expr.left.value]
+					end
 					signature = resolve_func_signature type
 
 					if signature
@@ -861,6 +871,9 @@ module Ore
 
 			if expr.left.is_a?(Ore::Identifier_Expr) && expr.left.type
 				assignment_scope.type_by_identifier[expr.left.value] = expr.left.type.value
+			elsif expr.left.is_a? Ore::Func_Signature_Expr
+				# Recorded so future reassignments (which are plain Identifier_Exprs with no annotation of their own) still resolve back to this signature to check against.
+				assignment_scope.type_by_identifier[expr.left.value] = build_func_signature expr.left
 			end
 
 			assignment_scope.declare expr.left.value, right_value
@@ -1307,6 +1320,9 @@ module Ore
 			when Ore::Instance, Ore::Type
 				interp_type_call receiver, expr
 
+			when Ore::Func_Signature
+				raise Ore::Cannot_Call_Func_Signature.new expr.receiver, self
+
 			else
 				raise Ore::Cannot_Initialize_Non_Type_Identifier.new expr.receiver, self
 			end
@@ -1413,14 +1429,8 @@ module Ore
 		end
 
 		def interp_func_signature expr
-			param_types = expr.params.map do |param|
-				param.type&.value
-			end
-
-			signature = Ore::Func_Signature.new param_types, expr.type&.value
-
+			signature = build_func_signature expr
 			stack.last.declare expr.name.value, signature if expr.name&.value
-
 			signature
 		end
 
