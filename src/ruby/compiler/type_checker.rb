@@ -1,10 +1,11 @@
 module Ore
 	class Type_Checker
-		attr_accessor :input, :type_by_identifier
+		attr_accessor :input, :type_by_identifier, :func_signatures_by_identifier
 
 		def initialize input
-			@input              = input
-			@type_by_identifier = {} # { identifier: (Type, function signature) }
+			@input                          = input
+			@type_by_identifier             = {} # { identifier: declared type name string }
+			@func_signatures_by_identifier  = {} # { identifier: param type name array }
 		end
 
 		def output
@@ -29,12 +30,12 @@ module Ore
 			return unless expr.name
 			params = expr.expressions.select { _1.is_a? Ore::Param_Expr }
 			return unless params.any?(&:type)
-			type_by_identifier[expr.name.value] = params.map { _1.type&.value }
+			func_signatures_by_identifier[expr.name.value] = params.map { _1.type&.value }
 		end
 
 		def check_call expr
 			return nil unless expr.receiver.is_a? Ore::Identifier_Expr
-			signature = type_by_identifier[expr.receiver.value]
+			signature = func_signatures_by_identifier[expr.receiver.value]
 			return nil unless signature.is_a? ::Array
 
 			expr.arguments.each_with_index.filter_map do |arg, i|

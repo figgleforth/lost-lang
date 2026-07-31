@@ -2467,4 +2467,158 @@ class Interpreter_Test < Base_Test
 		CODE
 		assert_equal [true, false, false, false, true, false, false], out.values
 	end
+
+	def test_function_signatures
+		out = Ore.interp 'Num_To_Str := String{Number;}'
+		assert_kind_of Ore::Func_Signature, out
+		assert_equal ['Number'], out.param_types
+		assert_equal 'String', out.return_type
+
+		# Named + typed param — the name is discarded, only the type survives.
+		out = Ore.interp 'String{a: Number;}'
+		assert_equal ['Number'], out.param_types
+		assert_equal 'String', out.return_type
+
+		# Zero-arg signature.
+		out = Ore.interp 'String{;}'
+		assert_equal [], out.param_types
+		assert_equal 'String', out.return_type
+
+		# Bare and named+typed params can mix in the same param list.
+		out = Ore.interp 'String{Number, a: Number;}'
+		assert_equal %w(Number Number), out.param_types
+		assert_equal 'String', out.return_type
+
+		# Named param with no type annotation is a malformed signature — every param slot in a signature literal must carry a type.
+		assert_raises Ore::Invalid_Func_Signature do
+			Ore.interp 'String{a;}'
+		end
+
+		# Bare as a top-level expression, not just as the RHS of :=.
+		out = Ore.interp 'String{Number;}'
+		assert_kind_of Ore::Func_Signature, out
+
+		# Regression: an ordinary Type declaration with a method must still parse as a real type, not get misdetected as a signature literal — this is exactly the shape #signature_literal?'s lookahead has to get right (a `;` inside a nested method's braces isn't a signature).
+		out = Ore.interp <<~CODE
+		    Person {
+		    	greet {; "hi" }
+		    }
+		    Person().greet()
+		CODE
+		assert_equal 'hi', out
+	end
+
+	def test_function_return_type_enforcement
+		# Declared return type matches what's actually returned.
+		out = Ore.interp <<~CODE
+			identity: Number { a; a }
+			identity(5)
+		CODE
+		assert_equal 5, out
+
+		# Declared return type doesn't match the actual value.
+		error = assert_raises Ore::Type_Contract_Violation do
+			Ore.interp <<~CODE
+				identity: Number { a; 'not a number' }
+				identity(5)
+			CODE
+		end
+		assert_equal 'Number', error.contract
+		assert_equal 'String', error.actual
+
+		# No declared return type — nothing is checked, any value is fine.
+		out = Ore.interp <<~CODE
+			identity { a; 'anything' }
+			identity(5)
+		CODE
+		assert_equal 'anything', out
+
+		# Signature-only declarations have no body, so there's nothing to enforce against — declaring one must not raise.
+		out = Ore.interp <<~CODE
+			double: Number{Number;}
+			'ok'
+		CODE
+		assert_equal 'ok', out
+
+		# A function (anonymous or named) can declare its own return type inline, at the end of its param list, instead of via the `name: Type { }` prefix.
+		out = Ore.interp <<~CODE
+			f := { a: Number -> Number; a * 2 }
+			f(21)
+		CODE
+		assert_equal 42, out
+
+		out = Ore.interp <<~CODE
+			example { a: Number -> Number; a * 2 }
+			example(21)
+		CODE
+		assert_equal 42, out
+
+		error = assert_raises Ore::Type_Contract_Violation do
+			Ore.interp <<~CODE
+				f := { a: Number -> Number; 'oops' }
+				f(1)
+			CODE
+		end
+		assert_equal 'Number', error.contract
+		assert_equal 'String', error.actual
+	end
+
+	def test_function_signature_matching
+		# A function whose actual shape matches the signature succeeds, both on first declaration and on reassignment.
+		out = Ore.interp <<~CODE
+			Num_to_str := String{Number;}
+			stringify: String { n: Number; 'x' }
+			to_string: Num_to_str = stringify
+			another: String { n: Number; 'y' }
+			to_string = another
+			'ok'
+		CODE
+		assert_equal 'ok', out
+
+		# First declaration with a mismatched shape raises immediately.
+		error = assert_raises Ore::Type_Contract_Violation do
+			Ore.interp <<~CODE
+				Num_to_str := String{Number;}
+				to_string: Num_to_str = { x, y; x + y }
+			CODE
+		end
+		assert_equal '{Number -> String;}', error.contract
+		assert_equal '{, -> ;}', error.actual
+
+		# Reassigning an already-valid signature-typed identifier to a mismatched shape raises too, comparing structurally rather than as a plain type name.
+		error = assert_raises Ore::Type_Contract_Violation do
+			Ore.interp <<~CODE
+				Num_to_str := String{Number;}
+				stringify: String { n: Number; 'x' }
+				to_string: Num_to_str = stringify
+				to_string = { x, y; x + y }
+			CODE
+		end
+		assert_equal '{Number -> String;}', error.contract
+		assert_equal '{, -> ;}', error.actual
+
+		# Ordinary nominal type annotations are unaffected by signature resolution.
+		out = Ore.interp <<~CODE
+			x: Number = 4
+			x = 8
+			x
+		CODE
+		assert_equal 8, out
+
+		assert_raises Ore::Type_Contract_Violation do
+			Ore.interp <<~CODE
+				x: Number = 4
+				x = 'oops'
+			CODE
+		end
+
+		# First declaration of an ordinary nominal type is now checked too, even
+		# with a non-literal RHS the static checker can't see.
+		assert_raises Ore::Type_Contract_Violation do
+			Ore.interp <<~CODE
+				n := 4
+				x: String = n
+			CODE
+		end
+	end
 end

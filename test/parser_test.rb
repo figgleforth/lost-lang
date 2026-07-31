@@ -687,20 +687,15 @@ class Parser_Test < Base_Test
 		assert_kind_of Ore::Identifier_Expr, out.last
 	end
 
-	def test_infinite_loop_bug
-		# Empty type body should parse fine
-		out = Ore.parse 'Identifier {}'
-		assert_kind_of Ore::Type_Expr, out.first
+	def test_function_signature
+		out = Ore.parse 'Identifier {;}'
+		assert_kind_of Ore::Func_Signature_Expr, out.first
 
-		# Bare semicolon in type body should raise reserved error
-		assert_raises Ore::Reserved_Function_Delimiter do
-			Ore.parse 'Identifier {;}'
-		end
+		out = Ore.parse 'String{Number;}'
+		assert_kind_of Ore::Func_Signature_Expr, out.first
 
-		# out = Ore.parse 'x, , y, , z,'
-		# assert_kind_of Ore::Postfix_Expr, out.first
-		# assert_kind_of Ore::Postfix_Expr, out[1]
-		# assert_kind_of Ore::Postfix_Expr, out.last
+		out = Ore.parse 'string {number;}'
+		assert_kind_of Ore::Func_Expr, out.first
 	end
 
 	def test_double_less_than_is_operator

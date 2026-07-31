@@ -275,6 +275,23 @@ module Ore
 			end
 		end
 
+		# If `name` is bound to an Ore::Func_Signature anywhere on the stack, return it. Otherwise nil — meaning `name` is an ordinary nominal type name (e.g. 'Number').
+		def resolve_func_signature name
+			return nil unless name
+			found = stack.reverse_each.find { |scope| scope.has? name }
+			value = found&.get(name)
+			value.is_a?(Ore::Func_Signature) ? value : nil
+		end
+
+		# Readable description of a value's shape for Type_Contract_Violation messages — a func-like value's param/return types if it has them, otherwise its plain type name.
+		def describe_value_shape value
+			if value.respond_to?(:param_types) && value.respond_to?(:return_type)
+				Ore::Func_Signature.new(value.param_types, value.return_type).to_s
+			else
+				type_name_to_string(value) || 'unknown'
+			end
+		end
+
 		def start_server server
 			webrick = WEBrick::HTTPServer.new Port:      server.port,
 			                                  Logger:    WEBrick::Log.new("/dev/null"),
@@ -820,10 +837,19 @@ module Ore
 			when :identifier
 				if assignment_scope
 					# If the left side of the expression was declared with a type annotation, the type of `right_value` is enforced here.
-					type = assignment_scope.type_by_identifier[expr.left.value]
-					name = type_name_to_string(right_value)
-					if type && name != type
-						raise Ore::Type_Contract_Violation.new(expr, type, name, self)
+					# `expr.left.type` covers the first, self-declaring assignment (the annotation is right here on this expression); the recorded type_by_identifier value covers every reassignment after that, once the annotation itself is gone.
+					type      = expr.left.type&.value || assignment_scope.type_by_identifier[expr.left.value]
+					signature = resolve_func_signature type
+
+					if signature
+						unless signature.matches? right_value
+							raise Ore::Type_Contract_Violation.new(expr, signature.to_s, describe_value_shape(right_value), self)
+						end
+					else
+						name = type_name_to_string(right_value)
+						if type && name != type
+							raise Ore::Type_Contract_Violation.new(expr, type, name, self)
+						end
 					end
 				end
 			end
@@ -1386,11 +1412,29 @@ module Ore
 			instance
 		end
 
+		def interp_func_signature expr
+			param_types = expr.params.map do |param|
+				param.type&.value
+			end
+
+			signature = Ore::Func_Signature.new param_types, expr.type&.value
+
+			stack.last.declare expr.name.value, signature if expr.name&.value
+
+			signature
+		end
+
 		def interp_func expr
 			func                 = Ore::Func.new expr.lexeme
 			func.name            = expr.lexeme
 			func.enclosing_scope = stack.last
 			func.expressions     = expr.expressions
+			func.return_type     = expr.type&.value
+			func.param_types     = expr.expressions.select do |e|
+				e.is_a? Ore::Param_Expr
+			end.map do |p|
+				p.type&.value
+			end
 
 			if func.name&.value
 				stack.last.declare func.name.value, func
@@ -1463,7 +1507,16 @@ module Ore
 				pop_scope if type.enclosing_scope # Pop the Type's enclosing scope
 			end
 
-			result.is_a?(Ore::Return) ? result.value : result
+			return_value = result.is_a?(Ore::Return) ? result.value : result
+
+			if func.return_type
+				actual_type = type_name_to_string return_value
+				if actual_type != func.return_type
+					raise Ore::Type_Contract_Violation.new(expr, func.return_type, actual_type, self)
+				end
+			end
+
+			return_value
 		end
 
 		# @param expr [Ore::Route_Expr]
@@ -2012,6 +2065,9 @@ module Ore
 
 			when Ore::Func_Expr
 				interp_func expr
+
+			when Ore::Func_Signature_Expr
+				interp_func_signature expr
 
 			when Ore::Composition_Expr
 				interp_composition expr

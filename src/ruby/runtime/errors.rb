@@ -170,4 +170,7 @@ module Ore
 
 	class Unsupported_Feature < Error
 	end
+
+	class Invalid_Func_Signature < Error
+	end
 end
