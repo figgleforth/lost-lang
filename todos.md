@@ -1,8 +1,8 @@
- - [ ] Replace all `# todo: Proper error` placeholders scattered through `src/runtime/interpreter.rb`: real error types needed instead of generic ones.
- - [ ] Stride overlap for `for x by n,overlap`: `getting_started.md` documents `for x reject by 2,1` / `for x each by 3,1` style overlapping chunks, but the parser doesn't support the second stride argument yet (`src/compiler/parser.rb`: "Currently `stride` doesn't support option to overlap elements"). This was meant to be implemented, not just aspirational docs: needs the parser to accept `by <stride>,<overlap>` and the interpreter's chunking (`each_slice` today) to respect the overlap instead of using non-overlapping slices.
- - [ ] An operator for checking AST types. For example, `func{;} ==== Func_Expr`. I'm only using four equals to illustrate.
- - [ ] `help {expr;}` or `@help` that accepts any expression and returns information about the Type, primitive, function, etc. Literally any expression should be able to be described given its AST. You even have access to the live values so the information can be dynamic to reflect what the user is actually asking about.
- - [ ] Switch statement / pattern matching: to be able@help to make a help{expr;} function that can be used to inspect expressions.
+- [ ] Replace all `# todo: Proper error` placeholders scattered through `src/runtime/interpreter.rb`: real error types needed instead of generic ones.
+- [ ] Stride overlap for `for x by n,overlap`: `getting_started.md` documents `for x reject by 2,1` / `for x each by 3,1` style overlapping chunks, but the parser doesn't support the second stride argument yet (`src/compiler/parser.rb`: "Currently `stride` doesn't support option to overlap elements"). This was meant to be implemented, not just aspirational docs: needs the parser to accept `by <stride>,<overlap>` and the interpreter's chunking (`each_slice` today) to respect the overlap instead of using non-overlapping slices.
+- [ ] An operator for checking AST types. For example, `func{;} ==== Func_Expr`. I'm only using four equals to illustrate.
+- [ ] `help {expr;}` or `@help` that accepts any expression and returns information about the Type, primitive, function, etc. Literally any expression should be able to be described given its AST. You even have access to the live values so the information can be dynamic to reflect what the user is actually asking about.
+- [ ] Switch statement / pattern matching: required for @help / help{expr;} function.
 
 **Bugs:**
 - [ ] Tuple-in-tuple has infinite members: `((), true).0.1`, `.0.2`, `.0.3`... all return a Tuple instead of erroring past the actual length.
@@ -21,9 +21,11 @@
 - [ ] No outbound HTTP client: Ore can serve requests but can't make them.
 - [ ] No `ENV`/config access: only I/O primitive is `File_System`.
 - [ ] No in-Ore testing/assert facility: Minitest only tests the interpreter itself.
+- [ ] Implement way to extract mulitple values from tuples like `x, y := (1, 2)`
+- [ ] Percent literals `%str(boo hoo COOL)` for ['boo', 'hoo', 'COOL'] `%sym(BOO hoo cool)` for [:BOO,  :hoo,  :cool], etc.
 
 **Parser robustness:**
-- [ ] `src/compiler/parser.rb`: a comma is discarded instead of implying a tuple in `#complete_expression` (possibly related to #78, tuple unpacking).
+- [ ] `src/compiler/parser.rb`: a comma is discarded instead of implying a tuple in `#complete_expression` (possibly related to tuple unpacking).
 - [ ] Update? `src/compiler/lexer.rb`: operators are still allowed to start/end with `` ' " { } ( ) `` and should be disallowed.
 
 **Language design loose ends:**
