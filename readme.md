@@ -42,7 +42,7 @@ without_args {;
 add { a, b;
     a + b
 }
-add(4, 8)  #=> 12
+add(4, 8)  # 12
 
 _privately_do { x, y, z; }
 ```
@@ -59,7 +59,7 @@ factorial { n;
         n * factorial(n - 1)
     end
 }
-factorial(8)  #=> 40320
+factorial(8)  # 40320
 
 fib { n;
     if n <= 1
@@ -68,7 +68,7 @@ fib { n;
         fib(n - 1) + fib(n - 2)
     end
 }
-fib(10)  #=> 55
+fib(10)  # 55
 
 fizz_buzz { n;
     if n % 15 == 0
@@ -102,7 +102,7 @@ My_Class {
     }
 }
 
-instance := My_Class('some input')  #=> Initted with "some input"
+instance := My_Class('some input')  # Initted with "some input"
 ```
 
 ## Constants
@@ -130,8 +130,8 @@ APP_NAME := 'My App'
 
 ```ore
 name := 'World'
-greeting := "Hello, `name`!"  #=> "Hello, World!"
-math := "2 + 2 = `2 + 2`"    #=> "2 + 2 = 4"
+greeting := "Hello, `name`!"  # "Hello, World!"
+math := "2 + 2 = `2 + 2`"    # "2 + 2 = 4"
 escaped := "Literal \`backticks\`"
 ```
 
@@ -178,7 +178,7 @@ Counter {
 
 Counter()
 Counter()
-Counter.count  #=> 2
+Counter.count  # 2
 ```
 
 ## Type Composition
@@ -221,13 +221,13 @@ Swimming { can_swim := true }
 
 Duck | Flying | Swimming { name := 'duck' }
 d := Duck()
-d.can_fly     #=> true
-d.can_swim    #=> true
+d.can_fly     # true
+d.can_swim    # true
 
 Ostrich | Duck ~ Flying { name := 'ostrich' }
 o := Ostrich()
-o.can_swim    #=> true
-o.can_fly     #=> raises Ore::Undeclared_Identifier
+o.can_swim    # true
+o.can_fly     # raises Ore::Undeclared_Identifier
 ```
 
 A type can even compose with itself, to extend or override a built-in type's own behavior:
@@ -246,7 +246,7 @@ doubled := []
 values.each({ it;
     doubled.push(it * 2)
 })
-doubled  #=> [2, 4, 6]
+doubled  # [2, 4, 6]
 ```
 
 ## Conditionals
@@ -336,19 +336,19 @@ end
 ```ore
 doubled := for [1, 2, 3] map
     it * 2
-end  #=> [2, 4, 6]
+end  # [2, 4, 6]
 
 evens := for [1, 2, 3, 4, 5] select
     it % 2 == 0
-end  #=> [2, 4]
+end  # [2, 4]
 
 odds := for [1, 2, 3, 4, 5] reject
     it % 2 == 0
-end  #=> [1, 3, 5]
+end  # [1, 3, 5]
 
 even_count := for [1, 2, 3, 4, 5, 6] count
     it % 2 == 0
-end  #=> 3
+end  # 3
 ```
 
 ## Loop Control
@@ -392,7 +392,7 @@ magnitude { @vec;
 v := Vector()
 v.x = 3
 v.y = 4
-magnitude(v)  #=> 5
+magnitude(v)  # 5
 
 # Manual sibling scope control
 @ += some_instance   # Add members to scope
@@ -422,7 +422,7 @@ outer {;
 
     inner()
 }
-outer()  #=> 65
+outer()  # 65
 ```
 
 ## Arrays
@@ -432,17 +432,17 @@ outer()  #=> 65
 
 ```ore
 arr := [1, 2, 3, 4, 5]
-arr[0]              #=> 1
-arr.0               #=> 1 (dot notation)
+arr[0]              # 1
+arr.0               # 1 (dot notation)
 
 arr.push(6)         # Add to end
 arr.pop()           # Remove from end
-arr.length()        #=> 5
-arr.first(2)        #=> [1, 2]
-arr.last(2)         #=> [4, 5]
+arr.length()        # 5
+arr.first(2)        # [1, 2]
+arr.last(2)         # [4, 5]
 arr.reverse()
-arr.include?(3)     #=> true
-arr.empty?()        #=> false
+arr.include?(3)     # true
+arr.empty?()        # false
 
 arr.map({ x; x * 2 })
 arr.filter({ x; x > 2 })
@@ -456,14 +456,14 @@ arr.filter({ x; x > 2 })
 
 ```ore
 dict := {x: 10, y: 20}
-dict[:x]            #=> 10
+dict[:x]            # 10
 dict[:z] = 30       # Assignment
 
-dict.keys()         #=> [:x, :y, :z]
-dict.values()       #=> [10, 20, 30]
-dict.has_key?(:x)   #=> true
-dict.count()        #=> 3
-dict.empty?()       #=> false
+dict.keys()         # [:x, :y, :z]
+dict.values()       # [10, 20, 30]
+dict.has_key?(:x)   # true
+dict.count()        # 3
+dict.empty?()       # false
 dict.delete(:z)
 dict.merge({a: 1})
 dict.fetch(:missing, 'default')
@@ -473,19 +473,19 @@ dict.fetch(:missing, 'default')
 
 ```ore
 s := 'Hello, World!'
-s.length            #=> 13
-s.upcase()          #=> 'HELLO, WORLD!'
-s.downcase()        #=> 'hello, world!'
-s.split(', ')       #=> ['Hello', 'World!']
+s.length            # 13
+s.upcase()          # 'HELLO, WORLD!'
+s.downcase()        # 'hello, world!'
+s.split(', ')       # ['Hello', 'World!']
 s.trim()            # Remove whitespace
-s.chars()           #=> ['H', 'e', 'l', ...]
+s.chars()           # ['H', 'e', 'l', ...]
 s.reverse()
-s.include?('World') #=> true
-s.start_with?('He') #=> true
-s.end_with?('!')    #=> true
+s.include?('World') # true
+s.start_with?('He') # true
+s.end_with?('!')    # true
 s.gsub('World', 'Ore')
 s.to_i()            # Convert to integer
-s.empty?()          #=> false
+s.empty?()          # false
 ```
 
 ## Numbers
@@ -497,9 +497,9 @@ n.floor()           # Round down
 n.ceil()            # Round up
 n.round()           # Round to nearest
 n.sqrt()            # Square root
-n.even?()           #=> true
-n.odd?()            #=> false
-n.to_s()            #=> '42'
+n.even?()           # true
+n.odd?()            # false
+n.to_s()            # '42'
 n.clamp(0, 100)     # Clamp to range
 ```
 
@@ -511,10 +511,10 @@ n.clamp(0, 100)     # Clamp to range
 4. `>.<` exclusive both
 
 ```ore
-1...5      #=> 1, 2, 3, 4, 5  (inclusive)
-1..<5      #=> 1, 2, 3, 4     (exclusive end)
-1>..5      #=> 2, 3, 4, 5     (exclusive start)
-1>.<5      #=> 2, 3, 4        (exclusive both)
+1...5   #   1, 2, 3, 4, 5    (inclusive)
+1..<5   #   1, 2, 3, 4       (exclusive end)
+1>..5   #      2, 3, 4, 5    (exclusive start)
+1>.<5   #      2, 3, 4       (exclusive both)
 
 for 1...10
     @puts it
@@ -644,8 +644,8 @@ db.create_table('users', {
     email: 'String'
 })
 
-db.table_exists?('users')  #=> true
-db.tables()                #=> ['users']
+db.table_exists?('users')  # true
+db.tables()                # ['users']
 db.delete_table('users')
 ```
 
@@ -664,8 +664,8 @@ User | Record {
 
 # CRUD operations
 User.create({name: 'Alice', email: 'alice@example.com'})
-users := User.all()       #=> Array of Dictionaries
-user := User.find(1)      #=> Dictionary
+users := User.all()       # Array of Dictionaries
+user := User.find(1)      # Dictionary
 User.delete(1)
 ```
 
@@ -736,16 +736,16 @@ Swimming { can_swim := true }
 Duck | Flying | Swimming { name := 'duck' }
 Fish | Swimming { name := 'fish' }
 
-Duck === Duck          #=> true  (identical composed types)
-Duck === Fish          #=> false (Duck also composes Flying)
-Duck !== Fish          #=> true
+Duck === Duck          # true  (identical composed types)
+Duck === Fish          # false (Duck also composes Flying)
+Duck !== Fish          # true
 
-Duck >== Swimming      #=> true  (Duck composes with at least Swimming)
-Swimming >== Duck      #=> false
-Swimming ==< Duck      #=> true  (==< is >== with the operands flipped)
+Duck >== Swimming      # true  (Duck composes with at least Swimming)
+Swimming >== Duck      # false
+Swimming ==< Duck      # true  (==< is >== with the operands flipped)
 
-Duck =/= Fish          #=> false (both compose Swimming — not disjoint)
-Flying =/= Swimming    #=> true  (share nothing)
+Duck =/= Fish          # false (both compose Swimming — not disjoint)
+Flying =/= Swimming    # true  (share nothing)
 ```
 
 ### Logical
@@ -781,8 +781,8 @@ scoped := compute {;
     3 + 4
 }
 
-3 + 4      #=> 7 (unaffected outside)
-scoped()   #=> 12
+3 + 4      # 7 (unaffected outside)
+scoped()   # 12
 
 # Build a pipeline operator
 @operator -> @infix 300 { left, right;
@@ -792,7 +792,7 @@ scoped()   #=> 12
 double { n; n * 2 }
 add_fifteen { n; n + 15 }
 
-4 -> double -> add_fifteen  #=> 23
+4 -> double -> add_fifteen  # 23
 
 # Invent new literal syntax
 Time { hour, minute, period, }
@@ -809,7 +809,7 @@ Time { hour, minute, period, }
     left
 }
 
-11:22pm  #=> Time(hour: 11, minute: 22, period: 'pm')
+11:22pm  # Time(hour: 11, minute: 22, period: 'pm')
 
 # Or a prefix operator that builds a value from a bare literal
 Currency { amount, name, code, }
@@ -822,7 +822,7 @@ Currency { amount, name, code, }
     c
 }
 
-$42  #=> Currency(amount: 42, name: 'US Dollar', code: 'USD')
+$42  # Currency(amount: 42, name: 'US Dollar', code: 'USD')
 ```
 
 ## Runtime Type Contracts
@@ -838,7 +838,7 @@ x = 'hello'   # raises Ore::Type_Contract_Violation ("expected Number, got Strin
 
 x := 4
 x := 'hello'  # fine — re-declaring with := re-infers and re-locks the type
-x             #=> 'hello'
+x             # 'hello'
 
 y = 4         # raises Ore::Cannot_Reassign_Undeclared_Identifier — y was never declared
 ```
@@ -858,14 +858,14 @@ format_usd { cents: Number -> String;
 }
 
 format_eur { cents: Number -> String;
-    "E" + (cents / 100.0).to_s()
+    "€" + (cents / 100.0).to_s()
 }
 
 formatter: Currency_Formatter = format_usd
-formatter(1050)               #=> "$10.5"
+formatter(1050)               # "$10.5"
 
 formatter = format_eur        # ok — same shape: (Number) -> String
-formatter(1050)               #=> "E10.5"
+formatter(1050)               # "€10.5"
 
 formatter = { cents; cents }  # raises Ore::Type_Contract_Violation — wrong shape
 ```
