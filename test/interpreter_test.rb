@@ -2539,5 +2539,86 @@ class Interpreter_Test < Base_Test
 			'ok'
 		CODE
 		assert_equal 'ok', out
+
+		# A function (anonymous or named) can declare its own return type inline, at the end of its param list, instead of via the `name: Type { }` prefix.
+		out = Ore.interp <<~CODE
+			f := { a: Number -> Number; a * 2 }
+			f(21)
+		CODE
+		assert_equal 42, out
+
+		out = Ore.interp <<~CODE
+			example { a: Number -> Number; a * 2 }
+			example(21)
+		CODE
+		assert_equal 42, out
+
+		error = assert_raises Ore::Type_Contract_Violation do
+			Ore.interp <<~CODE
+				f := { a: Number -> Number; 'oops' }
+				f(1)
+			CODE
+		end
+		assert_equal 'Number', error.contract
+		assert_equal 'String', error.actual
+	end
+
+	def test_function_signature_matching
+		# A function whose actual shape matches the signature succeeds, both on first declaration and on reassignment.
+		out = Ore.interp <<~CODE
+			Num_to_str := String{Number;}
+			stringify: String { n: Number; 'x' }
+			to_string: Num_to_str = stringify
+			another: String { n: Number; 'y' }
+			to_string = another
+			'ok'
+		CODE
+		assert_equal 'ok', out
+
+		# First declaration with a mismatched shape raises immediately.
+		error = assert_raises Ore::Type_Contract_Violation do
+			Ore.interp <<~CODE
+				Num_to_str := String{Number;}
+				to_string: Num_to_str = { x, y; x + y }
+			CODE
+		end
+		assert_equal '{Number -> String;}', error.contract
+		assert_equal '{, -> ;}', error.actual
+
+		# Reassigning an already-valid signature-typed identifier to a mismatched shape raises too, comparing structurally rather than as a plain type name.
+		error = assert_raises Ore::Type_Contract_Violation do
+			Ore.interp <<~CODE
+				Num_to_str := String{Number;}
+				stringify: String { n: Number; 'x' }
+				to_string: Num_to_str = stringify
+				to_string = { x, y; x + y }
+			CODE
+		end
+		assert_equal '{Number -> String;}', error.contract
+		assert_equal '{, -> ;}', error.actual
+
+		# Ordinary nominal type annotations are unaffected by signature resolution.
+		out = Ore.interp <<~CODE
+			x: Number = 4
+			x = 8
+			x
+		CODE
+		assert_equal 8, out
+
+		assert_raises Ore::Type_Contract_Violation do
+			Ore.interp <<~CODE
+				x: Number = 4
+				x = 'oops'
+			CODE
+		end
+
+		# First declaration of an ordinary nominal type is now checked too, even
+		# with a non-literal RHS the static checker can't see.
+		assert_raises Ore::Type_Contract_Violation do
+			Ore.interp <<~CODE
+				n := 4
+				x: String = n
+			CODE
+		end
 	end
 end

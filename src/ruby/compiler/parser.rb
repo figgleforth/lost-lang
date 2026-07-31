@@ -265,6 +265,12 @@ module Ore
 			reduce_newlines
 
 			until curr? Ore::FUNCTION_DELIMITER
+				if curr? '->' and eat '->'
+					# A function (named or anonymous) declaring its own return type inline, at the end of its param list: `{ a: Number -> Number; ... }`. Distinct from `identifier: Type { ... }`, which is a signature reference/alias, not an implementation declaring its own type.
+					func.type = eat(:Identifier)
+					next
+				end
+
 				param = Ore::Param_Expr.new
 
 				if curr? Ore::UNPACK_OPERATOR
