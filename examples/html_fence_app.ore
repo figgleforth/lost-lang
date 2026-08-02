@@ -1,5 +1,5 @@
 # This app demonstrates using html fences (```html\n...```) to render html as opposed to Dom compositions. (see examples/todo_app.ore)
-@use 'ore/server.ore'
+@load 'ore/server.ore'
 
 App | Server {
 	get:// home {;

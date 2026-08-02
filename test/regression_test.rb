@@ -375,7 +375,7 @@ class Regression_Test < Base_Test
 
 		assert_raises Ore::Database_Not_Set_For_Table_Instance do
 			Ore.interp <<~ORE
-			    @use 'ore/table.ore'
+			    @load 'ore/table.ore'
 
 			    Table.find(1)
 			ORE
@@ -411,10 +411,10 @@ class Regression_Test < Base_Test
 		assert_instance_of Ore::Range, Ore.interp("x:=1, y:=2, 0...(x + y)")
 	end
 
-	# Regression: types loaded via `variable = @use 'file.ore'` were missing enclosing_scope in interp_type
+	# Regression: types loaded via `variable = @load 'file.ore'` were missing enclosing_scope in interp_type
 	def test_use_with_variable_can_reference_sibling_types
 		out = Ore.interp <<~ORE
-		    lib := @use 'test/fixtures/use_with_variable_sibling_types.ore'
+		    lib := @load 'test/fixtures/use_with_variable_sibling_types.ore'
 		    m := lib.Main_Type()
 		    m.get_sibling_value()
 		ORE
@@ -424,7 +424,7 @@ class Regression_Test < Base_Test
 	# Regression: sibling types should also be accessible from within functions (not just type body)
 	def test_use_with_variable_can_reference_sibling_types_in_function
 		out = Ore.interp <<~ORE
-		    lib := @use 'test/fixtures/use_with_variable_sibling_types.ore'
+		    lib := @load 'test/fixtures/use_with_variable_sibling_types.ore'
 		    m := lib.Main_Type()
 		    m.create_sibling_in_func()
 		ORE

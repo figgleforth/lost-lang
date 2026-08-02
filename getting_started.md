@@ -315,9 +315,9 @@ multiply(2)  # Vector(10, 20)
 #### File Loading
 
 ```ore
-# Load external Ore files with @use directive
-@use './some_formatter.ore'
-@use './some_dir/users.ore'
+# Load external Ore files with @load directive
+@load './some_formatter.ore'
+@load './some_dir/users.ore'
 
 # Use loaded classes and functions
 user := User('Alice', 'alice@example.com')
@@ -327,8 +327,8 @@ formatted := format_name(user.name)
 #### Database & ORM
 
 ```ore
-@use 'ore/database.ore'
-@use 'ore/record.ore'
+@load 'ore/database.ore'
+@load 'ore/record.ore'
 
 # Create and connect to database
 db := Sqlite('./temp/blog.db')
@@ -368,7 +368,7 @@ Post.delete(2)
 #### Web Servers
 
 ```ore
-@use 'ore/server.ore'
+@load 'ore/server.ore'
 
 # Create servers by composing with built-in Server type
 Web_App | Server {
@@ -404,7 +404,7 @@ api := API_Server(3000)
 Using built-in `Dom` composition:
 
 ```ore
-@use 'ore/html.ore'
+@load 'ore/html.ore'
 
 Layout | Dom {
 	title,
@@ -428,7 +428,7 @@ Layout | Dom {
 Using strings with HTML:
 
 ```ore
-@use 'ore/html.ore'
+@load 'ore/html.ore'
 
 Layout | Dom {
 	render {;
@@ -453,7 +453,7 @@ Both examples will produce an HTML response as long as the class composes with `
 Adding HTML and CSS attributes:
 
 ```ore
-@use 'ore/html.ore'
+@load 'ore/html.ore'
 
 My_Div | Dom {
 	html_element := 'p'

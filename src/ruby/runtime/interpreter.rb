@@ -2014,7 +2014,7 @@ module Ore
 				# Standalone load is interpreted into current scope by passing the scope into runtime#load_file
 				filepath = interpret expr.expression
 				load_file_into_scope filepath, stack.last
-				# note: #load_file_into_scope returns the output but it's ignored. Assigning the value of a @use directive executes code in #interp_infix_expr
+				# note: #load_file_into_scope returns the output but it's ignored. Assigning the value of a @load directive executes code in #interp_infix_expr
 			else
 				# todo: Allow builtins to be extended by the user. Requirements would be:
 				#   1) Create type in Ore

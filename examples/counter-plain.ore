@@ -1,8 +1,8 @@
 # Counter Example (Plain)
 # A minimal example of reactive state with server-side re-rendering.
 
-@use 'ore/html.ore'
-@use 'ore/server.ore'
+@load 'ore/html.ore'
+@load 'ore/server.ore'
 
 # Counter component with in-memory state
 Counter | Div {

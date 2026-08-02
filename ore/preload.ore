@@ -1,14 +1,14 @@
 # Builtin types I'm experimenting with, very much incomplete. Each of these should have an equivalent Ore::Type in ./src/runtime/scopes.rb
 
-# @use 'ore/table.ore' # ore/ is the stdlib found in ./ore/
-# @use './this.ore'    # relative to wherever you ran bin/ore from (cwd)
-# @use 'that.ore'      # relative to wherever you ran bin/ore from (cwd)
+# @load 'ore/table.ore' # ore/ is the stdlib found in ./ore/
+# @load './this.ore'    # relative to wherever you ran bin/ore from (cwd)
+# @load 'that.ore'      # relative to wherever you ran bin/ore from (cwd)
 
-@use 'ore/file_system.ore'
-@use 'ore/number.ore'
-@use 'ore/array.ore'
-@use 'ore/dictionary.ore'
-@use 'ore/string.ore'
+@load 'ore/file_system.ore'
+@load 'ore/number.ore'
+@load 'ore/array.ore'
+@load 'ore/dictionary.ore'
+@load 'ore/string.ore'
 
 Iterable { # todo: This is unused, but here to remind me to think about how to make composing with Iterable behave like Protocols in Swift.
 	next {;}

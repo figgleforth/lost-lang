@@ -3,7 +3,7 @@ module Ore
 	UNPACK_OPERATOR             = '@' # todo: Pick a different symbol
 	NIL_INIT_POSTFIX            = ','
 	FUNCTION_DELIMITER          = ';'
-	IMPORT_FILE_DIRECTIVE       = 'use'
+	IMPORT_FILE_DIRECTIVE       = 'load'
 	FOR_VERBS                   = %w(each map select reject count)
 	HTML_ATTRS                  = %w(id class href)
 	HTTP_VERBS                  = %w(get put patch post delete head options connect trace)
@@ -94,7 +94,7 @@ module Ore
 
 		              # Equality
 		              '==' => 500, '!=' => 500, '===' => 500, '!==' => 500, '=/=' => 500,
-		              
+
 		              # Bitwise AND
 		              '&' => 450,
 

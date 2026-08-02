@@ -1,4 +1,4 @@
-# Regression test: types loaded via `variable = @use` should be able to reference sibling types
+# Regression test: types loaded via `variable = @load` should be able to reference sibling types
 # Tests two scenarios:
 # 1. Instantiating sibling type in type body (x = Sibling_Type())
 # 2. Instantiating sibling type inside a function (create_sibling_in_func)

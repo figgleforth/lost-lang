@@ -108,7 +108,7 @@ The AST is executed to produce output:
 
 ## Type Checker
 
-The type checker (`src/compiler/type_checker.rb`) runs between the parser and interpreter. It is invoked from `Interpreter#output` before the execution loop, so it also runs on files loaded via `@use`.
+The type checker (`src/compiler/type_checker.rb`) runs between the parser and interpreter. It is invoked from `Interpreter#output` before the execution loop, so it also runs on files loaded via `@load`.
 
 ### What it checks
 
@@ -686,7 +686,7 @@ Ore includes built-in database support with an ActiveRecord-style ORM using Sequ
 ### Database Connection
 
 ```ore
-@use 'ore/database.ore'
+@load 'ore/database.ore'
 
 db := Sqlite('./data/myapp.db')
 @connect db  # Establishes connection
@@ -714,7 +714,7 @@ db.tables()                # => ['users']
 The `Record` type provides ActiveRecord-style ORM functionality:
 
 ```ore
-@use 'ore/record.ore'
+@load 'ore/record.ore'
 
 User | Record {
     ../database := ~/db     # Set database (static declaration)
@@ -744,8 +744,8 @@ User.delete(1)
 ### Full Example
 
 ```ore
-@use 'ore/database.ore'
-@use 'ore/record.ore'
+@load 'ore/database.ore'
+@load 'ore/record.ore'
 
 db := Sqlite('./temp/blog.db')
 @connect db
@@ -816,7 +816,7 @@ post://login {;
 Ore supports HTML rendering via the built-in `Dom` type (load `ore/html.ore`). Any class composing with `Dom` that defines a `render` method will auto-render to HTML when returned from a server route.
 
 ```ore
-@use 'ore/html.ore'
+@load 'ore/html.ore'
 
 Layout | Dom {
     title,
@@ -856,7 +856,7 @@ Styled_Div | Dom {
 
 ## File Loading
 
-The `@use` directive allows importing Ore files:
+The `@load` directive allows importing Ore files:
 
 - Interpreter caches parsed expressions in `@cached_expressions_by_filepath` to prevent duplicate parsing
 - Files are loaded into a specified scope via `Interpreter#load_file_into_scope`

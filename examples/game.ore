@@ -1,5 +1,5 @@
-@use 'ore/database.ore'
-@use 'ore/table.ore'
+@load 'ore/database.ore'
+@load 'ore/table.ore'
 
 Position {
 	C := 0

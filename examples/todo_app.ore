@@ -1,7 +1,7 @@
-@use 'ore/html.ore'
-@use 'ore/database.ore'
-@use 'ore/Table.ore'
-@use 'ore/server.ore'
+@load 'ore/html.ore'
+@load 'ore/database.ore'
+@load 'ore/Table.ore'
+@load 'ore/server.ore'
 
 ```Page components```
 Page_Layout | Html {

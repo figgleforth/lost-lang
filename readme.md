@@ -524,21 +524,21 @@ end
 ## File I/O
 
 ```ore
-@use 'ore/file_system.ore'
+@load 'ore/file_system.ore'
 
 content := File_System.read('./file.txt')
 File_System.write_string_to_file('./out.txt', 'Hello!')
 ```
 
-## @use Directive
+## @load Directive
 
 1. Imports another Ore file
 2. Files are only loaded once
 
 ```ore
-@use 'ore/string.ore'
-@use 'ore/array.ore'
-@use './my_module.ore'
+@load 'ore/string.ore'
+@load 'ore/array.ore'
+@load './my_module.ore'
 ```
 
 ## @puts Directive
@@ -556,7 +556,7 @@ File_System.write_string_to_file('./out.txt', 'Hello!')
 3. Start with `@start` directive
 
 ```ore
-@use 'ore/server.ore'
+@load 'ore/server.ore'
 
 App | Server {
     new {;
@@ -633,7 +633,7 @@ get://api/data {;
 2. Connect with `@connect` directive
 
 ```ore
-@use 'ore/database.ore'
+@load 'ore/database.ore'
 
 db := Sqlite('./data/app.db')
 @connect db
@@ -655,7 +655,7 @@ db.delete_table('users')
 2. Set static `../database` and instance `table_name`
 
 ```ore
-@use 'ore/record.ore'
+@load 'ore/record.ore'
 
 User | Record {
     ../database := ~/db
@@ -676,7 +676,7 @@ User.delete(1)
 3. `html_*` prefix sets HTML attributes
 
 ```ore
-@use 'ore/html.ore'
+@load 'ore/html.ore'
 
 Card | Div {
     css_padding := '1rem'

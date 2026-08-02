@@ -1,8 +1,7 @@
 **Miscellaneous:**
 - [ ] Table associations (`belongs_to`/`has_many`): needed the moment `Player` needs a `Team`.
 - [ ] jsonb-like column support.
-- [ ] Related to issue #75 (ORM improvements) but that issue is specifically about migrations: associations/jsonb are a separate, currently unfiled, gap.
-- [ ] No JSON encode/decode exposed to Ore: `require 'json'` only used internally for parsing POST bodies (`interpreter.rb`).
+- [ ] No JSON encode/decode exposed to Ore: `require 'json'` only used internally, for example when parsing POST bodies (`interpreter.rb`).
 - [ ] No outbound HTTP client: Ore can serve requests but can't make them.
 - [ ] No `ENV`/config access: only I/O primitive is `File_System`.
 - [ ] No in-Ore testing/assert facility: Minitest only tests the interpreter itself.
@@ -29,7 +28,6 @@
 - [ ] Change set comparison operators to `=== =!= =/= =>= =<=` from `=== !== =/= >== ==<` to be more consistent
 
 **Language design loose ends:**
-- [ ] Rename @use to @load? Or something else because "use" doesn't clearly explain the behavior.
 - [ ] What should the default value for uninitilized declarations be? `x: Number` should probably start as 0 instead of nil. The value should depend on the type as well, like a String should be "" by default. Etc.
 - [ ] `@valid` directive: validate whether a call would type-check without actually invoking it, e.g. `@valid identity(123)` #=> true, `@valid identity("1")` #=> false. Return-type syntax now exists, so this is unblocked: just needs the directive itself: check arg count/types against a real function's `param_types`/`return_type` (both now on `Ore::Func`) without invoking it.
 - [ ] Related idea, tabled for now: an operator to structurally match a function's param signature against a shape, e.g. `add ==== {Number, Number;}`.
@@ -61,3 +59,4 @@
 - [x] Function signature literals (`Type{Param;}` as a value/alias, `name: Type{Param;}` self-declaring): `Ore::Func_Signature`, with `Invalid_Func_Signature` raised for malformed ones.
 - [x] Return-type annotations on real functions: `name: Type {}` prefix and `{params -> Type; ...}` inline (works for anonymous functions too): plus runtime enforcement (`Type_Contract_Violation` if the actual return value doesn't match).
 - [x] Structural signature matching: reassigning a signature-aliased identifier now checks a real function's actual param/return types against the alias, not just nominal string equality.
+- [x] Rename @use to @load? Or something else because "use" doesn't clearly explain the behavior.
