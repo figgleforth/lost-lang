@@ -373,7 +373,7 @@ find_first { predicate;
 
 ## Sibling Scopes
 
-Sibling scopes are checked before the current scope during identifier lookup, making an instance's members accessible without an `instance.` prefix.
+Sibling scopes are checked as a fallback after the current scope during identifier lookup, making an instance's members accessible without an `instance.` prefix.
 
 1. `@param` in a function signature adds the argument to a sibling scope, making its members directly accessible in the function body
 2. `@ += instance` and `@ -= instance` manually add and remove instances from sibling scopes in any scope
@@ -423,6 +423,32 @@ outer {;
     inner()
 }
 outer()  # 65
+```
+
+## Reopening Scopes (`@cd`)
+
+1. `@cd <Type or instance>` pushes that scope directly onto the stack, so declarations made inside it become real members of the target
+2. `@cd ..` pops back to the previous scope
+3. Unlike sibling scopes, `@cd` mutates its target — reopening a Type extends every instance of it, reopening a specific instance changes only that one
+
+```ore
+Button {
+    label := 'default'
+}
+
+@cd Button
+    css_filter := 'invert()'   # extends the Type itself
+@cd ..
+
+b := Button()
+b.css_filter   # 'invert()' — every Button gets it, since Button itself was extended
+
+@cd b
+    onclick := { @puts 'clicked' }   # modifies just this instance
+@cd ..
+
+c := Button()
+c.onclick   # raises Ore::Undeclared_Identifier — only b was modified
 ```
 
 ## Arrays
