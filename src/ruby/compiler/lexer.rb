@@ -205,9 +205,9 @@ module Ore
 		end
 
 		def lex_operator
-			# todo: Operators cannot start with or end with: ' " { } ( )
+			# note; Operators cannot start with or end with: ' " { } ( ) [ ] and that is a strict rule.
 			it = ::String.new
-			while chars? && symbol? && !%w(' " { } ( ) ).include?(curr)
+			while chars? && symbol? && !Ore::ILLEGAL_OPERATOR_CHARS.include?(curr)
 				it << eat
 
 				break if Ore::SCOPE_OPERATORS.include? it

@@ -512,7 +512,7 @@ class Regression_Test < Base_Test
 		assert_equal 55, out
 	end
 
-	# The comment string value was being returned by the Interpreter lol. 
+	# The comment string value was being returned by the Interpreter lol.
 	def test_comment_as_last_expression_bug
 		out = Ore.interp "
 			add { a, b;
@@ -520,5 +520,29 @@ class Regression_Test < Base_Test
 			}
 			add(4, 8)"
 		refute_kind_of Ore::String_Expr, out
+	end
+
+	# `=` used to swallow an adjacent `[` with no space between them, lexing as a single bad operator token `=[` instead of `=` followed by a delimiter.
+	def test_operator_does_not_absorb_adjacent_bracket_regression
+		out = Ore.lex 'a=[1,2]'
+		assert_equal %i(identifier operator delimiter number delimiter number delimiter), out.map(&:type)
+		assert_equal '=', out[1].value
+
+		out = Ore.lex 'a]=b'
+		assert_equal %i(identifier delimiter operator identifier), out.map(&:type)
+		assert_equal '=', out[2].value
+	end
+
+	# Operators must never absorb ' " { } ( ) [ ] at all, not just at their start/end.
+	def test_operator_does_not_absorb_quotes_or_braces_regression
+		out = Ore.lex "5+'hello'"
+		assert_equal %i(number operator string), out.map(&:type)
+		assert_equal '+', out[1].value
+
+		out = Ore.lex 'x=={y:1}'
+		assert_equal '==', out[1].value
+
+		out = Ore.lex '!(b)'
+		assert_equal '!', out[0].value
 	end
 end

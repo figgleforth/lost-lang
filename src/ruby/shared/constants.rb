@@ -38,6 +38,7 @@ module Ore
 	STARTING_PRECEDENCE         = 0
 	DEFAULT_OPERATOR_PRECEDENCE = 500 # given to all custom operators at runtime unless
 	DELIMITERS                  = %W(, ; { } ( ) [ ] \n \r).freeze
+	ILLEGAL_OPERATOR_CHARS      = %w(' " { } ( ) [ ] ).freeze
 	NEWLINES                    = %W(\r\n \n).freeze
 	WHITESPACES                 = %W(\t \s).freeze
 	NUMERIC_REGEX               = /\A\d+\z/
