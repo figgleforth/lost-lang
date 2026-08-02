@@ -1685,8 +1685,9 @@ module Ore
 			case expr.operator.value
 			when '|'
 				# Union with Ore::Type
+
 				right.declarations.each do |key, value|
-					curr_scope[key] ||= value
+					curr_scope[key] = value unless curr_scope.has?(key)
 				end
 
 				curr_scope.static_declarations ||= Set.new
@@ -1746,7 +1747,7 @@ module Ore
 				curr_scope.static_declarations = curr_scope.static_declarations ^ right.static_declarations
 
 				operand_unique_keys.each do |key|
-					curr_scope[key] ||= right[key]
+					curr_scope[key] = right[key]
 				end
 			else
 				raise Ore::Invalid_Composition_Operator.new(expr, self)
@@ -1998,16 +1999,13 @@ module Ore
 				database
 
 			when 'cd'
-				# note: This used to be destructive, the target was pushed directly on the stack. Now it's a sibling of a Temporary scope on the stack. And because it's a sibling scope, it is read-only and therefore nondestructive.
-				# todo: Double check that sibling scopes are read-only lol
+				# note: This can be destructive to the scope pushed.
 				if expr.expression&.value == '..'
-					popped = pop_scope
-					raise unless popped.is_a? Ore::Temporary
+					pop_scope
 				else
 					target = interpret expr.expression
 					if target
-						scope = Ore::Temporary.new target.name
-						scope.sibling_scopes << target
+						push_scope target
 					else
 						raise Ore::Invalid_Directive_Usage.new(expr, self)
 					end
@@ -2018,11 +2016,6 @@ module Ore
 				load_file_into_scope filepath, stack.last
 				# note: #load_file_into_scope returns the output but it's ignored. Assigning the value of a @load directive executes code in #interp_infix_expr
 			else
-				# todo: Allow builtins to be extended by the user. Requirements would be:
-				#   1) Create type in Ore
-				#   2) Create equivalent type in scopes.rb or similar
-				#   3) Make sure functions which use the @ruby expression in its body are named in to match the Ore::Type "proxy_#{func_name}"
-				# For example, `String { upcase {; @ruby } }` maps to `Ore::String@ruby_upcase`
 				raise Ore::Invalid_Directive_Usage.new(expr, self)
 			end
 		end

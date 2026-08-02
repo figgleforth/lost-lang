@@ -14,15 +14,17 @@ module Ore
 			self[identifier] = value
 		end
 
+		# todo: Currently there is no clear rule on multiple unpacks. :double_unpack
 		def get key
 			key_str = key&.to_s
 
-			# todo: Currently there is no clear rule on multiple unpacks. :double_unpack
+			return @declarations[key_str] if @declarations.key?(key_str) # note; calling #key? on @declarations here because I specifically want to see if this key is on @declarations.
+
 			@sibling_scopes.reverse_each do |sibling|
-				return sibling[key_str] if sibling.has? key_str
+				return sibling[key_str] if sibling.has? key_str # note; calling #has? here so the sibling can evaluate any siblings it might have
 			end
 
-			@declarations[key_str]
+			nil
 		end
 
 		def [] key

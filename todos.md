@@ -23,14 +23,13 @@
 - [ ] `src/compiler/parser.rb`: a comma is discarded instead of implying a tuple in `#complete_expression` (possibly related to tuple unpacking).
 
 **Language design loose ends:**
+- [ ] `src/runtime/interpreter.rb`: builtins aren't user-extensible yet; a rough shape of the requirements exists in some comment but nothing's implemented. Requirements for this to work might include: 1) creating a new Type in Ore. 2) creating proxy class in scopes.rb or preferrably a custom directory. 3) Functions which use the @ruby expression in its body should be named something like Ore::Type "proxy_#{func_name}"
 - [ ] What should the default value for uninitilized declarations be? `x: Number` should probably start as 0 instead of nil. The value should depend on the type as well, like a String should be "" by default. Etc.
 - [ ] `@valid` directive: validate whether a call would type-check without actually invoking it, e.g. `@valid identity(123)` #=> true, `@valid identity("1")` #=> false. Return-type syntax now exists, so this is unblocked: just needs the directive itself: check arg count/types against a real function's `param_types`/`return_type` (both now on `Ore::Func`) without invoking it.
 - [ ] Related idea, tabled for now: an operator to structurally match a function's param signature against a shape, e.g. `add ==== {Number, Number;}`.
 - [ ] Type contracts (`: Type` annotations, both nominal and signature) are only ever checked on *reassignment* (`interp_infix_assignment`): never on the first, self-declaring assignment. `to_string: Num_to_str = { totally wrong shape }` isn't caught. Pre-existing architectural gap, not new: applies equally to plain nominal types.
 - [ ] `test/regression_test.rb`: plan to make bare `{x}` implicitly set `x` if it's declared in the scope, so `x=123, {x}` should set x to 123.
 - [ ] `src/shared/constants.rb`: `UNPACK_OPERATOR = '@'` collides conceptually with `Ore::BUILTIN_OPERATOR` (also `@`); pick a distinct symbol for one of them.
-- [ ] `src/runtime/interpreter.rb`: sibling scopes are assumed read-only; assumption was never actually double-checked.
-- [ ] `src/runtime/interpreter.rb`: builtins aren't user-extensible yet; a rough shape of the requirements exists in some comment but nothing's implemented.
 - [ ] `ore/preload.ore`: `Iterable` composition exists but is unused; consider making it behave like a Swift-style protocol.
 - [ ] Consider disallowing ! and ? to be part of identifiers. Currently all identifiers may end with ? or ! like Ruby.
 
@@ -61,3 +60,4 @@
 - [x] `src/compiler/lexer.rb`: Add operator symbol exclusion list `' " { } ( ) [ ]` to contants.rb.
 - [x] `=~`/`!~` (regex match) are listed in `COMPARISON_OPERATORS` (`src/shared/constants.rb`) but missing from `INFIX`, so the parser never builds an `Infix_Expr` for them: same bug class the `!==` fix addressed. `'abc' =~ 'xyz'` silently parses as disconnected expressions instead of erroring. Needs `=~`/`!~` added to `INFIX`, and an actual regex-match implementation (currently nothing in `interp_infix`'s `COMPARISON_OPERATORS` branch handles them beyond the `left.send` fallback).
 - [x] Function param declarations should use `:=` to be consistent with the remainder of the declaration syntax
+- [x] `src/runtime/interpreter.rb`: sibling scopes are assumed read-only; assumption was never actually double-checked.
