@@ -11,19 +11,18 @@
 - [ ] `help {expr;}` or `@help` that accepts any expression and returns information about the Type, primitive, function, etc. Literally any expression should be able to be described given its AST. You even have access to the live values so the information can be dynamic to reflect what the user is actually asking about.
 - [ ] Switch statement / pattern matching: required for @help / help{expr;} function.
 - [ ] Work on Odin port scaffolding on the side, but no rush because I want to keep improving the Ruby version.
+- [ ] Improve error messaging. `src/runtime/error_formatter.rb` doesn't display source code properly for some expressions, I think.
 
 **Bugs:**
 - [ ] Tuple-in-tuple has infinite members: `((), true).0.1`, `.0.2`, `.0.3`... all return a Tuple instead of erroring past the actual length.
 - [ ] No try/catch: unhandled runtime errors crash the program outright. Ore errors are Ruby exceptions under the hood already, so the interpreter just needs to catch and hand off to a user-defined handler. Matters most for web routes, file I/O, DB calls.
 - [ ] Update? Dict keys that shadow a built-in dict method name (`keys`, `values`, etc.) break lookup: should check the dict's own scope before falling back to the built-in (`src/runtime/interpreter.rb`, ~L927).
-- [ ] Update? `src/runtime/error_formatter.rb`: doesn't display source code properly, unclear how to get the source string at that point.
 - [ ] `=~`/`!~` (regex match) are listed in `COMPARISON_OPERATORS` (`src/shared/constants.rb`) but missing from `INFIX`, so the parser never builds an `Infix_Expr` for them: same bug class the `!==` fix addressed. `'abc' =~ 'xyz'` silently parses as disconnected expressions instead of erroring. Needs `=~`/`!~` added to `INFIX`, and an actual regex-match implementation (currently nothing in `interp_infix`'s `COMPARISON_OPERATORS` branch handles them beyond the `left.send` fallback).
 - [ ] `<=>` works for Numbers/Strings only by accident: it falls through to `left.send('<=>', right)` in `interp_infix`, which works because number/string literals decay to plain Ruby values with a native `<=>`. Custom Instances have no `<=>` defined, so `<=>` on user-defined types raises rather than erroring cleanly or doing something sensible.
 
 **Parser robustness:**
 - [ ] `src/compiler/parser.rb`: a comma is discarded instead of implying a tuple in `#complete_expression` (possibly related to tuple unpacking).
 - [ ] Update? `src/compiler/lexer.rb`: operators are still allowed to start/end with `` ' " { } ( ) `` and should be disallowed.
-- [ ] Change set comparison operators to `=== =!= =/= =>= =<=` from `=== !== =/= >== ==<` to be more consistent
 
 **Language design loose ends:**
 - [ ] What should the default value for uninitilized declarations be? `x: Number` should probably start as 0 instead of nil. The value should depend on the type as well, like a String should be "" by default. Etc.
@@ -59,3 +58,4 @@
 - [x] Structural signature matching: reassigning a signature-aliased identifier now checks a real function's actual param/return types against the alias, not just nominal string equality.
 - [x] Rename @use to @load? Or something else because "use" doesn't clearly explain the behavior.
 - [x] Replace all `# todo: Proper error` placeholders scattered through `src/runtime/interpreter.rb`: real error types needed instead of generic ones. And add tests. A few of the errors are unreachable because of other guards, but the ones that are have a test now.
+- [x] Change set comparison operators to `=== =!= =/= =>= =<=` from `=== !== =/= >== ==<` to be more consistent

@@ -1152,23 +1152,23 @@ module Ore
 					right = interpret expr.right
 
 					case expr.operator.value
-					when '=/='
-						# They share absolutely no types
-						!left.types.any? do |type|
-							right.types.include? type
-						end
 					when '==='
 						left.types == right.types
-					when '!=='
+					when '=!='
 						left.types != right.types
-					when '>=='
+					when '=>='
 						# Is expr.left a superset of expr.right
 						right.types.all? do |type|
 							left.types.include? type
 						end
-					when '==<'
+					when '=<='
 						# Is expr.right a superset of expr.left
 						left.types.all? do |type|
+							right.types.include? type
+						end
+					when '=/='
+						# They share absolutely no types
+						!left.types.any? do |type|
 							right.types.include? type
 						end
 					else

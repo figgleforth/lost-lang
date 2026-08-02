@@ -2407,18 +2407,18 @@ class Interpreter_Test < Base_Test
 		    Right | Num {}
 			l := Left()
 			r := Right()
-			(Left !== Right, Right !== Right, l !== r, r !== r)
+			(Left =!= Right, Right =!= Right, l =!= r, r =!= r)
 		CODE
 		assert_equal [true, false, true, false], out.values
 
-		# Siblings that only share a common composed base (Num) are NOT comparable via >==/==< -- neither one's types are a subset of theother's, even though they overlap. This is what distinguishes >==/==< from a plain "do these share any composed type" check.
+		# Siblings that only share a common composed base (Num) are NOT comparable via =/= -- neither one's types are a subset of theother's, even though they overlap. This is what distinguishes =/= from a plain "do these share any composed type" check.
 		out = Ore.interp <<~CODE
 			#{shared}
 		    Left | Num {}
 		    Right | Num {}
 			l := Left()
 			r := Right()
-			(Left >== Right, Right >== Left, l >== r, r >== l)
+			(Left =>= Right, Right =>= Left, l =>= r, r =>= l)
 		CODE
 		assert_equal [false, false, false, false], out.values
 
@@ -2428,27 +2428,27 @@ class Interpreter_Test < Base_Test
 		    Right | Num {}
 			l := Left()
 			r := Right()
-			(Left ==< Right, Right ==< Left, l ==< r, r ==< l)
+			(Left =<= Right, Right =<= Left, l =<= r, r =<= l)
 		CODE
 		assert_equal [false, false, false, false], out.values
 
-		# `A >== B` is true when A's composed types are a superset of B's -- i.e. A composes with at least everything B does. Left composes Num, so Left has "at least" Num, but not the other way around.
+		# `A =>= B` is true when A's composed types are a superset of B's -- i.e. A composes with at least everything B does. Left composes Num, so Left has "at least" Num, but not the other way around.
 		out = Ore.interp <<~CODE
 			#{shared}
 		    Left | Num {}
 			l := Left()
 			n := Num()
-			(Left >== Num, Num >== Left, Left >== Left, l >== n, n >== l)
+			(Left =>= Num, Num =>= Left, Left =>= Left, l =>= n, n =>= l)
 		CODE
 		assert_equal [true, false, true, true, false], out.values
 
-		# ==< mirrors >== with the operands' roles reversed.
+		# =<= mirrors =>= with the operands' roles reversed.
 		out = Ore.interp <<~CODE
 			#{shared}
 		    Left | Num {}
 			l := Left()
 			n := Num()
-			(Num ==< Left, Left ==< Num, Left ==< Left, n ==< l, l ==< n)
+			(Num =<= Left, Left =<= Num, Left =<= Left, n =<= l, l =<= n)
 		CODE
 		assert_equal [true, false, true, true, false], out.values
 
