@@ -184,8 +184,7 @@ Ore uses a scope hierarchy, all defined in `src/runtime/scopes.rb`:
 - **Html_Element** - HTML element scopes (tracks `@expressions`, `@attributes`, `@types`)
 - **Return** - Return value wrapper (tracks `@value`)
 
-Each scope can have **sibling scopes
-** - additional scopes checked first during identifier lookup, used by the unpack feature.
+Each scope can have **sibling scopes** - additional scopes checked as a fallback during identifier lookup (after the scope's own declarations), used by the unpack feature.
 
 ### Scope Operators
 
@@ -371,7 +370,7 @@ thingy { @island;
 
 - `@param` in function signature automatically unpacks parameter into sibling scope
 - `@ += instance` and `@ -= instance` provide manual control in any scope
-- Sibling scopes are checked first during identifier lookup (before current scope declarations)
+- The scope's own declarations are checked first during identifier lookup; sibling scopes are only checked as a fallback
 - Only works with Instance types; errors with `Invalid_Unpack_Infix_Right_Operand` for non-instances
 - Only `+=` and `-=` operators supported; other operators error with `Invalid_Unpack_Infix_Operator`
 
