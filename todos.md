@@ -32,6 +32,7 @@
 - [ ] `src/runtime/interpreter.rb`: sibling scopes are assumed read-only; assumption was never actually double-checked.
 - [ ] `src/runtime/interpreter.rb`: builtins aren't user-extensible yet; a rough shape of the requirements exists in some comment but nothing's implemented.
 - [ ] `ore/preload.ore`: `Iterable` composition exists but is unused; consider making it behave like a Swift-style protocol.
+- [ ] Consider disallowing ! and ? to be part of identifiers. Currently all identifiers may end with ? or ! like Ruby.
 
 **ORM / stdlib gaps:**
 - [ ] `src/external/ruby/table.rb`: query results should convert to a `Record` instance instead of raw data.
