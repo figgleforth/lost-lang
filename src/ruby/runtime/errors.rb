@@ -176,4 +176,19 @@ module Ore
 
 	class Cannot_Call_Func_Signature < Error
 	end
+
+	class Unknown_Circumfix_Grouping < Error
+	end
+
+	class Arguments_Given_But_Not_Expected < Error
+	end
+
+	class Route_Param_Expected_But_Not_Found < Error
+	end
+
+	class Invalid_Composition_With_A_Non_Scope_type < Error
+	end
+
+	class Invalid_Composition_Operator < Error
+	end
 end

@@ -1,4 +1,3 @@
-**Miscellaneous:**
 - [ ] Table associations (`belongs_to`/`has_many`): needed the moment `Player` needs a `Team`.
 - [ ] jsonb-like column support.
 - [ ] No JSON encode/decode exposed to Ore: `require 'json'` only used internally, for example when parsing POST bodies (`interpreter.rb`).
@@ -7,7 +6,6 @@
 - [ ] No in-Ore testing/assert facility: Minitest only tests the interpreter itself.
 - [ ] Implement way to extract mulitple values from tuples like `x, y := (1, 2)`
 - [ ] Percent literals `%str(boo hoo COOL)` for ['boo', 'hoo', 'COOL'] `%sym(BOO hoo cool)` for [:BOO,  :hoo,  :cool], etc.
-- [ ] Replace all `# todo: Proper error` placeholders scattered through `src/runtime/interpreter.rb`: real error types needed instead of generic ones.
 - [ ] Stride overlap for `for x by n,overlap`: `getting_started.md` documents `for x reject by 2,1` / `for x each by 3,1` style overlapping chunks, but the parser doesn't support the second stride argument yet (`src/compiler/parser.rb`: "Currently `stride` doesn't support option to overlap elements"). This was meant to be implemented, not just aspirational docs: needs the parser to accept `by <stride>,<overlap>` and the interpreter's chunking (`each_slice` today) to respect the overlap instead of using non-overlapping slices.
 - [ ] An operator for checking AST types. For example, `func{;} ==== Func_Expr`. I'm only using four equals to illustrate.
 - [ ] `help {expr;}` or `@help` that accepts any expression and returns information about the Type, primitive, function, etc. Literally any expression should be able to be described given its AST. You even have access to the live values so the information can be dynamic to reflect what the user is actually asking about.
@@ -60,3 +58,4 @@
 - [x] Return-type annotations on real functions: `name: Type {}` prefix and `{params -> Type; ...}` inline (works for anonymous functions too): plus runtime enforcement (`Type_Contract_Violation` if the actual return value doesn't match).
 - [x] Structural signature matching: reassigning a signature-aliased identifier now checks a real function's actual param/return types against the alias, not just nominal string equality.
 - [x] Rename @use to @load? Or something else because "use" doesn't clearly explain the behavior.
+- [x] Replace all `# todo: Proper error` placeholders scattered through `src/runtime/interpreter.rb`: real error types needed instead of generic ones. And add tests. A few of the errors are unreachable because of other guards, but the ones that are have a test now.

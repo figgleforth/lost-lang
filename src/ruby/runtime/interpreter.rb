@@ -1287,8 +1287,7 @@ module Ore
 					dict
 				end
 			else
-				# todo: Proper error
-				raise "Interpreter#interp_circumfix unhandled circumfix #{expr.inspect}"
+				raise Ore::Unknown_Circumfix_Grouping.new(expr, self)
 			end
 		end
 
@@ -1419,8 +1418,7 @@ module Ore
 				interp_func_body func_new, expr
 			else
 				if expr.arguments.count > 0
-					# todo: Proper error
-					raise "Given #{expr.arguments.count} arguments, but new{} was not declared for #{type.name}"
+					raise Ore::Arguments_Given_But_Not_Expected.new(expr, self)
 				end
 			end
 
@@ -1595,8 +1593,7 @@ module Ore
 				if value.nil?
 					if route.param_names.include? param.name.value
 						# todo: I haven't triggered this yet to ensure this works.
-						# todo: Proper error
-						raise "Route parameter '#{param.name.value}' expected but not found in URL"
+						raise Ore::Route_Param_Expected_But_Not_Found.new(route, self)
 					end
 
 					# Use default value or raise
@@ -1674,8 +1671,7 @@ module Ore
 
 			right      = maybe_instance interpret expr.identifier
 			unless right.is_a? Ore::Scope
-				# todo: Proper error
-				raise "Expected a scope to compose with, got #{right.inspect}"
+				raise Ore::Invalid_Composition_With_A_Non_Scope_type.new(right, self)
 			end
 			curr_scope = stack.last
 
@@ -1746,8 +1742,7 @@ module Ore
 					curr_scope[key] ||= right[key]
 				end
 			else
-				# todo: Proper error
-				raise "Unknown composition operator #{expr.operator.value}"
+				raise Ore::Invalid_Composition_Operator.new(expr, self)
 			end
 		end
 
