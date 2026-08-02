@@ -8,9 +8,15 @@ module Ore
 		end
 
 		# @param func [#param_types, #return_type] a real Ore::Func or another Func_Signature
-		def matches? func
-			return false unless func.respond_to?(:param_types) && func.respond_to?(:return_type)
-			func.param_types == param_types && func.return_type == return_type
+		def matches? other
+			case other
+			when Func_Signature
+				other.param_types == param_types && other.return_type == return_type
+			when Func
+				other.func_signature.param_types == param_types && other.func_signature.return_type == return_type
+			else
+				false
+			end
 		end
 
 		def to_s

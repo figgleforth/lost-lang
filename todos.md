@@ -61,3 +61,4 @@
 - [x] `=~`/`!~` (regex match) are listed in `COMPARISON_OPERATORS` (`src/shared/constants.rb`) but missing from `INFIX`, so the parser never builds an `Infix_Expr` for them: same bug class the `!==` fix addressed. `'abc' =~ 'xyz'` silently parses as disconnected expressions instead of erroring. Needs `=~`/`!~` added to `INFIX`, and an actual regex-match implementation (currently nothing in `interp_infix`'s `COMPARISON_OPERATORS` branch handles them beyond the `left.send` fallback).
 - [x] Function param declarations should use `:=` to be consistent with the remainder of the declaration syntax
 - [x] `src/runtime/interpreter.rb`: sibling scopes are assumed read-only; assumption was never actually double-checked.
+- [x] Add :func_signature attr to Ore::Func, and it should be an Ore::Func_Signature instance 

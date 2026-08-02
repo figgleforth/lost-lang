@@ -292,8 +292,8 @@ module Ore
 
 		# Readable description of a value's shape for Type_Contract_Violation messages — a func-like value's param/return types if it has them, otherwise its plain type name.
 		def describe_value_shape value
-			if value.respond_to?(:param_types) && value.respond_to?(:return_type)
-				Ore::Func_Signature.new(value.param_types, value.return_type).to_s
+			if value.respond_to? :func_signature
+				value.func_signature.to_s
 			else
 				type_name_to_string(value) || 'unknown'
 			end
@@ -1444,12 +1444,13 @@ module Ore
 			func.name            = expr.lexeme
 			func.enclosing_scope = stack.last
 			func.expressions     = expr.expressions
-			func.return_type     = expr.type&.value
-			func.param_types     = expr.expressions.select do |e|
+
+			param_types         = expr.expressions.select do |e|
 				e.is_a? Ore::Param_Expr
 			end.map do |p|
 				p.type&.value
 			end
+			func.func_signature = Ore::Func_Signature.new(param_types, expr.type&.value)
 
 			if func.name&.value
 				stack.last.declare func.name.value, func
@@ -1524,10 +1525,10 @@ module Ore
 
 			return_value = result.is_a?(Ore::Return) ? result.value : result
 
-			if func.return_type
+			if func.func_signature.return_type
 				actual_type = type_name_to_string return_value
-				if actual_type != func.return_type
-					raise Ore::Type_Contract_Violation.new(expr, func.return_type, actual_type, self)
+				if actual_type != func.func_signature.return_type
+					raise Ore::Type_Contract_Violation.new(expr, func.func_signature.return_type, actual_type, self)
 				end
 			end
 
