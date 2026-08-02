@@ -2468,6 +2468,29 @@ class Interpreter_Test < Base_Test
 		assert_equal [true, false, false, false, true, false, false], out.values
 	end
 
+	def test_regex_match_operators
+		# =~ behaves like Ruby's String#=~: returns the match index, or nil.
+		assert_equal 5, Ore.interp("'hello123' =~ '\\d+'")
+		assert_nil Ore.interp("'hello' =~ '\\d+'")
+
+		# !~ is the boolean negation of a match.
+		assert_equal false, Ore.interp("'hello123' !~ '\\d+'")
+		assert_equal true, Ore.interp("'hello' !~ '\\d+'")
+
+		# Works through variables too, not just literals.
+		out = Ore.interp <<~CODE
+			x := 'foo_bar'
+			x =~ '_'
+		CODE
+		assert_equal 3, out
+
+		out = Ore.interp <<~CODE
+			x := 'foobar'
+			x !~ '_'
+		CODE
+		assert_equal true, out
+	end
+
 	def test_function_signatures
 		out = Ore.interp 'Num_To_Str := String{Number;}'
 		assert_kind_of Ore::Func_Signature, out

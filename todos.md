@@ -1,4 +1,4 @@
-- [ ] Table associations (`belongs_to`/`has_many`): needed the moment `Player` needs a `Team`.
+- [ ] Table associations (`belongs_to`/`has_many`)
 - [ ] jsonb-like column support.
 - [ ] No JSON encode/decode exposed to Ore: `require 'json'` only used internally, for example when parsing POST bodies (`interpreter.rb`).
 - [ ] No outbound HTTP client: Ore can serve requests but can't make them.
@@ -17,7 +17,6 @@
 - [ ] Tuple-in-tuple has infinite members: `((), true).0.1`, `.0.2`, `.0.3`... all return a Tuple instead of erroring past the actual length.
 - [ ] No try/catch: unhandled runtime errors crash the program outright. Ore errors are Ruby exceptions under the hood already, so the interpreter just needs to catch and hand off to a user-defined handler. Matters most for web routes, file I/O, DB calls.
 - [ ] calling () on a dict field that shadows a builtin method but isn't callable raises a misleading error instead of a clear not-callable error. `dict := {keys: 4}, dict.keys()` raises `Cannot_Initialize_Non_Type_Identifier`
-- [ ] `=~`/`!~` (regex match) are listed in `COMPARISON_OPERATORS` (`src/shared/constants.rb`) but missing from `INFIX`, so the parser never builds an `Infix_Expr` for them: same bug class the `!==` fix addressed. `'abc' =~ 'xyz'` silently parses as disconnected expressions instead of erroring. Needs `=~`/`!~` added to `INFIX`, and an actual regex-match implementation (currently nothing in `interp_infix`'s `COMPARISON_OPERATORS` branch handles them beyond the `left.send` fallback).
 - [ ] `<=>` works for Numbers/Strings only by accident: it falls through to `left.send('<=>', right)` in `interp_infix`, which works because number/string literals decay to plain Ruby values with a native `<=>`. Custom Instances have no `<=>` defined, so `<=>` on user-defined types raises rather than erroring cleanly or doing something sensible.
 
 **Parser robustness:**
@@ -59,3 +58,4 @@
 - [x] Replace all `# todo: Proper error` placeholders scattered through `src/runtime/interpreter.rb`: real error types needed instead of generic ones. And add tests. A few of the errors are unreachable because of other guards, but the ones that are have a test now.
 - [x] Change set comparison operators to `=== =!= =/= =>= =<=` from `=== !== =/= >== ==<` to be more consistent
 - [x] `src/compiler/lexer.rb`: Add operator symbol exclusion list `' " { } ( ) [ ]` to contants.rb.
+- [x] `=~`/`!~` (regex match) are listed in `COMPARISON_OPERATORS` (`src/shared/constants.rb`) but missing from `INFIX`, so the parser never builds an `Infix_Expr` for them: same bug class the `!==` fix addressed. `'abc' =~ 'xyz'` silently parses as disconnected expressions instead of erroring. Needs `=~`/`!~` added to `INFIX`, and an actual regex-match implementation (currently nothing in `interp_infix`'s `COMPARISON_OPERATORS` branch handles them beyond the `left.send` fallback).

@@ -1171,6 +1171,13 @@ module Ore
 						!left.types.any? do |type|
 							right.types.include? type
 						end
+					when '=~', '!~'
+						# These behave just like Ruby's =~/!~: =~ returns the match index (or nil), !~ returns the boolean negation of a match.
+						subject     = maybe_instance(left).value
+						pattern     = maybe_instance(right).value
+						match_index = subject =~ Regexp.new(pattern)
+
+						expr.operator.value == '!~' ? match_index.nil? : match_index
 					else
 						left.send expr.operator.value, right
 					end
