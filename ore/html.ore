@@ -3,7 +3,7 @@ Dom {
 	html_element := 'div'
 	children,
 
-	new { children = [];
+	new { children := [];
 		./children = children
 	}
 

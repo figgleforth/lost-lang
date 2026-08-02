@@ -8,7 +8,7 @@ Number {
 		./denominator = 1
 	}
 
-	../rand { max = 1; @ruby }
+	../rand { max := 1; @ruby }
 
 	clamp { min, max; @ruby }
 	to_s {; @ruby }

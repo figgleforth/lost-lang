@@ -9,7 +9,7 @@ class Server_Test < Base_Test
 		code = <<~ORE
 		    Server {
 		    	port,
-		    	new { port = 3000;
+		    	new { port := 3000;
 		    		./port = port
 		    	}
 		    }
@@ -26,7 +26,7 @@ class Server_Test < Base_Test
 		code = <<~ORE
 		    Server {
 		    	port,
-		    	new { port = 3001;
+		    	new { port := 3001;
 		    		./port = port
 		    	}
 		    }
@@ -49,7 +49,7 @@ class Server_Test < Base_Test
 		code = <<~ORE
 		    Server {
 		    	port,
-		    	new { port = 3002;
+		    	new { port := 3002;
 		    		./port = port
 		    	}
 		    }
@@ -77,7 +77,7 @@ class Server_Test < Base_Test
 		code = <<~ORE
 		    Server {
 		    	port,
-		    	new { port = 8888;
+		    	new { port := 8888;
 		    		./port = port
 		    	}
 		    }
@@ -99,7 +99,7 @@ class Server_Test < Base_Test
 		code = <<~ORE
 		    Server {
 		    	port,
-		    	new { port = 3003;
+		    	new { port := 3003;
 		    		./port = port
 		    	}
 		    }
@@ -127,7 +127,7 @@ class Server_Test < Base_Test
 		code = <<~ORE
 		    Server {
 		    	port,
-		    	new { port = 3004;
+		    	new { port := 3004;
 		    		./port = port
 		    	}
 		    }
@@ -165,7 +165,7 @@ class Server_Test < Base_Test
 		code = <<~ORE
 		    Server {
 		    	port,
-		    	new { port = 3005;
+		    	new { port := 3005;
 		    		./port = port
 		    	}
 		    }

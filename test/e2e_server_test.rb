@@ -20,7 +20,7 @@ class E2E_Server_Test < Minitest::Test
 		code = <<~ORE
 		    Server {
 		    	port,
-		    	new { port = #{@port};
+		    	new { port := #{@port};
 		    		./port = port
 		    	}
 		    }
@@ -67,7 +67,7 @@ class E2E_Server_Test < Minitest::Test
 		code = <<~ORE
 		    Server {
 		    	port,
-		    	new { port = #{@port};
+		    	new { port := #{@port};
 		    		./port = port
 		    	}
 		    }
@@ -100,7 +100,7 @@ class E2E_Server_Test < Minitest::Test
 		code = <<~ORE
 		    Server {
 		    	port,
-		    	new { port = #{@port};
+		    	new { port := #{@port};
 		    		./port = port
 		    	}
 		    }

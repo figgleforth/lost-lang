@@ -113,7 +113,7 @@ The type checker (`src/compiler/type_checker.rb`) runs between the parser and in
 ### What it checks
 
 - **Typed variable assignments** — `x: String = 123` raises `Type_Mismatch` (literal RHS only)
-- **Typed function parameter defaults** — `go { x: Number = 'bad'; x }` raises at the param default
+- **Typed function parameter defaults** — `go { x: Number := 'bad'; x }` raises at the param default
 - **Call site argument types** — `add(1, 'oops')` raises if `add` has typed params and the arg is a known literal
 
 Annotations whose RHS is non-literal (an identifier, a function call, etc.) are silently skipped — only literal mismatches are caught statically.

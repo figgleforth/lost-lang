@@ -7,13 +7,13 @@ String {
 	length, # Total number of characters
 	ord, # Integer ordinal of the first character
 
-	new { value = '';
+	new { value := '';
 		./value = value
 	}
 
 	downcase {; @ruby }
 	upcase {; @ruby }
-	split { delimiter = nil; @ruby }
+	split { delimiter := nil; @ruby }
     slice { substr; @ruby }
     trim {; @ruby }
 	trim_left {; @ruby }

@@ -326,18 +326,18 @@ class Parser_Test < Base_Test
 		refute out.first.expressions.first.default
 		refute out.first.expressions.first.type
 
-		out = Ore.parse '{ default_values = 4; }'
+		out = Ore.parse '{ default_values := 4; }'
 		assert_kind_of Ore::Param_Expr, out.first.expressions.first
 		assert out.first.expressions.first.default
 		assert_kind_of Ore::Number_Expr, out.first.expressions.first.default
 
-		out = Ore.parse 'named { and_labeled with_default = 8; }'
+		out = Ore.parse 'named { and_labeled with_default := 8; }'
 		assert_kind_of Ore::Param_Expr, out.first.expressions.first
 		assert_equal 'and_labeled', out.first.expressions.first.label.value
 		assert_equal 'with_default', out.first.expressions.first.name.value
 		assert_equal 'named', out.first.name.value
 
-		out = Ore.parse 'named { with, multiple, even labeled = 4, params = 5; }'
+		out = Ore.parse 'named { with, multiple, even labeled := 4, params := 5; }'
 		assert_equal 4, out.first.expressions.count
 		assert_equal out.first.expressions.map(&:label), [nil, nil, Ore::Lexeme.new(:identifier, 'even'), nil]
 		assert_equal out.first.expressions.map(&:name), %w(with multiple labeled params).map { Ore::Lexeme.new(:identifier, _1) }

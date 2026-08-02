@@ -18,7 +18,7 @@ Page_Layout | Html {
 Single_Task | Div {
 	task,
 
-	new { task = 'New Task';
+	new { task := 'New Task';
 		./task = task
 	}
 

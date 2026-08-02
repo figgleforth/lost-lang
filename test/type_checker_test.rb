@@ -73,7 +73,7 @@ class Type_Checker_Test < Base_Test
 	end
 
 	def test_mismatch_in_func_param_default_is_caught
-		assert_type_error { Ore.type_check "go { x: Number = 'bad'; x }" }
+		assert_type_error { Ore.type_check "go { x: Number := 'bad'; x }" }
 	end
 
 	# --- Nested in type body ---

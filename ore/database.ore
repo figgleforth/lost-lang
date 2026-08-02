@@ -15,7 +15,7 @@ Sqlite | Database {
 		./url = url
 	}
 
-	../local { url = './test/fixtures/sqlite_test.db';
+	../local { url := './test/fixtures/sqlite_test.db';
 		Sqlite(url)
 	}
 }

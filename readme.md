@@ -31,7 +31,7 @@ tested? := false
 ```ore
 # func_name { [args]; [body] }
 
-func_with_args { arg1, arg2 = 1, etc = true;
+func_with_args { arg1, arg2 := 1, etc := true;
     # body
 }
 

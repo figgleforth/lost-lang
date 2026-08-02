@@ -202,13 +202,13 @@ class Lexer_Test < Base_Test
 		out = Ore.lex '{ labeled input; }'
 		assert_equal [:delimiter, :identifier, :identifier, :delimiter, :delimiter], out.map(&:type)
 
-		out = Ore.lex '{ value = 123; }'
+		out = Ore.lex '{ value := 123; }'
 		assert_equal [:delimiter, :identifier, :operator, :number, :delimiter, :delimiter], out.map(&:type)
 
-		out = Ore.lex '{ labeled value = 123; }'
+		out = Ore.lex '{ labeled value := 123; }'
 		assert_equal [:delimiter, :identifier, :identifier, :operator, :number, :delimiter, :delimiter], out.map(&:type)
 
-		out = Ore.lex '{ mixed, labeled value = 456; }'
+		out = Ore.lex '{ mixed, labeled value := 456; }'
 		assert_equal [:delimiter, :identifier, :delimiter, :identifier, :identifier, :operator, :number, :delimiter, :delimiter], out.map(&:type)
 
 		out = Ore.lex 'square { input;

@@ -410,7 +410,7 @@ Layout | Dom {
 	title,
 	body_content,
 
-	new { title = 'My page', body_content = 'Hello!';
+	new { title := 'My page', body_content := 'Hello!';
 		.title = title
 		.body_content = body_content
 	}

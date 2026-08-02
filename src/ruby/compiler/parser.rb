@@ -145,7 +145,7 @@ module Ore
 			if sequence.nil? || sequence.empty? || sequence.one?
 				eaten = curr_lexeme
 				if sequence&.one? && !eaten.is(sequence[0])
-					raise "Parser#eat ate #{eaten.value.inspect} but expected #{sequence[0].inspect}"
+					raise "Parser#eat expected #{sequence[0].inspect} but ate #{eaten.value.inspect}"
 				end
 				@i    += 1
 				return eaten
@@ -292,11 +292,13 @@ module Ore
 					end
 					param.lexeme = param.name
 
-					if curr? ':' and eat ':'
+					if curr? ':'
+						eat ':'
 						param.type = eat(:Identifier)
 					end
 
-					if curr? '=' and eat '='
+					if curr? ':='
+						eat ':='
 						param.default = parse_expression
 					end
 				end

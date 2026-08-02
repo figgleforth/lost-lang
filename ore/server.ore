@@ -19,7 +19,7 @@ Response {
 Server {
 	port,
 
-	new { port = 8080;
+	new { port := 8080;
 		./port = port
 	}
 

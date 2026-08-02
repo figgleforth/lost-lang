@@ -81,7 +81,7 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_basic_func_declaration
-		out = Ore.interp 'enter { numbers = "4815162342"; }'
+		out = Ore.interp 'enter { numbers := "4815162342"; }'
 		assert_equal 1, out.expressions.count
 		assert_instance_of Ore::Param_Expr, out.expressions.first
 		assert_instance_of Ore::String_Expr, out.expressions.first.default
@@ -95,7 +95,7 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_complex_func_declaration
-		out = Ore.interp 'run { a, labeled b, c = 4, labeled d = 8;
+		out = Ore.interp 'run { a, labeled b, c := 4, labeled d := 8;
 			c + d
 		}'
 		assert_equal 5, out.expressions.count
@@ -626,7 +626,7 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_compound_operator
-		out = Ore.interp 'add { amount = 1, to = 0;
+		out = Ore.interp 'add { amount := 1, to := 0;
 			to += amount
 		}
 		add(5, 37)'
@@ -683,7 +683,7 @@ class Interpreter_Test < Base_Test
 
 	def test_function_call_as_argument
 		out = Ore.interp '
-		add { amount = 1, to = 4;
+		add { amount := 1, to := 4;
 			to + amount
 		}
 		inc := add() # should return 5
@@ -904,7 +904,7 @@ class Interpreter_Test < Base_Test
 		}
 
 		Transform | Vec2 {
-			new { position = Vec2();
+			new { position := Vec2();
 				./x = position.x
 				y = position.y
 			}
@@ -952,7 +952,7 @@ class Interpreter_Test < Base_Test
 			v := Vec2(4, 8)
 
 			Transform | Vec2 {
-				new { position = Vec2();
+				new { position := Vec2();
 					./x = position.x
 					y = position.y
 				}
@@ -2479,14 +2479,14 @@ class Interpreter_Test < Base_Test
 
 		# Works through variables too, not just literals.
 		out = Ore.interp <<~CODE
-			x := 'foo_bar'
-			x =~ '_'
+		    x := 'foo_bar'
+		    x =~ '_'
 		CODE
 		assert_equal 3, out
 
 		out = Ore.interp <<~CODE
-			x := 'foobar'
-			x !~ '_'
+		    x := 'foobar'
+		    x !~ '_'
 		CODE
 		assert_equal true, out
 	end

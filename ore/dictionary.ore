@@ -1,7 +1,7 @@
 Dictionary {
 	hash,
 
-	new { hash = nil; # bug; cannot assign {} as default, reserved something something.
+	new { hash := nil; # bug; cannot assign {} as default, reserved something something.
 		./hash = hash
 	}
 

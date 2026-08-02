@@ -1,7 +1,7 @@
 Array {
 	values,
 
-	new { values = [];
+	new { values := [];
 		./values = values
 	}
 

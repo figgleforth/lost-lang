@@ -154,7 +154,7 @@ class Regression_Test < Base_Test
 		assert_equal 125, out
 
 		out = Ore.interp "y := 0
-		add { amount_to_add = 1;
+		add { amount_to_add := 1;
 			~/y + amount_to_add
 		}
 		(a := add(4))
@@ -163,7 +163,7 @@ class Regression_Test < Base_Test
 		assert_equal [4, 8], out.values
 
 		out = Ore.interp "y := 0
-		add { amount_to_add = 1;
+		add { amount_to_add := 1;
 			y += amount_to_add
 		}
 		a := add(4)
@@ -177,7 +177,7 @@ class Regression_Test < Base_Test
 				id,
 				name := 'Thingy'
 
-				new { new_name = '', id = 123;
+				new { new_name := '', id := 123;
 					./name = new_name
 					./id = id
 				}
@@ -227,7 +227,7 @@ class Regression_Test < Base_Test
 
 		refute_raises Ore::Undeclared_Identifier do
 			Ore.interp "
-			funk { it = \"true\";
+			funk { it := \"true\";
 				it == true
 			}
 			funk(true), funk()
@@ -236,7 +236,7 @@ class Regression_Test < Base_Test
 
 		refute_raises Ore::Undeclared_Identifier do
 			Ore.interp "
-			funk { it = \"false\";
+			funk { it := \"false\";
 				it == true
 			}
 			funk(true), funk()
@@ -245,7 +245,7 @@ class Regression_Test < Base_Test
 
 		refute_raises Ore::Undeclared_Identifier do
 			Ore.interp "
-			funk { it = true;
+			funk { it := true;
 				it == true
 			}
 			funk(true), funk()
@@ -254,7 +254,7 @@ class Regression_Test < Base_Test
 
 		refute_raises Ore::Undeclared_Identifier do
 			Ore.interp "
-			funk { funkit = false;
+			funk { funkit := false;
 				funkit == true
 			}
 			funk(true), funk()
@@ -263,7 +263,7 @@ class Regression_Test < Base_Test
 
 		refute_raises Ore::Undeclared_Identifier do
 			Ore.interp "
-			funk { it = nil;
+			funk { it := nil;
 				it == true
 			}
 			funk(true), funk()
