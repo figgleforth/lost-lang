@@ -560,11 +560,14 @@ File_System.write_string_to_file('./out.txt', 'Hello!')
 
 1. Imports another Ore file
 2. Files are only loaded once
+3. Imports may be scoped by assigning the @load to a variable
 
 ```ore
 @load 'ore/string.ore'
 @load 'ore/array.ore'
 @load './my_module.ore'
+my_mod := @load './my_module.ore'
+my_mod.Some_Type()
 ```
 
 ## @puts Directive

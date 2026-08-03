@@ -860,3 +860,6 @@ The `@load` directive allows importing Ore files:
 - Interpreter caches parsed expressions in `@cached_expressions_by_filepath` to prevent duplicate parsing
 - Files are loaded into a specified scope via `Interpreter#load_file_into_scope`
 - Expressions are cached keyed by resolved filepath
+- The target scope depends on the call form:
+  - Bare `@load 'file'` merges the file's top-level declarations directly into the current scope (`stack.last`) — this is how `ore/preload.ore` loads the stdlib, so e.g. `String` lands as a plain global identifier
+  - `some_lib := @load 'file'` instead creates a fresh `Ore::Scope` named after the left-hand identifier, loads the file into *that*, and assigns it — giving real namespace isolation, e.g. `some_lib.square(5)`
