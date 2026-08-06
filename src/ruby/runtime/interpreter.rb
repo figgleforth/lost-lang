@@ -1183,24 +1183,39 @@ module Ore
 
 					case expr.operator.value
 					when '==='
-						left.types == right.types
+						left.types == right.types && left.tags&.types == right.tags&.types
+
 					when '=!='
-						left.types != right.types
+						left.types != right.types || left.tags&.types != right.tags&.types
+
 					when '=>='
-						# Is expr.left a superset of expr.right
-						right.types.all? do |type|
+						left_is_superset       = right.types.all? do |type|
 							left.types.include? type
 						end
+						left_tags_are_superset = (right.tags&.types || []).all? do |tag|
+							(left.tags&.types || []).include? tag
+						end
+
+						left_is_superset && left_tags_are_superset
 					when '=<='
-						# Is expr.right a superset of expr.left
-						left.types.all? do |type|
+						right_is_superset = left.types.all? do |type|
 							right.types.include? type
 						end
+
+						right_tags_are_superset = (left.tags&.types || []).all? do |tag|
+							(right.tags&.types || []).include? tag
+						end
+
+						right_is_superset && right_tags_are_superset
 					when '=/='
-						# They share absolutely no types
-						!left.types.any? do |type|
+						shared_types = left.types.any? do |type|
 							right.types.include? type
 						end
+						shared_tags  = (left.tags&.types || []).any? do |tag|
+							(right.tags&.types || []).include? tag
+						end
+
+						!shared_types && !shared_tags
 					when '=~', '!~'
 						# These behave just like Ruby's =~/!~: =~ returns the match index (or nil), !~ returns the boolean negation of a match.
 						subject     = maybe_instance(left).value
