@@ -933,8 +933,8 @@ lying(5)   # raises Ore::Type_Contract_Violation — declared Number, actually r
 `<...>` attaches runtime, inspectable metadata — "tags" — to a type declaration, a standalone value, or a reference to an existing type:
 
 ```ore
-Abc<Number> {}             # declaration — Number becomes part of Abc's declared tag schema
-x := Abc<Number>            # reference — tags an existing type without redeclaring or mutating it
+Abc<Number> {}               # declaration — Number becomes part of Abc's declared tag schema
+x := Abc<Number>             # reference — tags an existing type without redeclaring or mutating it
 x: Abc<Number>               # same, as a type annotation
 thing: <String, Number>      # bare tags, no type name at all — a standalone value
 z := Abc<4815>               # a reference tagged with an actual value rather than a type
@@ -963,8 +963,9 @@ String<dict: Dictionary> {
     }
 }
 
-a := String<{x=0, y=1, z=2}>()
-b := String<{x=0, y=1, z=2}>("My dict: ")
+dict := {x=0, y=1, z=2}
+a := String<dict>()
+b := String<dict>("My dict: ")
 
 a.to_s()   # "{x::0, y::1, z::2, }"
 b.to_s()   # "My dict: {x::0, y::1, z::2, }"
@@ -976,11 +977,10 @@ Trailing comma declares variable as nil if undefined.
 
 ```ore
 Type {
-	# equivalent to `undefined_var := nil`
-	undefined_var,	
+	undefined_var,      # equivalent to `undefined_var := nil`	
 }
 
-here_too,   # here_too := nil
+here_too,               # here_too := nil
 ```
 
 A bare annotated identifier with nothing assigned behaves the same way — no need to write `= nil` just to make an already-self-declaring annotation (`x: Number`, or a tag annotation) actually declare something:
