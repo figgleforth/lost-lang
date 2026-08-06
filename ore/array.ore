@@ -13,8 +13,8 @@ Array {
 	shift {; @ruby }
 	unshift { item; @ruby }
 	length {; @ruby }
-	first { count; @ruby }
-	last { count; @ruby }
+	first { count := 1; @ruby }
+	last { count := 1; @ruby }
 	slice { from, to; @ruby }
 	reverse {; @ruby }
 	join { separator; @ruby }

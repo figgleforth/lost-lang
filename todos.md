@@ -34,6 +34,7 @@
 - [ ] `ore/preload.ore`: `Iterable` composition exists but is unused; consider making it behave like a Swift-style protocol.
 - [ ] Consider disallowing ! and ? to be part of identifiers. Currently all identifiers may end with ? or ! like Ruby.
 - [ ] Allow control of initializer order for compsitions. Composition types are already known by identifier so I could call Comp.new() inside of new{;}. The interpreter would need to be aware that the top scope is new{;} and not to just instantiate a new Instance into new{;}'s scope.
+- [ ] Is there a way to namespace without strings? Like `Island/Hatch/Computer` instead of `Island.Hatch.Computer`. I'm not sure if this is even necessary, but I'm curious if this can be implemented in a way that it's able to coexist with the arithmetic division operator `/`.
 
 **ORM / stdlib gaps:**
 - [ ] `src/external/ruby/table.rb`: query results should convert to a `Record` instance instead of raw data.
@@ -64,3 +65,4 @@
 - [x] Function param declarations should use `:=` to be consistent with the remainder of the declaration syntax
 - [x] `src/runtime/interpreter.rb`: sibling scopes are assumed read-only; assumption was never actually double-checked.
 - [x] Add :func_signature attr to Ore::Func, and it should be an Ore::Func_Signature instance 
+- [x] Tags on types. `Array<Type>`, `Dictionary<Type,Type>`

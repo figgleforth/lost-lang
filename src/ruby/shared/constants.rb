@@ -35,6 +35,7 @@ module Ore
 	DOT_ACCESS_OPERATORS        = %w(. .?)
 	TYPE_COMPOSITION_OPERATORS  = %w(| & ~ ^) # Union, Intersection, Removal, Symmetric Difference
 	ANY_IDENTIFIER              = %i(identifier Identifier IDENTIFIER)
+	TYPE_IDENTIFIER             = %i(Identifier IDENTIFIER)
 	GSCOPE                      = :global
 	STARTING_PRECEDENCE         = 0
 	DEFAULT_OPERATOR_PRECEDENCE = 500 # given to all custom operators at runtime unless
@@ -61,7 +62,7 @@ module Ore
 		``` #
 
 		for
-		if elif else
+		if elif elsif else
 		while elwhile
 		unless until
 		true false nil

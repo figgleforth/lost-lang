@@ -442,7 +442,7 @@ class Parser_Test < Base_Test
 	def test_types
 		out = Ore.parse 'String {}'
 		assert_kind_of Ore::Type_Expr, out.first
-		assert_equal 'String', out.first.name.value
+		assert_equal 'String', out.first.name
 
 		out = Ore.parse 'Transform {
 			position,
@@ -656,14 +656,14 @@ class Parser_Test < Base_Test
 		assert_kind_of Ore::Infix_Expr, out.first
 		assert_kind_of Ore::Identifier_Expr, out.first.left
 		assert_kind_of Ore::Array_Index_Expr, out.first.right
-		assert_equal '4.8.15', out.first.right.value.value
+		assert_equal '4.8.15', out.first.right.value
 		assert_equal [4, 8, 15], out.first.right.indices_in_order
 	end
 
 	def test_multidot_number_lexeme
 		out = Ore.parse '4.8.15.16.23.42'
 		assert_kind_of Ore::Array_Index_Expr, out.first
-		assert_equal '4.8.15.16.23.42', out.first.value.value
+		assert_equal '4.8.15.16.23.42', out.first.value
 		assert_equal [4, 8, 15, 16, 23, 42], out.first.indices_in_order
 	end
 

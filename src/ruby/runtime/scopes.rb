@@ -1,6 +1,6 @@
 module Ore
 	class Scope
-		attr_accessor :enclosing_scope, :sibling_scopes, :declarations, :name, :type_by_identifier, :static_declarations
+		attr_accessor :enclosing_scope, :sibling_scopes, :declarations, :name, :type_by_identifier, :static_declarations, :tags
 
 		def initialize name = nil
 			@name                = name
