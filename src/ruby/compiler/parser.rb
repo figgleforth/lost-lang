@@ -300,6 +300,10 @@ module Ore
 					if curr? ':='
 						eat ':='
 						param.default = parse_expression
+					elsif param.type && curr?('=')
+						# `:=` is only required when there's no `: Type` to declare it instead.
+						eat '='
+						param.default = parse_expression
 					end
 				end
 
@@ -341,6 +345,36 @@ module Ore
 			copy_location func, start
 		end
 
+		def parse_tags
+			return nil unless curr? '<'
+			start = curr_lexeme
+			Ore::Tags_Expr.new.tap do |it|
+				it.lexeme = Ore::Lexeme.new :tags, '<>'
+				it.types  = []
+				it.names  = []
+				eat '<'
+				until curr? '>'
+					# Each element is a full expression (`Number`, `4815`, `1+2+3/123`, `this`, ...). A named element (`some_string: String`) parses as an Identifier_Expr with #type set, via #parse_identifier_expr's existing `: Type` annotation handling.
+					# A bare identifier directly followed by `,` (`<String, Number>`) is special-cased here rather than going through #parse_expression, because #begin_expression would otherwise mistake it for the nil-init idiom (`ident,` => `ident = ident or nil`), which is unrelated to tags and only coincidentally shares the same shape.
+					element = if curr?(ANY_IDENTIFIER, ',')
+						parse_identifier_expr
+					else
+						parse_expression(precedence_for('<'))
+					end
+					it.types << element
+					it.names << (element.is_a?(Ore::Identifier_Expr) && element.type ? element.value : nil)
+					eat if curr? ','
+				end
+				closing = eat '>'
+
+				# Manually tracking location insead of using `#copy_location`, because I want it to span all of "<....>
+				it.c0 = start.c0
+				it.l0 = start.l0
+				it.c1 = closing.c1
+				it.l1 = closing.l1
+			end
+		end
+
 		def parse_type_decl
 			# Looks at the tokens immediately after the `{` we just ate.
 			# Hits `;` first  -> it's a signature literal (String{Number;})
@@ -364,10 +398,22 @@ module Ore
 			#   :absolute_value_circumfix
 			#
 
-			start          = curr_lexeme
-			valid_idents   = %I(Identifier IDENTIFIER)
-			it             = Ore::Type_Expr.new
-			it.name        = eat
+			start        = curr_lexeme
+			it           = Ore::Type_Expr.new eat # one of valid_idents
+			it.name      = it.lexeme.value
+			valid_idents = %i(Identifier IDENTIFIER)
+			is_type      = Helpers.type_identifier? it.name
+			is_const     = Helpers.constant_identifier? it.name
+
+			Ore.assert is_type || is_const, "Type names can only be Capitalized or UPPERCASE"
+
+			it.tags = parse_tags # returns nil if none was found
+
+			# No body and no composition chain follows, e.g. `x: Abc<Number>`, `y := Abc<Number>`, `Abc<Number>()`, `Abc<4815>()` — this is a reference to an existing type (optionally tagged with type tags), not a declaration. `it.expressions` stays nil here so callers (like #interp_type) can tell this apart from a real, even if empty, `{}` body. Whatever follows (like a trailing `(...)` call) is picked up in #complete_expression, same as any other primary expression.
+			unless curr?('{') || curr?(TYPE_COMPOSITION_OPERATORS, ANY_IDENTIFIER)
+				return copy_location it, start
+			end
+
 			it.expressions = []
 
 			until curr? '{'
@@ -380,7 +426,7 @@ module Ore
 			reduce_newlines
 
 			if signature_literal?
-				return parse_signature_literal it.name, start
+				return parse_signature_literal it.lexeme, start
 			end
 
 			until curr?(:delimiter) && curr?('}') # note: Added explicit check for delimiter because there was a bug where a comment whose value is simply "}" was evaluating to true in this condition, leaving the parser with an unhandled } todo: Maybe #curr? should always return false if it detects a comment?
@@ -391,8 +437,6 @@ module Ore
 			it.expressions = it.expressions.compact
 
 			eat '}'
-
-			it
 			copy_location it, start
 		end
 
@@ -440,8 +484,8 @@ module Ore
 
 		def parse_comment
 			lexeme   = eat
-			it       = Ore::Comment_Expr.new lexeme.value
-			it.value = Ore::String_Expr.new lexeme.value
+			it       = Ore::Comment_Expr.new lexeme
+			it.value = Ore::String_Expr.new lexeme
 			it.body  = Ore::String_Expr.new lexeme
 			it.type  = lexeme.type
 			it
@@ -449,8 +493,8 @@ module Ore
 
 		def parse_fence_expr
 			lexeme   = eat
-			it       = Ore::Fence_Expr.new lexeme.value
-			it.value = Ore::String_Expr.new lexeme.value
+			it       = Ore::Fence_Expr.new lexeme
+			it.value = Ore::String_Expr.new lexeme
 			it.type  = lexeme.type # :fence by default
 			it
 		end
@@ -489,8 +533,7 @@ module Ore
 
 		def parse_identifier_expr
 			start = curr_lexeme
-
-			expr = Ore::Identifier_Expr.new
+			expr  = Ore::Identifier_Expr.new
 
 			if curr? BUILTIN_OPERATOR and eat BUILTIN_OPERATOR
 				expr.directive = true
@@ -505,7 +548,11 @@ module Ore
 
 			if curr?(':', :Identifier)
 				eat ':'
-				expr.type = eat(:Identifier)
+				expr.type      = eat(:Identifier)
+				expr.type_tags = parse_tags # returns nil if none was found
+			elsif curr?(':', '<')
+				eat ':'
+				expr.type_tags = parse_tags # bare tag-set annotation, e.g. `thing: <String, Number>`
 			end
 
 			expr.kind = Ore.type_of_identifier expr.value
@@ -600,10 +647,10 @@ module Ore
 
 		def parse_number_expr
 			start       = curr_lexeme
-			expr        = Ore::Number_Expr.new
+			expr        = Ore::Number_Expr.new start
 			expr.lexeme = eat(:number)
 			if expr.lexeme.value.count('.') > 1
-				expr                  = Ore::Array_Index_Expr.new expr
+				expr                  = Ore::Array_Index_Expr.new expr.lexeme
 				expr.indices_in_order = expr.lexeme.value.split '.'
 				expr.indices_in_order = expr.indices_in_order.map &:to_i
 				# It's important not to convert number.value here to anything to preserve the variant number of dots in the string. I think this'll be cool syntax, 2d_array.1.2 would be the equivalent of 2d_array[1][2].
@@ -647,7 +694,10 @@ module Ore
 			elsif (curr?('{') || curr?(:identifier, '{') || curr?(:identifier, ':', :Identifier, '{') || curr?(SCOPE_OPERATORS, :identifier, '{')) && peek_contains?(Ore::FUNCTION_DELIMITER, '}')
 				parse_func precedence, named: curr?(:identifier)
 
-			elsif curr?(:Identifier, '{') || curr?(:Identifier, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, '{')
+			elsif curr?('<', TYPE_IDENTIFIER, '>') || curr?('<', TYPE_IDENTIFIER, ',')
+				parse_tags
+
+			elsif curr?(:Identifier, '{') || curr?(:Identifier, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, '{') || curr?(TYPE_IDENTIFIER, '<')
 				parse_type_decl
 
 			elsif curr?(TYPE_COMPOSITION_OPERATORS) && peek.is(:Identifier)

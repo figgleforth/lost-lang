@@ -8,11 +8,13 @@ module Ore
 		end
 
 		def lexeme= lexeme
-			@lexeme = lexeme
-			@value  = if lexeme && lexeme.is_a?(Ore::Lexeme)
-				lexeme.value
-			else
-				lexeme
+			case lexeme
+			when Ore::Lexeme
+				@value  = lexeme.value
+				@lexeme = lexeme
+			when ::String
+				@value  = lexeme
+				@lexeme = Ore::Lexeme.new Helpers.type_identifier?(lexeme), lexeme
 			end
 		end
 
@@ -42,6 +44,10 @@ module Ore
 		def line_col
 			"#{l0}:#{c0}..#{l1}:#{c1}" if l0
 		end
+	end
+
+	class Tags_Expr < Expression
+		attr_accessor :types, :names # names[i] is nil for unnamed slots, e.g. `Type<String>` but has value for named slots, e.g. `Type<str: String>`
 	end
 
 	class Param_Expr < Expression
@@ -90,7 +96,7 @@ module Ore
 	end
 
 	class Type_Expr < Expression
-		attr_accessor :name, :expressions
+		attr_accessor :name, :expressions, :tags
 	end
 
 	# Useful reading.
@@ -140,7 +146,7 @@ module Ore
 	end
 
 	class Identifier_Expr < Expression
-		attr_accessor :kind, :unpack, :scope_operator, :directive, :privacy, :binding
+		attr_accessor :kind, :unpack, :scope_operator, :directive, :privacy, :binding, :type_tags
 		# todo: Rename @directive to @builtin
 	end
 

@@ -751,12 +751,12 @@ page := Html([
 < <= > >=         # Relational
 <=>               # Spaceship (three-way)
 =~ !~             # Regex match
-=== !==           # Composed-type-set equality
->== ==<           # Composed-type-set superset (and its mirror)
-=/=               # Composed-type-set disjointness
+=== =!=           # Composed-type-set equality
+=>= =<=           # Composed-type-set superset (and its mirror) =>= means "left superset of right?", and its mirror
+=/=               # Composed-type-set disjointness means they don't share anything
 ```
 
-`===`, `!==`, `>==`, `==<`, and `=/=` compare a type or instance's *composed types* — its own name plus everything it's picked up via `|`/`&`/`~`/`^` — rather than comparing values:
+`===`, `=!=`, `=>=`, `=<=`, and `=/=` compare a type or instance's *composed types* — its own name plus everything it's picked up via `|`/`&`/`~`/`^` — rather than comparing values:
 
 ```ore
 Flying { can_fly := true }
@@ -767,14 +767,22 @@ Fish | Swimming { name := 'fish' }
 
 Duck === Duck          # true  (identical composed types)
 Duck === Fish          # false (Duck also composes Flying)
-Duck !== Fish          # true
+Duck =!= Fish          # true
 
-Duck >== Swimming      # true  (Duck composes with at least Swimming)
-Swimming >== Duck      # false
-Swimming ==< Duck      # true  (==< is >== with the operands flipped)
+Duck =>= Swimming      # true  (Duck composes with at least Swimming)
+Swimming =>= Duck      # false
+Swimming =<= Duck      # true  (=<= is =>= with the operands flipped)
 
 Duck =/= Fish          # false (both compose Swimming — not disjoint)
 Flying =/= Swimming    # true  (share nothing)
+```
+
+All five comparison operators also take [Tags](#tags) into account. An untagged type is treated as having no tags, so plain comparisons like the ones above are unaffected:
+
+```ore
+Abc<Number> {}
+Abc<Number> === Abc<String>   # false — same composed type, different tags
+Abc === Abc                   # true  — neither side tagged
 ```
 
 ### Logical
@@ -800,6 +808,7 @@ Flying =/= Swimming    # true  (share nothing)
 1. Declare with `@operator`, a symbol or identifier, a fixity (`@infix`, `@prefix`, `@postfix`), a precedence number, and a function body
 2. Overloads are stored as regular functions in the declaring scope, so they can be scoped to a single function without leaking out
 3. Precedence controls how overloaded operators combine with each other and with built-ins
+4. If a type declares its own overload for an operator, that always wins over a same-named overload declared elsewhere — dispatch is by the left operand's type first, falling back to whatever's in scope only if the operand doesn't have its own
 
 ```ore
 # Redefine + only inside this function — everywhere else, + still adds
@@ -852,6 +861,19 @@ Currency { amount, name, code, }
 }
 
 $42  # Currency(amount: 42, name: 'US Dollar', code: 'USD')
+
+# A type's own overload beats a same-named global one
+@operator -> @infix 300 { left, right; 999 }
+
+Wrapped {
+    val,
+    new { v; ./val = v }
+    @operator -> @infix 300 { left, right; left.val }
+}
+
+a := Wrapped(42)
+a -> 1          # 42 — Wrapped's own -> wins
+5 -> double     # 10 — global -> still applies to everything else
 ```
 
 ## Runtime Type Contracts
@@ -906,6 +928,48 @@ lying { a -> Number; 'not a number' }
 lying(5)   # raises Ore::Type_Contract_Violation — declared Number, actually returned String
 ```
 
+## Tags
+
+`<...>` attaches runtime, inspectable metadata — "tags" — to a type declaration, a standalone value, or a reference to an existing type:
+
+```ore
+Abc<Number> {}             # declaration — Number becomes part of Abc's declared tag schema
+x := Abc<Number>            # reference — tags an existing type without redeclaring or mutating it
+x: Abc<Number>               # same, as a type annotation
+thing: <String, Number>      # bare tags, no type name at all — a standalone value
+z := Abc<4815>               # a reference tagged with an actual value rather than a type
+z()                          # constructs Abc, with .tags available before new{;} runs
+Abc<4815>()                  # same, in one step
+```
+
+- A tag can be any expression, not just a type name (`Abc<1+2+3/123>` and `Abc<this, that>` both work), evaluated normally (so an identifier like `Number` resolves to the real type). 
+- Tags are reachable through `.tags`, `.tags.types` for the positional list, or `.tags.some_name` for a named tag (`Type<some_name: String> {}`).
+- They're not unpacked into `./`.
+- Tag values are never forwarded as constructor arguments either
+- `./tags` is bound onto an instance *before* `new{;}` runs so the constructor can read it, but whatever you actually pass in `(...)` still binds to `new`'s own declared params, completely separately:
+
+```ore
+String<dict: Dictionary> {
+    new { str: String = "";
+        value = str
+    }
+    to_s {;
+        final := value
+        final += "{"
+        for tags.dict
+            final += "`key`::`value`, "
+        end
+        final += "}"
+    }
+}
+
+a := String<{x=0, y=1, z=2}>()
+b := String<{x=0, y=1, z=2}>("My dict: ")
+
+a.to_s()   # "{x::0, y::1, z::2, }"
+b.to_s()   # "My dict: {x::0, y::1, z::2, }"
+```
+
 ## Shorthand Nil-Initialization
 
 Trailing comma declares variable as nil if undefined. 
@@ -917,4 +981,14 @@ Type {
 }
 
 here_too,   # here_too := nil
+```
+
+A bare annotated identifier with nothing assigned behaves the same way — no need to write `= nil` just to make an already-self-declaring annotation (`x: Number`, or a tag annotation) actually declare something:
+
+```ore
+thing: <String, Number>   # same as thing: <String, Number> = nil
+thing                     # nil
+
+x: Number                 # same as x: Number = nil
+x                         # nil
 ```

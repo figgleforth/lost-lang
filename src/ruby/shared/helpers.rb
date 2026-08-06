@@ -13,8 +13,11 @@ module Helpers
 
 	def type_identifier? ident
 		return false unless ident
+
+		Ore.assert ident.is_a?(::String), "#type_identifier? expected a ::String got #{ident.class}"
+
 		# Capitalized Like_This or This
-		ident[0] && ident[0].upcase == ident[0] && !constant_identifier?(ident)
+		ident[0] && ident[0].upcase == ident[0]
 	end
 
 	def member_identifier? ident

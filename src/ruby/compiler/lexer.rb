@@ -207,10 +207,14 @@ module Ore
 		def lex_operator
 			# note; Operators cannot start with or end with: ' " { } ( ) [ ] and that is a strict rule.
 			it = ::String.new
-			while chars? && symbol? && !Ore::ILLEGAL_OPERATOR_CHARS.include?(curr)
-				it << eat
+			while chars? && symbol?
+				# Don't append `.` onto a trailing `>` unless it's forming a genuine range operator (`>..`, `>.<`). Otherwise `Type<Tag>.member` would lex `>.` as one bogus operator token, swallowing the `>` that's supposed to close the tag list on its own.
+				break if it == '>' && curr == '.' && !%w(. <).include?(peek)
 
+				it << eat
 				break if Ore::SCOPE_OPERATORS.include? it
+				break if Ore::ILLEGAL_OPERATOR_CHARS.include? it
+				break if Ore::ILLEGAL_OPERATOR_CHARS.include? curr
 			end
 			it
 		end

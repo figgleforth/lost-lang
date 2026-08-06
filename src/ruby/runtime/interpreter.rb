@@ -662,6 +662,8 @@ module Ore
 					else
 						return value
 					end
+				elsif expr.type || expr.type_tags
+					self_declare_annotated_identifier expr
 				else
 					raise Ore::Undeclared_Identifier.new(expr, self)
 				end
@@ -671,6 +673,8 @@ module Ore
 					raise Ore::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr, self)
 				elsif expr.scope_operator&.value == './'
 					raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr, self)
+				elsif expr.type || expr.type_tags
+					self_declare_annotated_identifier expr
 				else
 					raise Ore::Undeclared_Identifier.new(expr, self)
 				end
@@ -748,8 +752,8 @@ module Ore
 		def interp_infix_assignment expr
 			assignment_scope = scope_for_identifier expr.left # Reminder; this returns a scope whether or not the identifier exists
 
-			# A type annotation (`x: Number = value`) is itself a declaration, so it's allowed to introduce a brand-new identifier just like `:=`, even though plain `=` otherwise requires the identifier to already exist. An inline signature (`x: Type{Param;} = value`) is the same idea — expr.left is a Func_Signature_Expr instead of a plain annotated Identifier_Expr, but it's just as self-declaring.
-			has_type_annotation = (expr.left.is_a?(Ore::Identifier_Expr) && expr.left.type) ||
+			# A type annotation (`x: Number = value`) is itself a declaration, so it's allowed to introduce a brand-new identifier just like `:=`, even though plain `=` otherwise requires the identifier to already exist. An inline signature (`x: Type{Param;} = value`) is the same idea — expr.left is a Func_Signature_Expr instead of a plain annotated Identifier_Expr, but it's just as self-declaring. A bare tag-set annotation (`thing: <String, Number> = value`) is self-declaring the same way, even with no `expr.left.type`.
+			has_type_annotation = (expr.left.is_a?(Ore::Identifier_Expr) && (expr.left.type || expr.left.type_tags)) ||
 			                      expr.left.is_a?(Ore::Func_Signature_Expr)
 			assignment_scope    ||= stack.last if has_type_annotation
 
@@ -1091,6 +1095,29 @@ module Ore
 			end
 		end
 
+		# A bare annotated identifier (`x: Number`, `thing: <String, Number>`) that's never been declared behaves like the nil-init idiom (`ident,`) rather than raising Undeclared_Identifier
+		def self_declare_annotated_identifier expr
+			scope = stack.last
+			scope.declare expr.value, nil
+			track_static_declaration scope, expr
+			nil
+		end
+
+		# A type's own @operator overload takes precedence over a same-named global one. Checks the operand's own declarations first, then its enclosing Type (for shorthand-constructed instances that never got the type's declarations copied onto themselves, see #interp_type_call), and only falls back to a global operator (excluding Type/Instance scopes, see the comment at the call site in #interp_infix) if neither applies.
+		def find_operator_overload operator, operand = nil
+			if operand.is_a?(Ore::Scope) && operand.has?(operator)
+				return operand.get operator
+			end
+
+			if operand.is_a?(Ore::Scope) && operand.enclosing_scope.is_a?(Ore::Type) && operand.enclosing_scope.has?(operator)
+				return operand.enclosing_scope.get operator
+			end
+
+			stack.reverse_each.find do |scope|
+				!scope.is_a?(Ore::Type) && scope.has?(operator)
+			end&.get(operator)
+		end
+
 		# @param expr [Ore::Infix_Expr]
 		def interp_infix expr
 			case expr.operator.value
@@ -1101,10 +1128,17 @@ module Ore
 			when '.', '.?'
 				interp_dot_infix expr
 			else
-				# We're checking for operator overloads first, then the default operator functionality is the fallback. Operator overloads are normal functions that take its operands as arguments, declared on the stack. We're looking them up as if they were regular named functions.
-				overload_func = stack.reverse_each.find do |s|
-					s.has? expr.operator.value
-				end&.get(expr.operator.value)
+				# A type's own @operator overload always takes precedence over a same-named global
+				# one — #find_operator_overload checks the operand's type first, falling back to the
+				# global stack search only when the operand doesn't declare its own.
+				if INFIX_ARITHMETIC_OPERATORS.include?(expr.operator.value) || COMPARISON_OPERATORS.include?(expr.operator.value)
+					overload_func = nil
+				elsif COMPOUND_OPERATORS.include?(expr.operator.value) || RANGE_OPERATORS.include?(expr.operator.value) ||
+				      LOGICAL_OPERATORS.include?(expr.operator.value) || expr.left.value == Ore::BUILTIN_OPERATOR
+					overload_func = find_operator_overload expr.operator.value
+				else
+					overload_func = find_operator_overload expr.operator.value, (maybe_instance interpret expr.left)
+				end
 
 				if overload_func.is_a? Ore::Func
 					call           = Ore::Call_Expr.new
@@ -1131,12 +1165,8 @@ module Ore
 					left  = maybe_instance interpret expr.left
 					right = maybe_instance interpret expr.right
 
-					# If left (or left's type) declares this operator via @operator, call it like a regular function with (left, right) as arguments. Falls back to left.enclosing_scope (the Type) because shorthand-constructed instances (array/string/dict literals, e.g. `[1, 2, 3]`) never get the type's own declarations copied down onto themselves the way `Array(...)`-style construction does (see #interp_type_call) -- this mirrors the same fallback #interp_identifier already does for regular method calls like `arr.push(...)`.
-					overload_func = if left.is_a?(Ore::Scope) && left.has?(expr.operator.value)
-						left.get expr.operator.value
-					elsif left.is_a?(Ore::Scope) && left.enclosing_scope.is_a?(Ore::Type) && left.enclosing_scope.has?(expr.operator.value)
-						left.enclosing_scope.get expr.operator.value
-					end
+					# If left (or left's type) declares this operator via @operator, call it like a regular function with (left, right) as arguments. Falls back to left.enclosing_scope (the Type) because shorthand-constructed instances (array/string/dict literals, e.g. `[1, 2, 3]`) never get the type's own declarations copied down onto themselves the way `Array(...)`-style construction does (see #interp_type_call) -- this mirrors the same fallback #interp_identifier already does for regular method calls like `arr.push(...)`. Falls back further to a same-named global operator if the operand itself doesn't declare one.
+					overload_func = find_operator_overload expr.operator.value, left
 
 					if overload_func.is_a? Ore::Func
 						call           = Ore::Call_Expr.new
@@ -1153,24 +1183,39 @@ module Ore
 
 					case expr.operator.value
 					when '==='
-						left.types == right.types
+						left.types == right.types && left.tags&.types == right.tags&.types
+
 					when '=!='
-						left.types != right.types
+						left.types != right.types || left.tags&.types != right.tags&.types
+
 					when '=>='
-						# Is expr.left a superset of expr.right
-						right.types.all? do |type|
+						left_is_superset       = right.types.all? do |type|
 							left.types.include? type
 						end
+						left_tags_are_superset = (right.tags&.types || []).all? do |tag|
+							(left.tags&.types || []).include? tag
+						end
+
+						left_is_superset && left_tags_are_superset
 					when '=<='
-						# Is expr.right a superset of expr.left
-						left.types.all? do |type|
+						right_is_superset = left.types.all? do |type|
 							right.types.include? type
 						end
+
+						right_tags_are_superset = (left.tags&.types || []).all? do |tag|
+							(right.tags&.types || []).include? tag
+						end
+
+						right_is_superset && right_tags_are_superset
 					when '=/='
-						# They share absolutely no types
-						!left.types.any? do |type|
+						shared_types = left.types.any? do |type|
 							right.types.include? type
 						end
+						shared_tags  = (left.tags&.types || []).any? do |tag|
+							(right.tags&.types || []).include? tag
+						end
+
+						!shared_types && !shared_tags
 					when '=~', '!~'
 						# These behave just like Ruby's =~/!~: =~ returns the match index (or nil), !~ returns the boolean negation of a match.
 						subject     = maybe_instance(left).value
@@ -1179,7 +1224,20 @@ module Ore
 
 						expr.operator.value == '!~' ? match_index.nil? : match_index
 					else
-						left.send expr.operator.value, right
+						# ==, !=, <, >, <=, >=, <=> aren't given fixed set-comparison semantics above,
+						# so — same as INFIX_ARITHMETIC_OPERATORS above — check for a user-declared
+						# @operator overload (on left itself, or falling back to left.enclosing_scope
+						# for shorthand-constructed instances, or a same-named global operator) before
+						# falling back to Ruby's own #==/#<=>/etc.
+						overload_func = find_operator_overload expr.operator.value, left
+
+						if overload_func.is_a? Ore::Func
+							call           = Ore::Call_Expr.new
+							call.arguments = [expr.left, expr.right]
+							interp_func_body overload_func, call
+						else
+							left.send expr.operator.value, right
+						end
 					end
 
 				elsif COMPOUND_OPERATORS.include? expr.operator.value
@@ -1335,15 +1393,40 @@ module Ore
 		end
 
 		def interp_type expr
-			existing = stack.last.has?(expr.name.value) && stack.last[expr.name.value]
-			type     = existing.is_a?(Ore::Type) ? existing : Ore::Type.new(expr.name.value)
+			# No body was parsed (`x: Abc<Number>`, `y := Abc<Number>`, `Abc<Number>()`, `Abc<4815>()`) so this references an existing type rather than declaring one. Dup it so tagging this reference with tags doesn't mutate the shared type every other reference sees.
+			if expr.expressions.nil?
+				existing = stack.last.has?(expr.name) && stack.last[expr.name]
+				unless existing.is_a? Ore::Type
+					raise Ore::Undeclared_Identifier.new(expr, self)
+				end
+
+				# Object#dup is shallow so  @declarations/@static_declarations would still be the exact same Hash/Set every reference and the original type share, so tagging one would silently mutate all the others (and the type itself). Fork them explicitly.
+				referenced                     = existing.dup
+				referenced.declarations        = existing.declarations.dup
+				referenced.static_declarations = (existing.static_declarations || Set.new).dup
+				if expr.tags
+					supplied = interpret expr.tags
+					# Call-site tag values are always positional (`Woof<'hello', 4815>`, never `Woof<key: 'hello'>`) for now! Here we re-associate them with the names from the type's own declared schema (`Woof<String, key: Dictionary> {}`) so `.tags.key` still works on the resulting instance.
+					# Eventually I want to support named arguments like <key='hello'>.
+					schema_names    = existing.tags.is_a?(Ore::Tags) ? existing.tags.names : []
+					referenced.tags = Ore::Tags.new supplied.types, schema_names
+					link_instance_to_type referenced.tags, 'Tags'
+				end
+				declare_tags referenced
+				return referenced
+			end
+
+			existing = stack.last.has?(expr.name) && stack.last[expr.name]
+			type     = existing.is_a?(Ore::Type) ? existing : Ore::Type.new(expr.name)
 
 			type.expressions     = (type.expressions || []) + expr.expressions
 			type.enclosing_scope = stack.last
+			type.tags            = interpret expr.tags if expr.tags
+			declare_tags type
 
-			ore_name = "Ore::#{expr.name.value}"
-			defined  = expr.name.value[0] != '_' && Object.const_defined?(ore_name) # note; #const_defined? does not allow underscore as the first character, hence the underscore check.
-			link_instance_to_type type, expr.name.value if defined
+			ore_name = "Ore::#{expr.name}"
+			defined  = expr.name[0] != '_' && Object.const_defined?(ore_name) # note; #const_defined? does not allow underscore as the first character, hence the underscore check.
+			link_instance_to_type type, expr.name if defined
 
 			type.types ||= []
 			type.types << type.name
@@ -1357,6 +1440,14 @@ module Ore
 
 			stack.last.declare type.name, type
 			type
+		end
+
+		# Makes `.tags` readable via Ore dot-access on a Type, Instance, or type reference, and marks it static so it's also readable straight off a bare Type (not just an instance). Only adds the declaration when this particular one actually has tags, so plain untagged types don't pick up a stray `tags` member.
+		def declare_tags scope
+			return unless scope.tags
+
+			scope.declarations['tags'] = scope.tags
+			scope.static_declarations  = (scope.static_declarations || Set.new) + ['tags']
 		end
 
 		#
@@ -1380,6 +1471,10 @@ module Ore
 			instance.name            = type.name
 			instance.types           = type.types
 			instance.enclosing_scope = type
+
+			# Bind tags onto the instance before the type's expressions (and therefore `new`) are interpreted below, so `new{;}`'s own body can reference `.tags`. This is a completely separate binding path from the call's own arguments — tag values never get forwarded into `new`'s params.
+			instance.tags = type.tags
+			declare_tags instance
 
 			# note: There was a bug here where I wasn't popping the instance after interpreting the type's expressions. That caused the #new function below (func_new) to not properly interpret arguments passed to it.
 			# note: We push type.enclosing_scope first (when present) so sibling types declared in the same scope can be found during instantiation.
@@ -1814,7 +1909,9 @@ module Ore
 							new_it = element[1]
 							new_at = element[0]
 							scope.declare 'it', new_it
+							scope.declare 'value', new_it
 							scope.declare 'at', new_at
+							scope.declare 'key', new_at
 							element = new_it
 							index   = new_at
 						end
@@ -2043,6 +2140,24 @@ module Ore
 			end
 		end
 
+		def interp_tags expr
+			values = expr.types.each_with_index.map do |slot, i|
+				if expr.names[i]
+					# Named slot, e.g. `some_string: String` — the slot's own identifier (`some_string`)
+					# is just a label, not something to look up; resolve its declared type instead.
+					type_ref        = Ore::Identifier_Expr.new
+					type_ref.lexeme = slot.type
+					interpret type_ref
+				else
+					interpret slot
+				end
+			end
+
+			tags = Ore::Tags.new values, expr.names
+			link_instance_to_type tags, 'Tags'
+			tags
+		end
+
 		# @param expr [Ore::Operator_Overload_Expr]
 		def interp_operator_overload expr
 			# expr attrs:  func_expr(Func_Expr)  fixity(Lexeme)  precedence(Int)  value(String)
@@ -2131,6 +2246,9 @@ module Ore
 				when 'stop'
 					throw :stop
 				end
+
+			when Ore::Tags_Expr
+				interp_tags expr
 
 			else
 				pp expr

@@ -1,0 +1,11 @@
+Tags {
+	types: Array = []
+
+	@operator == @infix 500 { left, right;
+		left.types == right.types
+	}
+
+	include? { type;
+		types.include?(type)
+	}
+}

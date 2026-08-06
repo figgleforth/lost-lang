@@ -63,7 +63,7 @@ Four phases: **Lexer → Parser → Type Checker → Interpreter**
 
 `Interpreter` is the main entry point. It owns a `Lexer` and `Parser`, and exposes `run(source_code)` which drives all phases. `Lexer` and `Parser` are plain transformation classes you can also call directly.
 
-### Compile-time (src/compiler/)
+### Compile-time (src/ruby/compiler/)
 
 Source code is tokenized, parsed into an AST, and statically type checked:
 
@@ -73,7 +73,7 @@ Source code is tokenized, parsed into an AST, and statically type checked:
 - `expressions.rb` - AST node definitions
 - `type_checker.rb` - Static type checker; runs on the AST before interpretation
 
-### Runtime (src/runtime/)
+### Runtime (src/ruby/runtime/)
 
 The AST is executed to produce output:
 
@@ -84,19 +84,19 @@ The AST is executed to produce output:
 	- `String`, `Array`, `Number`, `Dictionary`, `Server`, `Record`, `Database`, etc. - Built-in types
 - `errors.rb` - Runtime error definitions
 
-### Systems (src/systems/)
+### Systems (src/ruby/systems/)
 
 - `server_runner.rb` - HTTP server implementation using WEBrick (routing, URL params, query strings)
 - `dom_renderer.rb` - HTML rendering for `Dom` composition
 
-### Shared (src/shared/)
+### Shared (src/ruby/shared/)
 
 - `constants.rb` - Language constants, operators, precedence table, reserved words
 - `helpers.rb` - Utility functions for identifier classification (constant_identifier?, type_identifier?, member_identifier?)
 
 ### Entry Point
 
-- `src/ore.rb` - Requires all components; exposes convenience methods:
+- `src/ruby/ore.rb` - Requires all components; exposes convenience methods:
 	- `Ore.lex(source)` / `Ore.lex_file(filepath)` - Tokenize only
 	- `Ore.parse(source)` / `Ore.parse_file(filepath)` - Parse to AST
 	- `Ore.interp(source)` / `Ore.interp_file(filepath)` - Full execution
@@ -108,7 +108,7 @@ The AST is executed to produce output:
 
 ## Type Checker
 
-The type checker (`src/compiler/type_checker.rb`) runs between the parser and interpreter. It is invoked from `Interpreter#output` before the execution loop, so it also runs on files loaded via `@load`.
+The type checker (`src/ruby/compiler/type_checker.rb`) runs between the parser and interpreter. It is invoked from `Interpreter#output` before the execution loop, so it also runs on files loaded via `@load`.
 
 ### What it checks
 
@@ -157,6 +157,7 @@ counter           # still -1 — the outer `counter` was never touched
 - Re-running `:=` on the same identifier re-infers and overwrites the locked type
 - `=` without a prior `:=` (or a `: Type` annotation, or another declaration form — see below) raises `Ore::Cannot_Reassign_Undeclared_Identifier`
 - A `: Type` annotation (`x: Number = 4`) and a Class-styled identifier assigned a Scope value (`My_Type = Other {}`) are each themselves self-declaring, so `=` is allowed to introduce those identifiers too
+- A bare annotated identifier with no `=` at all (`x: Number`, or a tag annotation like `thing: <String, Number>`) self-declares to `nil` rather than raising `Ore::Undeclared_Identifier` when later referenced — same as the nil-init idiom (`ident,`), handled in `interp_identifier` via `self_declare_annotated_identifier`
 - Raises `Ore::Type_Contract_Violation` (`errors.rb`), not `Type_Mismatch`
 
 ### Important gotcha
@@ -174,7 +175,7 @@ Call sites that appear before the function definition are not checked — the si
 
 ## Scope System
 
-Ore uses a scope hierarchy, all defined in `src/runtime/scopes.rb`:
+Ore uses a scope hierarchy, all defined in `src/ruby/runtime/scopes.rb`:
 
 - **Global** - The global scope; pushed as the bottom of `Interpreter#stack` on first `run`; standard library declarations live here; execution state (routes, servers, loaded files, etc.) lives directly on `Interpreter`
 - **Type** - Class definitions (tracks `@types`, `@expressions`)
@@ -262,15 +263,15 @@ Layout | Dom { render {; Html([Body("Hello")]) } }
 
 ## Type Comparison Operators
 
-Five operators compare the *composed-type sets* of Types and Instances (a type's own name plus every type it has composed via `|`/`&`/`~`/`^`), handled in the `COMPARISON_OPERATORS` branch of `interp_infix` in `interpreter.rb`:
+Five operators compare the *composed-type sets* of Types and Instances (a type's own name plus every type it has composed via `|`/`&`/`~`/`^`), handled in the `COMPARISON_OPERATORS` branch of `interp_infix` in `interpreter.rb`. All five share the `=X=` shape (equals, symbol, equals) so they're easy to remember and hard to mistake for one another:
 
 - `===` - exact type-set equality
-- `!==` - negation of `===`
-- `>==` - is left a superset of right (left composes with at least everything right does)
-- `==<` - is right a superset of left (mirror of `>==` with operands reversed: `A ==< B` ≡ `B >== A`)
+- `=!=` - negation of `===`
+- `=>=` - is left a superset of right (left composes with at least everything right does)
+- `=<=` - is right a superset of left (mirror of `=>=` with operands reversed: `A =<= B` ≡ `B =>= A`)
 - `=/=` - disjoint: the two share no composed types at all
 
-Only `>==` (superset) carries genuinely new information — `==<` is `>==` with swapped operands, and `===` is mutual `>==` in both directions (`(A >== B) && (B >== A)`); `!==` is just `!(A === B)`. The other three exist purely for readability at the call site, the same reason most languages ship both `<=`/`>=` alongside `==`/`!=` despite one being derivable from the other.
+Only `=>=` (superset) carries genuinely new information — `=<=` is `=>=` with swapped operands, and `===` is mutual `=>=` in both directions (`(A =>= B) && (B =>= A)`); `=!=` is just `!(A === B)`. The other three exist purely for readability at the call site, the same reason most languages ship both `<=`/`>=` alongside `==`/`!=` despite one being derivable from the other.
 
 ```ore
 Flying { can_fly := true }
@@ -281,13 +282,67 @@ Fish | Swimming { name := 'fish' }
 
 Duck === Duck          #=> true  (identical composed-type sets)
 Duck === Fish          #=> false (Duck also composes Flying)
-Duck !== Fish          #=> true
-Duck >== Swimming      #=> true  (Duck composes with at least Swimming)
-Swimming >== Duck      #=> false (Swimming doesn't compose Duck's extra types)
-Swimming ==< Duck      #=> true  (mirror of the line above)
+Duck =!= Fish          #=> true
+Duck =>= Swimming      #=> true  (Duck composes with at least Swimming)
+Swimming =>= Duck      #=> false (Swimming doesn't compose Duck's extra types)
+Swimming =<= Duck      #=> true  (mirror of the line above)
 Duck =/= Fish          #=> false (both compose Swimming, so they're not disjoint)
 Flying =/= Swimming    #=> true  (share nothing)
 ```
+
+Tags (see below) factor into all five: `===`/`=!=` require both the composed-type-sets *and* the tags (`left.tags&.types == right.tags&.types`) to match; `=>=`/`=<=` additionally require the tag-poor side's tags to be entirely present in the tag-rich side's; `=/=` additionally requires the tags to share nothing either. An untagged side is treated as having empty tags, so `Abc === Abc` (neither side tagged) is unaffected and stays `true`. Two types still sharing a composed type (e.g. both being `Abc`) always blocks `=/=` regardless of their tags — disjointness means sharing *nothing*, composed types included.
+
+## Tags
+
+`<...>` attaches runtime-inspectable metadata ("tags") to a type declaration, a standalone value, or a reference to an existing type. Parsed by `parse_tags` in `parser.rb` into `Ore::Tags_Expr`; interpreted by `interp_tags`/`interp_type` in `interpreter.rb` into an `Ore::Tags` instance (`src/ruby/external/ruby/tags.rb`, paired with `ore/tags.ore`).
+
+```ore
+Abc<Number> {}            # declaration — Number becomes part of Abc's declared tag schema
+x := Abc<Number>           # reference — dup of the existing Abc type, tagged; doesn't mutate the original
+x: Abc<Number>             # same, as a type annotation
+thing: <String, Number>    # bare tags, no type name at all — a standalone Ore::Tags value
+z := Abc<4815>             # a reference tagged with an actual value rather than a type
+z()                        # constructs Abc, with .tags bound before new{;} runs
+Abc<4815>()                # same, in one step
+Def {}
+Def()                      # untagged types are completely unaffected
+```
+
+- A tag slot is any expression (`Abc<1+2+3/123>`, `Abc<this, that>`), not just a type name — evaluated normally at interpret time, so an identifier like `Number` resolves to the actual `Ore::Type`
+- Named tags (`Type<some_string: String, num: Number> {}`) reuse `parse_identifier_expr`'s existing `: Type` annotation parsing for each slot — no separate grammar needed
+- Tags are only ever reachable via `.tags` (`.tags.types`, `.tags.some_string` for named slots) — never auto-unpacked into `./`
+- A bare identifier immediately followed by `,` inside `<...>` (`<String, Number>`) is special-cased in `parse_tags` to parse as a plain identifier rather than the nil-init idiom (`ident,` ⇒ `ident = ident or nil`), which would otherwise misfire on the exact same shape
+- Reference forms (`x := Abc<Number>`) `dup` the existing type rather than mutating it in place — `Object#dup` is shallow, so `@declarations`/`@static_declarations` are explicitly re-forked too; otherwise tagging one reference would silently mutate every other reference (and the type itself), since they'd share the same underlying Hash/Set
+- Constructing from a tagged reference binds `.tags` onto the instance *before* `type.expressions` (and therefore `new{;}`) run, so `new`'s own body can read `.tags` — but tag values are never forwarded as constructor arguments; whatever `(...)` actually passes still binds to `new`'s own declared params, entirely separately
+- A named tag's value, supplied positionally at the reference site (`Woof<'hello', 4815>`, never `Woof<key: 'hello'>`), gets re-associated with the *type's own* declared schema names before landing on the instance, so `.tags.key` still resolves correctly
+
+### Confirmed example
+
+```ore
+String<dict: Dictionary> {
+    new { str: String = "";
+        value = str
+    }
+    to_s {;
+        final := value
+        final += "{"
+        for tags.dict
+            final += "`key`::`value`, "
+        end
+        final += "}"
+    }
+}
+a := String<{x=0, y=1, z=2}>()
+b := String<{x=0, y=1, z=2}>("My dict: ")
+a.to_s()   # "{x::0, y::1, z::2, }"
+b.to_s()   # "My dict: {x::0, y::1, z::2, }"
+```
+
+### Runtime wiring
+
+- `Ore::Tags < Instance`, not `Scope` — the `enclosing_scope` method-lookup fallback used for `arr.push(...)`-style calls (see `#interp_identifier`) is gated on `is_a?(Ore::Instance)`, and `Tags` needs that same fallback for `ore/tags.ore`'s own declarations (`==`, `include?`) to be reachable at all
+- Every `Ore::Tags.new` call site also calls `link_instance_to_type(tags, 'Tags')`, linking it to the type declared by `ore/tags.ore` (loaded via `preload.ore`)
+- `.tags` is exposed on `Type`/`Instance` via `declare_tags` (`interpreter.rb`) — only added when a scope actually has tags, and marked as a static declaration so it's readable straight off a bare `Type`, not just an instance
 
 ## Identifier Naming Conventions
 
@@ -321,8 +376,8 @@ Point {
     y,
 
     new { x, y;
-        .x = x
-        .y = y
+        ./x = x
+        ./y = y
     }
 }
 
@@ -391,6 +446,9 @@ double { n; n * 2 }
 - The operator symbol can be any symbol sequence or identifier (`->`, `!!`, `pm`, `$`)
 - Overloads are stored as regular functions in the declaring scope — they don't leak outside it
 - Represented internally as `Ore::Operator_Overload_Expr` (fixity, precedence, operator lexeme, `Func_Expr` body)
+- **Precedence**: a type's own overload for an operator always wins over a same-named one declared anywhere else. Dispatch (`#find_operator_overload` in `interpreter.rb`) checks the left operand's own declarations first, then its `enclosing_scope` (for shorthand-constructed instances that never got the type's declarations copied onto themselves — see `#interp_type_call`), and only falls back to a lexically/dynamically-scoped global operator (found by searching `stack.reverse_each`, deliberately excluding `Ore::Type`/`Ore::Instance` scopes) if the operand doesn't declare its own
+- That stack search is scope-based, not global-only — an operator declared inside a function body shadows a same-named one declared outside it, for the duration of that call, with no leakage back out once the call returns
+- `Ore::Type`/`Ore::Instance` scopes are excluded from that stack search specifically to prevent infinite recursion: a Type merely being on the call stack (because one of its methods is currently executing) says nothing about whether the *current* operands belong to it — without the exclusion, an overload whose body reuses its own operator symbol on unrelated operands (even plain `1 == 1`) would recurse into itself forever, since the declaring Type never leaves the stack while its own body runs
 
 ## Ranges
 
@@ -407,7 +465,7 @@ Four range operators, all built on the same `...`/`..<`/`>..`/`>.<` family (`RAN
 
 ## Built-in Types and Intrinsic Methods
 
-Ore's built-in types (String, Array, Dictionary, Number) have ruby methods that delegate to Ruby's native implementations. These methods are declared using a `proxy_` prefix (see src/shared/ruby_proxies.rb)
+Ore's built-in types (String, Array, Dictionary, Number) have ruby methods that delegate to Ruby's native implementations. These methods are declared using a `proxy_` prefix (see src/ruby/shared/ruby_proxies.rb)
 
 ### Intrinsic Method Implementation Pattern
 
@@ -773,7 +831,7 @@ end
 
 **Implementation:**
 - Database operations use Ruby's Sequel gem
-- Record methods are proxy methods (see `src/runtime/scopes.rb`)
+- Record methods are proxy methods (see `src/ruby/runtime/scopes.rb`)
 - Records return `Ore::Dictionary` instances
 - Static declarations (`..database`) link models to database
 
@@ -821,7 +879,7 @@ Layout | Dom {
     title,
 
     new { title = 'My Page';
-        .title = title
+        ./title = title
     }
 
     render {;
