@@ -26,7 +26,7 @@ require_relative 'external/ruby/number'
 require_relative 'external/ruby/file_system'
 require_relative 'external/ruby/database'
 require_relative 'external/ruby/table'
-require_relative 'external/ruby/tags'
+require_relative 'external/ruby/tag_info'
 
 require_relative 'runtime/return'
 require_relative 'runtime/interpreter'

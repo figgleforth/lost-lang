@@ -5,13 +5,13 @@ require_relative 'base_test'
 class Tags_Test < Base_Test
 	def test_parses_standalone_tags_literal
 		out = Ore.parse '<String, Number>'
-		assert_kind_of Ore::Tags_Expr, out.first
+		assert_kind_of Ore::Tag_Info_Expr, out.first
 		assert_equal %w(String Number), out.first.types.map(&:value)
 	end
 
 	def test_parses_standalone_tags_literal_with_single_type
 		out = Ore.parse '<String>'
-		assert_kind_of Ore::Tags_Expr, out.first
+		assert_kind_of Ore::Tag_Info_Expr, out.first
 		assert_equal %w(String), out.first.types.map(&:value)
 	end
 
@@ -19,7 +19,7 @@ class Tags_Test < Base_Test
 		out = Ore.parse 'Array<String> {}'
 		assert_kind_of Ore::Type_Expr, out.first
 		assert_equal 'Array', out.first.name
-		assert_kind_of Ore::Tags_Expr, out.first.tags
+		assert_kind_of Ore::Tag_Info_Expr, out.first.tags
 		assert_equal %w(String), out.first.tags.types.map(&:value)
 	end
 
@@ -38,13 +38,14 @@ class Tags_Test < Base_Test
 		assert_kind_of Ore::Infix_Expr, out.first.tags.types.first
 
 		result = Ore.interp "Abc {}
+		Abc<Number> {}
 		Abc<1+2+3/123>.tags.types.first()"
 		assert_equal 3, result
 	end
 
 	def test_interprets_standalone_tags_literal_to_tags_instance
 		out = Ore.interp '<String, Number>'
-		assert_kind_of Ore::Tags, out
+		assert_kind_of Ore::Tag_Info, out
 		assert_equal 'String', out.types[0].name
 		assert_equal 'Number', out.types[1].name
 	end
@@ -57,10 +58,7 @@ class Tags_Test < Base_Test
 	end
 
 	def test_bare_tags_assignable_and_storable
-		# A bare annotation alone on its own line (no `=` on the same expression) is undeclared,
-		# same as any other annotation (`x: Number` alone behaves identically) — combine the
-		# annotation and assignment into one expression, which is how self-declaring annotations
-		# actually work today.
+		# A bare annotation alone on its own line (no `=` on the same expression) is undeclared, same as any other annotation (`x: Number` alone behaves identically) — combine the annotation and assignment into one expression, which is how self-declaring annotations actually work today.
 		out = Ore.interp 'thing: <String, Number> = <String, Number>
 		thing.types.count'
 		assert_equal 2, out
@@ -100,19 +98,20 @@ class Tags_Test < Base_Test
 
 	def test_annotation_form_captures_tags
 		out = Ore.parse 'x: Abc<Number>'
-		assert_kind_of Ore::Tags_Expr, out.first.type_tags
+		assert_kind_of Ore::Tag_Info_Expr, out.first.type_tags
 		assert_equal %w(Number), out.first.type_tags.types.map(&:value)
 	end
 
 	def test_bare_tags_annotation_with_no_type_name
 		out = Ore.parse 'thing: <String, Number>'
-		assert_kind_of Ore::Tags_Expr, out.first.type_tags
+		assert_kind_of Ore::Tag_Info_Expr, out.first.type_tags
 		assert_equal %w(String Number), out.first.type_tags.types.map(&:value)
 	end
 
 	def test_type_reference_with_tags_does_not_mutate_shared_type
 		out = Ore.interp <<~CODE
 		    Abc<Number> {}
+		    Abc<String> {}
 		    x := Abc<Number>
 		    y := Abc<String>
 		    (x.tags.types.first(), y.tags.types.first())
@@ -127,6 +126,7 @@ class Tags_Test < Base_Test
 		    	val,
 		    	new { v; ./val = v }
 		    }
+		    Abc<Number> {}
 		    Y := Abc<Number>
 		    Y(9).val
 		CODE
@@ -139,6 +139,7 @@ class Tags_Test < Base_Test
 		    	val,
 		    	new { v; ./val = v }
 		    }
+		    Abc<Number> {}
 		    y := Abc<Number>
 		    z := y
 		    z(5).val
@@ -164,6 +165,7 @@ class Tags_Test < Base_Test
 		    	val,
 		    	new { v := -1; ./val = v }
 		    }
+		    Abc<Number> {}
 		    zz := Abc<4815>()
 		    zz.val
 		CODE
@@ -175,8 +177,123 @@ class Tags_Test < Base_Test
 		assert_equal ['some_string', 'num'], out.first.tags.names
 
 		type = Ore.interp 'Type<some_string: String, num: Number> {}'
-		assert_equal 'String', type.tags.declarations['some_string'].name
-		assert_equal 'Number', type.tags.declarations['num'].name
+		assert_equal 'String', type.tag_info_declaration.declarations['some_string'].name
+		assert_equal 'Number', type.tag_info_declaration.declarations['num'].name
+	end
+
+	def test_tag_info_declaration_captures_default_values
+		type = Ore.interp 'Widget<indent: Number = 2> {}'
+		assert_equal ['indent'], type.tag_info_declaration.names
+		assert_equal({ 'indent' => 2 }, type.tag_info_declaration.defaults)
+	end
+
+	def test_untagged_declaration_has_no_tag_info_declaration
+		type = Ore.interp 'Plain { x, }'
+		assert_nil type.tag_info_declaration
+	end
+
+	def test_tag_info_declaration_is_independent_per_variant
+		out = Ore.interp <<~CODE
+		    dict_variant := String<dict: Dictionary> {}
+		    num_variant := String<num: Number> {}
+		    (dict_variant, num_variant)
+		CODE
+		dict_variant, num_variant = out.values
+
+		assert_equal ['dict'], dict_variant.tag_info_declaration.names
+		assert_equal 'Dictionary', dict_variant.tag_info_declaration.types.first.name
+
+		assert_equal ['num'], num_variant.tag_info_declaration.names
+		assert_equal 'Number', num_variant.tag_info_declaration.types.first.name
+	end
+
+	def test_tag_variant_key_builds_mangled_key_from_type_names
+		interpreter = Ore::Interpreter.new
+		assert_equal 'String<Dictionary>', interpreter.tag_variant_key('String', ['Dictionary'])
+		assert_equal 'Thing<This,That,String>', interpreter.tag_variant_key('Thing', %w(This That String))
+	end
+
+	def test_tag_variant_key_falls_back_to_bare_name_with_no_types
+		interpreter = Ore::Interpreter.new
+		assert_equal 'String', interpreter.tag_variant_key('String', [])
+		assert_equal 'String', interpreter.tag_variant_key('String', nil)
+	end
+
+	def test_reference_to_never_declared_shape_raises
+		assert_raises Ore::Undeclared_Tagged_Type do
+			Ore.interp 'Abc<Number>'
+		end
+	end
+
+	def test_reference_to_mismatched_declared_shape_raises
+		assert_raises Ore::Undeclared_Tagged_Type do
+			Ore.interp <<~CODE
+			    Abc<Number> {}
+			    Abc<String>
+			CODE
+		end
+	end
+
+	def test_reference_matches_shape_by_composed_type_not_just_own_name
+		out = Ore.interp <<~CODE
+		    Flying { can_fly := true }
+		    Duck | Flying { name := 'duck' }
+
+		    String<val: Flying> {
+		    	to_s {; "yes" }
+		    }
+
+		    d := Duck()
+		    String<d>().to_s()
+		CODE
+		assert_equal 'yes', out
+	end
+
+	def test_tagged_type_can_be_aliased_and_retagged_through_the_alias
+		out = Ore.interp <<~CODE
+		    Flying { can_fly := true }
+		    Duck | Flying { name := 'duck' }
+
+		    String<val: Flying> {
+		    	to_s {; "yes" }
+		    }
+
+		    duck := Duck()
+		    Does_It_Fly := String<Flying>
+		    Does_It_Fly<duck>().to_s()
+		CODE
+		assert_equal 'yes', out
+	end
+
+	def test_multi_slot_reference_matches_via_composed_types_in_combination
+		out = Ore.interp <<~CODE
+		    Alpha { }
+		    Beta { }
+		    Combo_Alpha | Alpha { }
+		    Combo_Beta | Beta { }
+
+		    Thing<x: Alpha, y: Beta> {
+		    	to_s {; "matched" }
+		    }
+
+		    Thing<Combo_Alpha(), Combo_Beta()>().to_s()
+		CODE
+		assert_equal 'matched', out
+	end
+
+	def test_redeclaring_same_shape_extends_the_same_variant
+		out = Ore.interp <<~CODE
+		    Abc<Number> {
+		    	first {; 'first' }
+		    }
+		    Abc<Number> {
+		    	second {; 'second' }
+		    }
+
+		    a := Abc<Number>()
+		    (a.first(), a.second())
+		CODE
+		assert_equal %w(first second), out.values
 	end
 
 	def test_string_tagged_with_a_dictionary

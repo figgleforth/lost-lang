@@ -92,7 +92,9 @@ module Ore
 				code = File.read resolved_path
 				register_source resolved_path, code
 				@lexer.input                                   = code
-				@parser.input                                  = @lexer.output
+				@parser.input                                  = @lexer.output.reject do |lexeme|
+					%I(comment).include? lexeme.type
+				end
 				@cached_expressions_by_filepath[resolved_path] = @parser.output
 			end
 
@@ -253,7 +255,9 @@ module Ore
 		end
 
 		def truthy? value
-			!(value == nil || value == 0 || value == false) # todo? does this need to check truthiness of ore constructs?
+			return false if value.nil? || false == value
+			return false if (value.is_a?(::Integer) || value.is_a?(::Float)) && value.zero?
+			true
 		end
 
 		def type_name_to_string value
@@ -652,15 +656,20 @@ module Ore
 						return scope.send(proxy_method)
 					end
 				elsif scope.is_a?(Ore::Instance) && scope.enclosing_scope&.is_a?(Ore::Type) && scope.enclosing_scope&.has?(expr.value)
-					# todo: This seems like a hack. This currently prevents instances from shadowing it's type's declarations.
-					# Method/property exists on the Type, not the instance
-					value = scope.enclosing_scope.get expr.value
-					if value.is_a? Ore::Func
-						func                 = value.dup
-						func.enclosing_scope = scope
-						return func
+					if expr.type || expr.type_tags
+						# A bare annotated identifier (`x: Number`) must self-declare its own per-instance copy, exactly like the nil-init idiom (`x,`) already does (see #interp_nil_init's identical shadowing fix) -- reading straight through to the enclosing Type's own nil placeholder instead would mean the instance never gets its own key, so a later `./x = value` would wrongly raise Cannot_Assign_Undeclared_Identifier.
+						self_declare_annotated_identifier expr
 					else
-						return value
+						# todo: This seems like a hack. This currently prevents instances from shadowing it's type's declarations.
+						# Method/property exists on the Type, not the instance
+						value = scope.enclosing_scope.get expr.value
+						if value.is_a? Ore::Func
+							func                 = value.dup
+							func.enclosing_scope = scope
+							return func
+						else
+							return value
+						end
 					end
 				elsif expr.type || expr.type_tags
 					self_declare_annotated_identifier expr
@@ -947,10 +956,7 @@ module Ore
 				# @copypaste from #interp_dot_scope because we already interpreted expr as 'left'. If #interp_dot_scope interprets expr again, we end up with duplicate duplicate instantiations
 
 				if expr.right.instance_of? Ore::Type_Expr
-					push_scope receiver
-					result = interpret expr.right
-					pop_scope
-					return result
+					return interp_member_access receiver, expr.right
 				end
 
 				unless expr.right.instance_of? Ore::Identifier_Expr
@@ -959,21 +965,28 @@ module Ore
 
 				check_dot_access_permissions! receiver, expr.right.value, expr
 
-				push_scope receiver
-
 				# Here I'm special casing for `.?` which is my version of Ruby's `&.`
-				result = case expr.operator.value
+				case expr.operator.value
 				when '.'
-					interpret expr.right
+					interp_member_access receiver, expr.right
 				when '.?'
 					begin
-						interpret expr.right
+						interp_member_access receiver, expr.right
 					rescue Ore::Undeclared_Identifier
 						nil
 					end
 				end
-				pop_scope
-				result
+			end
+		end
+
+		# Interprets `expr` (the right side of `x.y`) scoped only to `receiver` and global scope, so a missing member can't fall through to an unrelated identically-named one still active further down the caller's stack (this caused a real infinite recursion before the fix).
+		def interp_member_access receiver, expr
+			saved_stack = stack
+			self.stack  = [saved_stack.first, receiver]
+			begin
+				interpret expr
+			ensure
+				self.stack = saved_stack
 			end
 		end
 
@@ -1035,12 +1048,7 @@ module Ore
 				end
 			end
 
-			# todo: Handle the case when dictionary keys shadow one of the builtin dictionary functions. Ideally check the dict scope first, then dict.hash, but manually check the scope instead of using #interpret because #interpret will look up the stack so the identifier may be found and evaluated despite not existing in dictionary.dict or dictionary the built-in.
-			push_scope dict
-			result = interpret expr.right
-			pop_scope
-
-			result
+			interp_member_access dict, expr.right
 		end
 
 		def interp_dot_scope expr
@@ -1051,10 +1059,7 @@ module Ore
 
 			check_dot_access_permissions! scope, expr.right.value, expr
 
-			push_scope scope
-			result = interpret expr.right
-			pop_scope
-			result
+			interp_member_access scope, expr.right
 		end
 
 		def interp_each_loop collection, func_expr
@@ -1181,19 +1186,23 @@ module Ore
 					left  = interpret expr.left
 					right = interpret expr.right
 
+					# A bare reference (`Abc`) is never tagged for comparison -- only an explicit `Abc<...>` reference sets `.tag_info` -- so `Abc === Abc<Dictionary>` doesn't wrongly come out true just because Abc's declared shape matches.
+					left_tags  = left.is_a?(Ore::Type) ? left.tag_info&.types : nil
+					right_tags = right.is_a?(Ore::Type) ? right.tag_info&.types : nil
+
 					case expr.operator.value
 					when '==='
-						left.types == right.types && left.tags&.types == right.tags&.types
+						left.types == right.types && left_tags == right_tags
 
 					when '=!='
-						left.types != right.types || left.tags&.types != right.tags&.types
+						left.types != right.types || left_tags != right_tags
 
 					when '=>='
 						left_is_superset       = right.types.all? do |type|
 							left.types.include? type
 						end
-						left_tags_are_superset = (right.tags&.types || []).all? do |tag|
-							(left.tags&.types || []).include? tag
+						left_tags_are_superset = (right_tags || []).all? do |tag|
+							(left_tags || []).include? tag
 						end
 
 						left_is_superset && left_tags_are_superset
@@ -1202,8 +1211,8 @@ module Ore
 							right.types.include? type
 						end
 
-						right_tags_are_superset = (left.tags&.types || []).all? do |tag|
-							(right.tags&.types || []).include? tag
+						right_tags_are_superset = (left_tags || []).all? do |tag|
+							(right_tags || []).include? tag
 						end
 
 						right_is_superset && right_tags_are_superset
@@ -1211,8 +1220,8 @@ module Ore
 						shared_types = left.types.any? do |type|
 							right.types.include? type
 						end
-						shared_tags  = (left.tags&.types || []).any? do |tag|
-							(right.tags&.types || []).include? tag
+						shared_tags  = (left_tags || []).any? do |tag|
+							(right_tags || []).include? tag
 						end
 
 						!shared_types && !shared_tags
@@ -1374,6 +1383,11 @@ module Ore
 
 			receiver = interpret expr.receiver
 
+			# A nil-safe dot chain (`x.?method`) that found nothing evaluates to nil deliberately -- a trailing call (`x.?method()`) should short-circuit to nil too, not try to invoke nil.
+			if receiver.nil? && expr.receiver.is_a?(Ore::Infix_Expr) && expr.receiver.operator&.value == '.?'
+				return nil
+			end
+
 			case receiver
 			when Ore::Route
 				interp_func_body receiver.handler, expr
@@ -1393,36 +1407,73 @@ module Ore
 		end
 
 		def interp_type expr
-			# No body was parsed (`x: Abc<Number>`, `y := Abc<Number>`, `Abc<Number>()`, `Abc<4815>()`) so this references an existing type rather than declaring one. Dup it so tagging this reference with tags doesn't mutate the shared type every other reference sees.
+			# No body was parsed (`x: Abc<Number>`, `y := Abc<Number>`, `Abc<Number>()`, `Abc<4815>()`) so this references an existing type rather than declaring one. Dup it so tagging this reference with tags doesn't mutate the shared declaration every other reference sees.
 			if expr.expressions.nil?
-				existing = stack.last.has?(expr.name) && stack.last[expr.name]
-				unless existing.is_a? Ore::Type
-					raise Ore::Undeclared_Identifier.new(expr, self)
+				if expr.tags
+					supplied = interpret expr.tags
+
+					# `expr.name` is normally a real type name ("String"), but if it's instead a local
+					# alias bound to an earlier tagged reference (`X := String<Flying>`), re-tag against
+					# *that value's own* family name rather than treating "X" itself as a type name --
+					# `X<duck>` should behave exactly like `String<duck>`, since `.name` on any Type
+					# object (dup'd or not) always reflects its true declared family.
+					aliased    = stack.last.has?(expr.name) && stack.last[expr.name]
+					lookup_name = aliased.is_a?(Ore::Type) ? aliased.name : expr.name
+
+					existing = find_tagged_type_variant lookup_name, supplied.types
+					unless existing.is_a? Ore::Type
+						raise Ore::Undeclared_Tagged_Type.new(expr, self)
+					end
+				else
+					existing = stack.last.has?(expr.name) && stack.last[expr.name]
+					unless existing.is_a? Ore::Type
+						raise Ore::Undeclared_Identifier.new(expr, self)
+					end
 				end
 
-				# Object#dup is shallow so  @declarations/@static_declarations would still be the exact same Hash/Set every reference and the original type share, so tagging one would silently mutate all the others (and the type itself). Fork them explicitly.
+				# Object#dup is shallow so  @declarations/@static_declarations would still be the exact same Hash/Set every reference and the matched variant share, so tagging one would silently mutate all the others (and the variant itself). Fork them explicitly.
 				referenced                     = existing.dup
 				referenced.declarations        = existing.declarations.dup
 				referenced.static_declarations = (existing.static_declarations || Set.new).dup
 				if expr.tags
-					supplied = interpret expr.tags
-					# Call-site tag values are always positional (`Woof<'hello', 4815>`, never `Woof<key: 'hello'>`) for now! Here we re-associate them with the names from the type's own declared schema (`Woof<String, key: Dictionary> {}`) so `.tags.key` still works on the resulting instance.
+					# Call-site tag values are always positional (`Woof<'hello', 4815>`, never `Woof<key: 'hello'>`) for now! Here we re-associate them with the names — and pick up any defaults — from the matched variant's own tag declaration (`Woof<String, key: Dictionary> {}`) so `.tags.key` still works on the resulting instance.
 					# Eventually I want to support named arguments like <key='hello'>.
-					schema_names    = existing.tags.is_a?(Ore::Tags) ? existing.tags.names : []
-					referenced.tags = Ore::Tags.new supplied.types, schema_names
-					link_instance_to_type referenced.tags, 'Tags'
+					declaration          = existing.tag_info_declaration
+					declaration_names    = declaration.is_a?(Ore::Tag_Info) ? declaration.names : []
+					declaration_types    = declaration.is_a?(Ore::Tag_Info) ? declaration.types : []
+					declaration_defaults = declaration.is_a?(Ore::Tag_Info) ? declaration.defaults : {}
+
+					# A default only fills in for a slot that just re-asserts the declaration's own declared type for that slot (`Abc<Dictionary>()`, re-stating `dict`'s own type rather than giving it a value) — never when a real value was actually supplied there (`Abc<{x=1}>()` must keep {x=1}, not fall back to the default).
+					resolved_values = supplied.types.each_with_index.map do |value, i|
+						name = declaration_names[i]
+						if name && declaration_defaults.key?(name) && value.equal?(declaration_types[i])
+							declaration_defaults[name]
+						else
+							value
+						end
+					end
+
+					referenced.tag_info = Ore::Tag_Info.new resolved_values, declaration_names, declaration_defaults
+					link_instance_to_type referenced.tag_info, 'Tag_Info'
 				end
 				declare_tags referenced
 				return referenced
 			end
 
+			if expr.tags
+				interp_tagged_type_declaration expr
+			else
+				interp_bare_type_declaration expr
+			end
+		end
+
+		# A plain, untagged declaration (`String { ... }`) -- reopens/extends the same shared Type object across multiple declarations of the same bare name, e.g. how preload.ore's files each contribute to the same base String/Array/etc.
+		def interp_bare_type_declaration expr
 			existing = stack.last.has?(expr.name) && stack.last[expr.name]
 			type     = existing.is_a?(Ore::Type) ? existing : Ore::Type.new(expr.name)
 
 			type.expressions     = (type.expressions || []) + expr.expressions
 			type.enclosing_scope = stack.last
-			type.tags            = interpret expr.tags if expr.tags
-			declare_tags type
 
 			ore_name = "Ore::#{expr.name}"
 			defined  = expr.name[0] != '_' && Object.const_defined?(ore_name) # note; #const_defined? does not allow underscore as the first character, hence the underscore check.
@@ -1442,11 +1493,108 @@ module Ore
 			type
 		end
 
+		# A shaped declaration (`String<dict: Dictionary> { ... }`) is its own type, separate from the bare `String` and every other shape under the same name -- this stops one variant's `new`/methods from clobbering another's (a real bug this fixed).
+		# Stored under a mangled key (e.g. "String<Dictionary>") built from the shape's types only, never names, since a reference can only ever supply values positionally. See #tag_variant_key/#tag_type_name.
+		def interp_tagged_type_declaration expr
+			shape      = interpret expr.tags
+			type_names = shape.types.map { |value| tag_type_name value }
+			lookup_key = tag_variant_key expr.name, type_names
+
+			existing = stack.last.has?(lookup_key) && stack.last[lookup_key]
+			if existing.is_a? Ore::Type
+				variant = existing
+			else
+				variant             = Ore::Type.new(expr.name)
+				blueprint           = stack.last.has?(expr.name) && stack.last[expr.name]
+				variant.expressions = blueprint.is_a?(Ore::Type) ? (blueprint.expressions || []).dup : []
+			end
+
+			variant.expressions          = (variant.expressions || []) + expr.expressions
+			variant.enclosing_scope      = stack.last
+			variant.tag_info_declaration = shape
+
+			ore_name = "Ore::#{expr.name}"
+			defined  = expr.name[0] != '_' && Object.const_defined?(ore_name)
+			link_instance_to_type variant, expr.name if defined
+
+			variant.types ||= []
+			variant.types << variant.name
+			variant.types = variant.types.uniq
+
+			push_then_pop variant do |scope|
+				variant.expressions.each do |sub_expr|
+					interpret sub_expr
+				end
+			end
+
+			stack.last.declare lookup_key, variant
+			variant
+		end
+
+		# The canonical type-name string a tagged-type *declaration* stores its own shape's lookup key under -- a shape slot's type is always a bare type reference, so there's no ambiguity, its own `.name` is what was written. Not used for matching a *reference* against declared variants; see #tag_candidate_type_names for that.
+		def tag_type_name value
+			case value
+			when ::Integer, ::Float
+				'Number'
+			when ::String
+				'String'
+			when ::Symbol
+				'Symbol'
+			when ::TrueClass, ::FalseClass
+				'Bool'
+			else
+				value.name
+			end
+		end
+
+		# All type names a supplied tag value could match a declared shape's slot under -- its own primary name first, then everything it composes, so e.g. a `Div` satisfies a slot declared `Dom` without being named Dom itself. See #find_tagged_type_variant.
+		def tag_candidate_type_names value
+			case value
+			when ::Integer, ::Float
+				['Number']
+			when ::String
+				['String']
+			when ::Symbol
+				['Symbol']
+			when ::TrueClass, ::FalseClass
+				['Bool']
+			else
+				if value.is_a?(Ore::Type) && value.types && !value.types.empty?
+					value.types.to_a
+				else
+					[value.name]
+				end
+			end
+		end
+
+		# Builds the canonical lookup key a tagged-type declaration is stored under -- e.g. "String<Dictionary>", or plain "String" when untagged.
+		def tag_variant_key base_name, type_names
+			return base_name if type_names.nil? || type_names.empty?
+			"#{base_name}<#{type_names.join(',')}>"
+		end
+
+		# Finds the declared variant a reference's supplied tag values match, considering every type each value composes, not just its own name -- tries each value's own name first so an exact match always wins.
+		def find_tagged_type_variant base_name, values
+			return nil if values.nil? || values.empty?
+
+			candidate_lists = values.map { |value| tag_candidate_type_names value }
+			return nil if candidate_lists.any?(&:empty?)
+
+			first, *rest = candidate_lists
+			first.product(*rest).each do |type_names|
+				key   = tag_variant_key base_name, type_names
+				found = stack.last.has?(key) && stack.last[key]
+				return found if found.is_a? Ore::Type
+			end
+
+			nil
+		end
+
 		# Makes `.tags` readable via Ore dot-access on a Type, Instance, or type reference, and marks it static so it's also readable straight off a bare Type (not just an instance). Only adds the declaration when this particular one actually has tags, so plain untagged types don't pick up a stray `tags` member.
 		def declare_tags scope
-			return unless scope.tags
+			return unless scope.tag_info
 
-			scope.declarations['tags'] = scope.tags
+			scope.declarations['tags'] = scope.tag_info # Ore-level name stays `.tags` regardless of the Ruby-side `tag_info` rename
 			scope.static_declarations  = (scope.static_declarations || Set.new) + ['tags']
 		end
 
@@ -1473,8 +1621,15 @@ module Ore
 			instance.enclosing_scope = type
 
 			# Bind tags onto the instance before the type's expressions (and therefore `new`) are interpreted below, so `new{;}`'s own body can reference `.tags`. This is a completely separate binding path from the call's own arguments — tag values never get forwarded into `new`'s params.
-			instance.tags = type.tags
-			declare_tags instance
+			# `.tag_info` is only ever set here when `type` came from an explicit `Abc<...>` reference —
+			# a plain `Abc()` call is NOT the same thing as `Abc<Dictionary>()` (they're =!=), so it
+			# doesn't get the shape's tags bound onto it at all; it's genuinely untagged (see
+			# Type#tag_info_declaration for why the tag declaration can't just double as `.tag_info`). Defaults are
+			# already resolved by this point (see #interp_type's reference branch) — just pass through.
+			if type.tag_info
+				instance.tag_info = type.tag_info
+				declare_tags instance
+			end
 
 			# note: There was a bug here where I wasn't popping the instance after interpreting the type's expressions. That caused the #new function below (func_new) to not properly interpret arguments passed to it.
 			# note: We push type.enclosing_scope first (when present) so sibling types declared in the same scope can be found during instantiation.
@@ -1648,12 +1803,11 @@ module Ore
 				_1.empty?
 			end
 
-			route_key = if func.name&.value
-				func.name.value
-			else
-				# Anonymous route with auto-generated key: "method:path"
-				"#{route.http_method.value}:#{route.path}"
-			end
+			# Always keyed by "method:path", even when the handler is a named function
+			# (`get://path some_handler`) — the name identifies the *function*, not the route, and two
+			# different routes can legitimately share one handler. Keying by name instead used to
+			# collide in exactly that case, silently dropping every route but the last to reuse a name.
+			route_key = "#{route.http_method.value}:#{route.path}"
 
 			# Store route in the enclosing Type's @routes if it has one (e.g., Server)
 			enclosing_type = stack.reverse.find do |scope|
@@ -1947,7 +2101,7 @@ module Ore
 		end
 
 		def interp_conditional expr
-			# I'm being very explicit with the "== true" checks of the condition. It's easy to misread this to mean that as long as it's not nil. While the distinction in this case may not matter (in Ruby), I still haven't decided how this language will handle truthiness.
+			# All conditional forms (if/unless/while/until) use #truthy? uniformly now -- `if`/`while` used to require the condition be the literal value `true`, so `if [1,2,3]` never took its true branch.
 			case expr.type.value
 			when 'while', 'until', 'elwhile'
 				result    = nil
@@ -1972,11 +2126,11 @@ module Ore
 
 				catch :stop do
 					if expr.type.value == 'until'
-						until condition == true
+						until truthy? condition
 							iteration_proc.call
 						end
 					else
-						while condition == true
+						while truthy? condition
 							iteration_proc.call
 						end
 					end
@@ -1993,12 +2147,11 @@ module Ore
 				return result
 			when 'unless'
 				# @Copypaste from the else clause below. This is simple to factor out.
-				# The behavior of truthiness is not yet finalized.
 				condition = interpret expr.condition
-				body      = if condition == false || condition.nil?
-					expr.when_true
-				else
+				body      = if truthy? condition
 					expr.when_false
+				else
+					expr.when_true
 				end
 
 				if body.is_a? Ore::Conditional_Expr
@@ -2011,7 +2164,7 @@ module Ore
 
 			else
 				condition = interpret expr.condition
-				body      = if condition == true
+				body      = if truthy? condition
 					expr.when_true
 				else
 					expr.when_false
@@ -2141,21 +2294,23 @@ module Ore
 		end
 
 		def interp_tags expr
-			values = expr.types.each_with_index.map do |slot, i|
+			defaults = {}
+
+			values = expr.types.each_with_index.map do |tag, i|
 				if expr.names[i]
-					# Named slot, e.g. `some_string: String` — the slot's own identifier (`some_string`)
-					# is just a label, not something to look up; resolve its declared type instead.
-					type_ref        = Ore::Identifier_Expr.new
-					type_ref.lexeme = slot.type
+					# Named slot, e.g. `some_string: String` — the slot's own identifier (`some_string`) is just a label, not something to look up; resolve its declared type instead. A default (`some_string: String = 'x'`) is what gets bound onto an instance's.tags in place of this shape's type, when nothing overrides it at construction — see #interp_type_call.
+					type_ref                = Ore::Identifier_Expr.new
+					type_ref.lexeme         = tag.type
+					defaults[expr.names[i]] = interpret(tag.tag_default) if tag.tag_default
 					interpret type_ref
 				else
-					interpret slot
+					interpret tag
 				end
 			end
 
-			tags = Ore::Tags.new values, expr.names
-			link_instance_to_type tags, 'Tags'
-			tags
+			tag_info = Ore::Tag_Info.new values, expr.names, defaults
+			link_instance_to_type tag_info, 'Tag_Info'
+			tag_info
 		end
 
 		# @param expr [Ore::Operator_Overload_Expr]
@@ -2247,7 +2402,7 @@ module Ore
 					throw :stop
 				end
 
-			when Ore::Tags_Expr
+			when Ore::Tag_Info_Expr
 				interp_tags expr
 
 			else

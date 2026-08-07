@@ -1,4 +1,4 @@
-Tags {
+Tag_Info {
 	types: Array = []
 
 	@operator == @infix 500 { left, right;

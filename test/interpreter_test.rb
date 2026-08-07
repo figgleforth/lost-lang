@@ -2473,15 +2473,15 @@ class Interpreter_Test < Base_Test
 		# `A =/= B` is true when A and B share no composed types at all. A/B share nothing. Left/Right both compose Num, so they're not disjoint even though neither composes the other. Left/Num aren't disjoint either, since Left composes Num directly.
 		out = Ore.interp <<~CODE
 			#{shared}
-		    A {}
-		    B {}
+		    Aa {}
+		    Bb {}
 		    Left | Num {}
 		    Right | Num {}
-			a := A()
-			b := B()
+			a := Aa()
+			b := Bb()
 			l := Left()
 			r := Right()
-			(A =/= B, A =/= A, Left =/= Right, Left =/= Num, a =/= b, l =/= r, l =/= Num)
+			(Aa =/= Bb, Aa =/= Aa, Left =/= Right, Left =/= Num, a =/= b, l =/= r, l =/= Num)
 		CODE
 		assert_equal [true, false, false, false, true, false, false], out.values
 	end

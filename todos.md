@@ -1,3 +1,4 @@
+- [ ] Rewrite the Dom_Renderer in Ore, and remove the magic rendering whenever a Dom is returned. Make the user render themselves, everyone prefers control over magic probably.
 - [ ] Table associations (`belongs_to`/`has_many`)
 - [ ] jsonb-like column support.
 - [ ] No JSON encode/decode exposed to Ore: `require 'json'` only used internally, for example when parsing POST bodies (`interpreter.rb`).
@@ -5,13 +6,14 @@
 - [ ] No `ENV`/config access: only I/O primitive is `File_System`.
 - [ ] No in-Ore testing/assert facility: Minitest only tests the interpreter itself.
 - [ ] Implement way to extract mulitple values from tuples like `x, y := (1, 2)`
-- [ ] Percent literals `%str(boo hoo COOL)` for ['boo', 'hoo', 'COOL'] `%sym(BOO hoo cool)` for [:BOO,  :hoo,  :cool], etc.
+- [ ] Percent literals `%str(boo hoo COOL)` for ['boo', 'hoo', 'COOL'] `%sym(BOO hoo cool)` for [:BOO, :hoo, :cool], etc.
 - [ ] Stride overlap for `for x by n,overlap`: `getting_started.md` documents `for x reject by 2,1` / `for x each by 3,1` style overlapping chunks, but the parser doesn't support the second stride argument yet (`src/compiler/parser.rb`: "Currently `stride` doesn't support option to overlap elements"). This was meant to be implemented, not just aspirational docs: needs the parser to accept `by <stride>,<overlap>` and the interpreter's chunking (`each_slice` today) to respect the overlap instead of using non-overlapping slices.
 - [ ] An operator for checking AST types. For example, `func{;} ==== Func_Expr`. I'm only using four equals to illustrate.
 - [ ] `help {expr;}` or `@help` that accepts any expression and returns information about the Type, primitive, function, etc. Literally any expression should be able to be described given its AST. You even have access to the live values so the information can be dynamic to reflect what the user is actually asking about.
 - [ ] Switch statement / pattern matching: required for @help / help{expr;} function.
 - [ ] Work on Odin port scaffolding on the side, but no rush because I want to keep improving the Ruby version.
 - [ ] Improve error messaging. `src/runtime/error_formatter.rb` doesn't display source code properly for some expressions, I think.
+- [ ] Ensure `@cd ..` doesn't work if no scope was pushed with `@cd <scope>`. Probably need some kind of stack that remembers the pushes.
 
 **Bugs:**
 - [ ] Tuple-in-tuple has infinite members: `((), true).0.1`, `.0.2`, `.0.3`... all return a Tuple instead of erroring past the actual length.
@@ -66,3 +68,6 @@
 - [x] `src/runtime/interpreter.rb`: sibling scopes are assumed read-only; assumption was never actually double-checked.
 - [x] Add :func_signature attr to Ore::Func, and it should be an Ore::Func_Signature instance 
 - [x] Tags on types. `Array<Type>`, `Dictionary<Type,Type>`
+- [x] Tagged-type declarations (`String<Dictionary> {}`, `String<Number> {}`, ...)
+- [x] Route registration bug found while investigating the above: a named-handler route (`get://path some_handler`) was keyed in the route table by the handler function's *name* instead of `method:path`, so two different routes sharing one handler silently collided and the earlier one was dropped. Always keyed by `method:path` now.
+- [x] Bare annotated properties (`x: Number`) only self-declared on the Type at declaration time, not per-instance, so assigning to one inside `new` before ever reading it first raised `Cannot_Assign_Undeclared_Identifier`. Now self-declares eagerly per-instance, matching how the comma idiom (`x,`) already worked.

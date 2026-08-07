@@ -46,7 +46,7 @@ module Ore
 		end
 	end
 
-	class Tags_Expr < Expression
+	class Tag_Info_Expr < Expression
 		attr_accessor :types, :names # names[i] is nil for unnamed slots, e.g. `Type<String>` but has value for named slots, e.g. `Type<str: String>`
 	end
 
@@ -146,8 +146,7 @@ module Ore
 	end
 
 	class Identifier_Expr < Expression
-		attr_accessor :kind, :unpack, :scope_operator, :directive, :privacy, :binding, :type_tags
-		# todo: Rename @directive to @builtin
+		attr_accessor :kind, :unpack, :scope_operator, :directive, :privacy, :binding, :type_tags, :tag_default
 	end
 
 	class Composition_Expr < Expression

@@ -9,7 +9,7 @@
 @load 'ore/array.ore'
 @load 'ore/dictionary.ore'
 @load 'ore/string.ore'
-@load 'ore/tags.ore'
+@load 'ore/tag_info.ore'
 
 Iterable { # todo: This is unused, but here to remind me to think about how to make composing with Iterable behave like Protocols in Swift.
 	next {;}

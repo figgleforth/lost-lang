@@ -254,6 +254,7 @@ doubled  # [2, 4, 6]
 1. `if`/`elif`/`else`/`end`
 2. `unless` is the negation of `if`
 3. Can be used as inline modifiers
+4. Any value works as a condition (`nil`/`false`/`0`/`0.0` are falsy, everything else is truthy)
 
 ```ore
 if x > 10
@@ -703,6 +704,7 @@ User.delete(1)
 1. Compose with HTML element types from `ore/html.ore`
 2. `css_*` prefix sets inline CSS properties
 3. `html_*` prefix sets HTML attributes
+4. `.to_s()` renders an element and its children to string directly
 
 ```ore
 @load 'ore/html.ore'
@@ -930,45 +932,21 @@ lying(5)   # raises Ore::Type_Contract_Violation — declared Number, actually r
 
 ## Tags
 
-`<...>` attaches runtime, inspectable metadata — "tags" — to a type declaration, a standalone value, or a reference to an existing type:
-
-```ore
-Abc<Number> {}               # declaration — Number becomes part of Abc's declared tag schema
-x := Abc<Number>             # reference — tags an existing type without redeclaring or mutating it
-x: Abc<Number>               # same, as a type annotation
-thing: <String, Number>      # bare tags, no type name at all — a standalone value
-z := Abc<4815>               # a reference tagged with an actual value rather than a type
-z()                          # constructs Abc, with .tags available before new{;} runs
-Abc<4815>()                  # same, in one step
-```
-
-- A tag can be any expression, not just a type name (`Abc<1+2+3/123>` and `Abc<this, that>` both work), evaluated normally (so an identifier like `Number` resolves to the real type). 
-- Tags are reachable through `.tags`, `.tags.types` for the positional list, or `.tags.some_name` for a named tag (`Type<some_name: String> {}`).
-- They're not unpacked into `./`.
-- Tag values are never forwarded as constructor arguments either
-- `./tags` is bound onto an instance *before* `new{;}` runs so the constructor can read it, but whatever you actually pass in `(...)` still binds to `new`'s own declared params, completely separately:
+1. `<...>` attaches runtime-inspectable metadata to a type declaration, a value, or a reference to an existing type
+2. Each declared shape is its own type — `Abc<Number> {}` and `Abc<String> {}` don't share `new`/methods
+3. A reference matches a declared shape by type (like overload resolution), including types it composes and not just its own name — no match raises `Ore::Undeclared_Tagged_Type`
+4. Reachable through `.tags` (`.tags.types`, or `.tags.some_name` for named tags) — bound before `new{;}` runs, never forwarded as constructor args
 
 ```ore
 String<dict: Dictionary> {
-    new { str: String = "";
-        value = str
-    }
-    to_s {;
-        final := value
-        final += "{"
-        for tags.dict
-            final += "`key`::`value`, "
-        end
-        final += "}"
-    }
+    to_s {; "dict: `tags.dict`" }
+}
+String<num: Number> {
+    to_s {; "number: `tags.num`" }
 }
 
-dict := {x=0, y=1, z=2}
-a := String<dict>()
-b := String<dict>("My dict: ")
-
-a.to_s()   # "{x::0, y::1, z::2, }"
-b.to_s()   # "My dict: {x::0, y::1, z::2, }"
+String<{x=1}>().to_s()   # "dict: {x: 1}"
+String<5>().to_s()       # "number: 5"
 ```
 
 ## Shorthand Nil-Initialization

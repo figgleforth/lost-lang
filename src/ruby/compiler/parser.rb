@@ -348,7 +348,7 @@ module Ore
 		def parse_tags
 			return nil unless curr? '<'
 			start = curr_lexeme
-			Ore::Tags_Expr.new.tap do |it|
+			Ore::Tag_Info_Expr.new.tap do |it|
 				it.lexeme = Ore::Lexeme.new :tags, '<>'
 				it.types  = []
 				it.names  = []
@@ -361,6 +361,13 @@ module Ore
 					else
 						parse_expression(precedence_for('<'))
 					end
+
+					# A named slot can carry a default (`dict: Dictionary = {}`) for when it's not supplied at the reference/construction site. `=` binds looser than `precedence_for('<')`, so #parse_expression above already stopped right before it, leaving it for us here.
+					if element.is_a?(Ore::Identifier_Expr) && element.type && curr?('=')
+						eat '='
+						element.tag_default = parse_expression(precedence_for('<'))
+					end
+
 					it.types << element
 					it.names << (element.is_a?(Ore::Identifier_Expr) && element.type ? element.value : nil)
 					eat if curr? ','

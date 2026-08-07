@@ -212,6 +212,8 @@ Identifiers starting with `_` are considered private by convention (e.g., `_priv
 - Using `./` outside an instance context raises `Cannot_Use_Instance_Scope_Operator_Outside_Instance`
 - Using `../` outside a type context raises `Cannot_Use_Type_Scope_Operator_Outside_Type`
 
+**Dot access (`x.y`)** resolves `y` only against `x` (plus global scope) via `#interp_member_access` (`interpreter.rb`), never the ambient call stack — without this, a member missing on `x` could fall through to an unrelated same-named member still active further down the interpreter's stack (e.g. the very method currently executing) instead of raising `Undeclared_Identifier`.
+
 ## Static Declarations
 
 Type-level (static) members are declared using the `../` scope operator:
@@ -294,13 +296,13 @@ Tags (see below) factor into all five: `===`/`=!=` require both the composed-typ
 
 ## Tags
 
-`<...>` attaches runtime-inspectable metadata ("tags") to a type declaration, a standalone value, or a reference to an existing type. Parsed by `parse_tags` in `parser.rb` into `Ore::Tags_Expr`; interpreted by `interp_tags`/`interp_type` in `interpreter.rb` into an `Ore::Tags` instance (`src/ruby/external/ruby/tags.rb`, paired with `ore/tags.ore`).
+`<...>` attaches runtime-inspectable metadata ("tags") to a type declaration, a standalone value, or a reference to an existing type. Parsed by `parse_tags` in `parser.rb` into `Ore::Tags_Expr`; interpreted by `interp_tags`/`interp_type` in `interpreter.rb` into an `Ore::Tag_Info` instance (`src/ruby/external/ruby/tag_info.rb`, paired with `ore/tag_info.ore`).
 
 ```ore
-Abc<Number> {}            # declaration — Number becomes part of Abc's declared tag schema
+Abc<Number> {}            # declaration — Number becomes part of Abc's tag_info_declaration
 x := Abc<Number>           # reference — dup of the existing Abc type, tagged; doesn't mutate the original
 x: Abc<Number>             # same, as a type annotation
-thing: <String, Number>    # bare tags, no type name at all — a standalone Ore::Tags value
+thing: <String, Number>    # bare tags, no type name at all — a standalone Ore::Tag_Info value
 z := Abc<4815>             # a reference tagged with an actual value rather than a type
 z()                        # constructs Abc, with .tags bound before new{;} runs
 Abc<4815>()                # same, in one step
@@ -312,9 +314,25 @@ Def()                      # untagged types are completely unaffected
 - Named tags (`Type<some_string: String, num: Number> {}`) reuse `parse_identifier_expr`'s existing `: Type` annotation parsing for each slot — no separate grammar needed
 - Tags are only ever reachable via `.tags` (`.tags.types`, `.tags.some_string` for named slots) — never auto-unpacked into `./`
 - A bare identifier immediately followed by `,` inside `<...>` (`<String, Number>`) is special-cased in `parse_tags` to parse as a plain identifier rather than the nil-init idiom (`ident,` ⇒ `ident = ident or nil`), which would otherwise misfire on the exact same shape
-- Reference forms (`x := Abc<Number>`) `dup` the existing type rather than mutating it in place — `Object#dup` is shallow, so `@declarations`/`@static_declarations` are explicitly re-forked too; otherwise tagging one reference would silently mutate every other reference (and the type itself), since they'd share the same underlying Hash/Set
+- Reference forms (`x := Abc<Number>`) `dup` the matched variant (see below) rather than mutating it in place — `Object#dup` is shallow, so `@declarations`/`@static_declarations` are explicitly re-forked too, otherwise tagging one reference would silently mutate every other reference sharing that variant
 - Constructing from a tagged reference binds `.tags` onto the instance *before* `type.expressions` (and therefore `new{;}`) run, so `new`'s own body can read `.tags` — but tag values are never forwarded as constructor arguments; whatever `(...)` actually passes still binds to `new`'s own declared params, entirely separately
-- A named tag's value, supplied positionally at the reference site (`Woof<'hello', 4815>`, never `Woof<key: 'hello'>`), gets re-associated with the *type's own* declared schema names before landing on the instance, so `.tags.key` still resolves correctly
+- A named tag's value, supplied positionally at the reference site (`Woof<'hello', 4815>`, never `Woof<key: 'hello'>`), gets re-associated with the *matched variant's own* `tag_info_declaration` names before landing on the instance, so `.tags.key` still resolves correctly
+
+### Each declared shape is its own type
+
+`Abc<Number> {}` and `Abc<String> {}` are independent `Ore::Type` objects, not one shared type with two shapes bolted on — declaring a shape creates a fresh type seeded from a copy of the *bare* type's own body (if one exists at declaration time), so one shape's `new`/methods can never clobber another's. This is handled by `#interp_tagged_type_declaration` (`interpreter.rb`), a sibling of `#interp_bare_type_declaration` (used for plain, untagged `Type { ... }`, which still reopens/extends one shared object as before).
+
+Each variant is stored under a mangled key built from its shape's *types* only, never names — e.g. `String<Dictionary>` for `String<dict: Dictionary> {}` — since a reference can only ever supply values positionally and so could never reproduce a name in its own lookup key (`#tag_variant_key`).
+
+A reference resolves by inferring a type name for each supplied value and matching that against declared keys — but the match isn't exact-name-only: `#tag_candidate_type_names` returns every type a value composes (its own name first, then everything it composes), so e.g. a `Div` satisfies a slot declared `Dom` even though nothing in `ore/html.ore` is literally named `Dom`. `#find_tagged_type_variant` tries combinations of each slot's candidates, preferring exact matches first, and a reference with no matching declared variant raises `Ore::Undeclared_Tagged_Type` — there's no fallback to untyped/ad-hoc tagging.
+
+```ore
+String<Dictionary> { to_s {; "I'm a dict-tagged string" } }
+String<Number>     { to_s {; "I'm a number-tagged string" } }
+
+String<{x=1}>().to_s()   # "I'm a dict-tagged string"   -- {x=1} is a Dictionary
+String<5>().to_s()       # "I'm a number-tagged string" -- 5 is a Number
+```
 
 ### Confirmed example
 
@@ -340,9 +358,13 @@ b.to_s()   # "My dict: {x::0, y::1, z::2, }"
 
 ### Runtime wiring
 
-- `Ore::Tags < Instance`, not `Scope` — the `enclosing_scope` method-lookup fallback used for `arr.push(...)`-style calls (see `#interp_identifier`) is gated on `is_a?(Ore::Instance)`, and `Tags` needs that same fallback for `ore/tags.ore`'s own declarations (`==`, `include?`) to be reachable at all
-- Every `Ore::Tags.new` call site also calls `link_instance_to_type(tags, 'Tags')`, linking it to the type declared by `ore/tags.ore` (loaded via `preload.ore`)
+- `Ore::Tag_Info < Instance`, not `Scope` — the `enclosing_scope` method-lookup fallback used for `arr.push(...)`-style calls (see `#interp_identifier`) is gated on `is_a?(Ore::Instance)`, and `Tag_Info` needs that same fallback for `ore/tag_info.ore`'s own declarations (`==`, `include?`) to be reachable at all
+- Every `Ore::Tag_Info.new` call site also calls `link_instance_to_type(tag_info, 'Tag_Info')`, linking it to the type declared by `ore/tag_info.ore` (loaded via `preload.ore`)
 - `.tags` is exposed on `Type`/`Instance` via `declare_tags` (`interpreter.rb`) — only added when a scope actually has tags, and marked as a static declaration so it's readable straight off a bare `Type`, not just an instance
+- `Type` (and therefore `Instance`, which subclasses it) carries two separate accessors, both holding an `Ore::Tag_Info`:
+  - `.tag_info` — what a specific reference or instance was actually tagged with (`Abc<4815>`). Only ever set on an explicit `Abc<...>` reference, never on the bare declared type — its mere presence is what distinguishes "explicitly referenced" from "just the declared type" for `===`/`=!=`/etc. and for whether construction binds `.tags` at all
+  - `.tag_info_declaration` — the type's own declared shape (`Abc<dict: Dictionary = {}> {}`): named/positional slots, annotations, and defaults. A tagged reference looks here to re-associate positional call-site values with names and fall back to defaults
+  - Both live on `Type`, not `Scope`, because a tagged reference is a `dup` of the type (same Ruby class as the type itself), so a `Type`-vs-`Instance` check can't stand in for the "declared" vs "supplied" distinction — see the comments on `Type#tag_info`/`Type#tag_info_declaration` in `scopes.rb`
 
 ## Identifier Naming Conventions
 
@@ -681,6 +703,8 @@ else
 end
 ```
 
+**Truthiness** (`#truthy?` in `interpreter.rb`) is uniform across all four conditional forms (`if`/`unless`/`while`/`until`): `nil`/`false`/`0`/`0.0` are falsy, everything else — Arrays, Strings, Instances, whatever — is truthy.
+
 ### Return Statement
 
 The `return` keyword exits a function and returns a value. It properly propagates even when used inside loops:
@@ -715,7 +739,7 @@ find { func;
 - **Class names**: Use `This_Case` (capitalized with underscores), not `ThisCase`
 - **Method definitions**: Omit parentheses - `def something arg` not `def something(arg)`
 - **Method calls**: Omit parentheses where possible - `foo.bar arg` not `foo.bar(arg)`
-- **Comments**: Only add comments for non-obvious code. Don't comment obvious operations
+- **Comments**: Only add comments for non-obvious code — don't comment obvious operations. Keep each comment to 1-2 sentences on a single `#` line that wraps naturally in the editor; only start a new `#` line for a genuinely separate second point, never to manually wrap one long sentence across multiple lines
 
 ## Testing
 
@@ -918,6 +942,7 @@ The `@load` directive allows importing Ore files:
 - Interpreter caches parsed expressions in `@cached_expressions_by_filepath` to prevent duplicate parsing
 - Files are loaded into a specified scope via `Interpreter#load_file_into_scope`
 - Expressions are cached keyed by resolved filepath
+- Comment lexemes are filtered out before parsing, matching `#run`'s top-level behavior — otherwise a trailing comment at the end of a loaded file's function/program body would silently become that body's return value
 - The target scope depends on the call form:
   - Bare `@load 'file'` merges the file's top-level declarations directly into the current scope (`stack.last`) — this is how `ore/preload.ore` loads the stdlib, so e.g. `String` lands as a plain global identifier
   - `some_lib := @load 'file'` instead creates a fresh `Ore::Scope` named after the left-hand identifier, loads the file into *that*, and assigns it — giving real namespace isolation, e.g. `some_lib.square(5)`

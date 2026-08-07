@@ -8,6 +8,22 @@ Dom {
 	}
 
 	render {; children }
+
+	# Renders this element, and its children, to a string.
+	to_s {;
+		inner   := render()
+		content := if inner.?uniq()
+			final := ''
+			for inner
+				final += it.?to_s() or it
+			end
+			final
+		else
+			inner.?to_s() or inner
+		end
+
+		"<`html_element`>`content`</`html_element`>"
+	}
 }
 
 ```Predefined Dom elements```

@@ -1,0 +1,38 @@
+# A variety of [tagged](#tbd) Types.
+
+```
+dict := { x=0, y=0 }
+
+str := String<dict>()
+str.to_s()  # "{ x::0  y::0 }"
+
+str = String<dict>("Prefix before the dict: ")
+str.to_s()  # "Prefix before the dict: { x::0  y::0 }"
+```
+String<dict: Dictionary> {
+	to_s {;
+		final := ./value
+		final += '{'
+		for tags.dict
+			final += " `key`::`value` "
+		end
+		final += '}'
+	}
+}
+
+
+```
+@load 'ore/html.ore'
+@load 'examples/tagged_types.ore'
+
+dom := Div([H1('Hello')])
+
+str := String<dom>()
+str.to_s()  # '<div> <h1>Hello</h1> </div>'
+```
+@load 'ore/html.ore'
+String<dom: Dom> {
+	to_s {;
+		tags.dom.?to_s() # Dom renders the Html through a to_s{;} call.
+	}
+}

@@ -1,6 +1,6 @@
 module Ore
 	class Scope
-		attr_accessor :enclosing_scope, :sibling_scopes, :declarations, :name, :type_by_identifier, :static_declarations, :tags
+		attr_accessor :enclosing_scope, :sibling_scopes, :declarations, :name, :type_by_identifier, :static_declarations
 
 		def initialize name = nil
 			@name                = name
@@ -74,6 +74,11 @@ module Ore
 
 	class Type < Scope
 		attr_accessor :expressions, :types, :routes
+		# Holds an Ore::Tag_Info, exposed to Ore code as `.tags` regardless (see #declare_tags) -- this is just the Ruby-side name.
+		attr_accessor :tag_info
+		# A type's own tag declaration (e.g. `Abc<dict: Dictionary = {}> {}`)'s named/positional slots, annotations, and defaults -- kept separate from `.tag_info`, which is only ever set on an explicit `Abc<...>` reference, never the bare type (see #interp_type_call).
+		# Both live on Type, not Scope, since a tagged reference is a dup of the type (same class), so Type/Instance can't stand in for this distinction.
+		attr_accessor :tag_info_declaration
 
 		def initialize name = nil
 			super name
@@ -108,6 +113,20 @@ module Ore
 		attr_accessor :http_method, :path, :handler, :parts, :param_names
 	end
 
+	class Any < Scope
+		ANY = new()
+
+		def self.shared
+			ANY
+		end
+
+		private_class_method :new
+
+		def initialize
+			super 'Any'
+		end
+	end
+
 	class Nil < Scope # Like Ruby's NilClass, this represents the absence of a value.
 		NIL = new()
 
@@ -118,7 +137,7 @@ module Ore
 		private_class_method :new # prevent external instantiation
 
 		def initialize
-			super 'nil'
+			super 'Nil'
 		end
 	end
 

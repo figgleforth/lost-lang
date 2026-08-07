@@ -18,6 +18,10 @@ module Ore
 	class Undeclared_Identifier < Error
 	end
 
+	class Undeclared_Tagged_Type < Error
+		# When a tagged-type reference (`Abc<Number>`) has no declared variant matching its shape (`Abc<Number> {}`)
+	end
+
 	class Cannot_Reassign_Constant < Error
 	end
 
