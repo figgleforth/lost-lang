@@ -681,21 +681,24 @@ db.delete_table('users')
 
 ## Record ORM
 
-1. Compose with `Record` type
-2. Set static `../database` and instance `table_name`
+1. Compose with `Table` type
+2. Set static `../database` and instance `table_name` (or call `infer_table_name_from_class!()` to derive it, e.g. `User` → `'users'`)
 
 ```ore
-@load 'ore/record.ore'
+@load 'ore/table.ore'
 
-User | Record {
+User | Table {
     ../database := ~/db
     table_name := 'users'
 }
 
 # CRUD operations
 User.create({name: 'Alice', email: 'alice@example.com'})
-users := User.all()       # Array of Dictionaries
-user := User.find(1)      # Dictionary
+users := User.all()                          # Array of Dictionaries
+user := User.find(1)                         # Dictionary
+User.find_by({email: 'alice@example.com'})   # Dictionary, or nil
+User.where({name: 'Alice'})                  # Array of Dictionaries
+User.update(1, {name: 'Alicia'})
 User.delete(1)
 ```
 

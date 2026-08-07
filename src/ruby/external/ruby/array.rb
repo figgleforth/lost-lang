@@ -53,6 +53,10 @@ module Ore
 			# I think there's more to this than a simple evaluation. Tbd...
 			values == other&.values
 		end
+
+		def + other
+			Ore::Array.new(values + other.values)
+		end
 	end
 
 	class Tuple < Ore::Array

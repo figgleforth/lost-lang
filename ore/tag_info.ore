@@ -5,6 +5,12 @@ Tag_Info {
 		left.types == right.types
 	}
 
+	@operator + @infix 700 { left, right;
+		info := Tag_Info()
+		info.types = left.types + right.types
+		info
+	}
+
 	include? { type;
 		types.include?(type)
 	}

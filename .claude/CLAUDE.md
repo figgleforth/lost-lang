@@ -81,7 +81,7 @@ The AST is executed to produce output:
 - `scopes.rb` - All scope types and built-in types:
 	- `Global < Scope` - The global scope; pushed as the bottom of the stack on first `run`; standard library declarations live here
 	- `Type`, `Instance`, `Func`, `Route`, `Return` - Scope hierarchy
-	- `String`, `Array`, `Number`, `Dictionary`, `Server`, `Record`, `Database`, etc. - Built-in types
+	- `String`, `Array`, `Number`, `Dictionary`, `Server`, `Table`, `Database`, etc. - Built-in types
 - `errors.rb` - Runtime error definitions
 
 ### Systems (src/ruby/systems/)
@@ -255,11 +255,11 @@ Ore uses composition operators instead of inheritance. Applied as `Class | Other
 
 Multiple operators can be chained: `Admin | Read_Permissions | Write_Permissions { }`.
 
-Built-in types like `Server`, `Record`, and `Dom` are composed this way:
+Built-in types like `Server`, `Table`, and `Dom` are composed this way:
 
 ```ore
 Web_App | Server { get:// {; "Hello" } }
-Post | Record { ../database := ~/db; table_name := 'posts' }
+Post | Table { ../database := ~/db; table_name := 'posts' }
 Layout | Dom { render {; Html([Body("Hello")]) } }
 ```
 
@@ -792,21 +792,24 @@ db.tables()                # => ['users']
 
 ### Record ORM
 
-The `Record` type provides ActiveRecord-style ORM functionality:
+The `Table` type (`ore/table.ore`) provides ActiveRecord-style ORM functionality:
 
 ```ore
-@load 'ore/record.ore'
+@load 'ore/table.ore'
 
-User | Record {
+User | Table {
     ../database := ~/db     # Set database (static declaration)
-    table_name := 'users'
+    table_name := 'users'   # or call ../infer_table_name_from_class!() instead — derives it from the composed type name, e.g. "User" -> "users"
 }
 ```
 
-**Record class methods (static):**
+**Table class methods (static):**
 - `all()` - Fetch all records as Array of Dictionaries
-- `find(id)` - Find record by ID, returns Dictionary
-- `create(attributes)` - Insert new record, returns ID
+- `find(id)` - Find record by ID, returns Dictionary or nil
+- `find_by(attributes)` - Find first record matching a Dictionary of conditions, returns Dictionary or nil
+- `where(attributes)` - Find all records matching a Dictionary of conditions, returns Array of Dictionaries
+- `create(attributes)` - Insert new record, returns the inserted ID
+- `update(id, attributes)` - Update record by ID
 - `delete(id)` - Delete record by ID
 
 ```ore
@@ -817,8 +820,11 @@ User.create({name: "Bob", email: "bob@example.com"})
 `Query records
 users := User.all()        # => Array of Dictionary instances
 user := User.find(1)       # => Dictionary with {id: 1, name: "Alice", ... }
+User.find_by({email: "alice@example.com"})
+User.where({name: "Alice"})
 
-`Delete records
+`Update and delete records
+User.update(1, {name: "Alicia"})
 User.delete(1)
 ```
 
@@ -826,7 +832,7 @@ User.delete(1)
 
 ```ore
 @load 'ore/database.ore'
-@load 'ore/record.ore'
+@load 'ore/table.ore'
 
 db := Sqlite('./temp/blog.db')
 @connect db
@@ -839,7 +845,7 @@ db.create_table('posts', {
 })
 
 # Define model
-Post | Record {
+Post | Table {
     ../database := ~/db
     table_name := 'posts'
 }
@@ -855,8 +861,8 @@ end
 
 **Implementation:**
 - Database operations use Ruby's Sequel gem
-- Record methods are proxy methods (see `src/ruby/runtime/scopes.rb`)
-- Records return `Ore::Dictionary` instances
+- Table methods are proxy methods (see `src/ruby/external/ruby/table.rb`)
+- Table methods return `Ore::Dictionary` instances, not typed model instances (see `table.rb`'s own `# todo: Convert this to a Record instance`)
 - Static declarations (`..database`) link models to database
 
 ## Web Server Features

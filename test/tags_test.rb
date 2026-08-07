@@ -46,8 +46,8 @@ class Tags_Test < Base_Test
 	def test_interprets_standalone_tags_literal_to_tags_instance
 		out = Ore.interp '<String, Number>'
 		assert_kind_of Ore::Tag_Info, out
-		assert_equal 'String', out.types[0].name
-		assert_equal 'Number', out.types[1].name
+		assert_equal 'String', out.tag_types[0].name
+		assert_equal 'Number', out.tag_types[1].name
 	end
 
 	def test_tags_instance_types_accessible_from_ore
@@ -201,10 +201,10 @@ class Tags_Test < Base_Test
 		dict_variant, num_variant = out.values
 
 		assert_equal ['dict'], dict_variant.tag_info_declaration.names
-		assert_equal 'Dictionary', dict_variant.tag_info_declaration.types.first.name
+		assert_equal 'Dictionary', dict_variant.tag_info_declaration.tag_types.first.name
 
 		assert_equal ['num'], num_variant.tag_info_declaration.names
-		assert_equal 'Number', num_variant.tag_info_declaration.types.first.name
+		assert_equal 'Number', num_variant.tag_info_declaration.tag_types.first.name
 	end
 
 	def test_tag_variant_key_builds_mangled_key_from_type_names
@@ -279,6 +279,26 @@ class Tags_Test < Base_Test
 		    Thing<Combo_Alpha(), Combo_Beta()>().to_s()
 		CODE
 		assert_equal 'matched', out
+	end
+
+	def test_unnamed_tag_value_that_is_a_tag_info_spreads_into_the_shape
+		type = Ore.interp <<~CODE
+		    DEFAULT_COLUMNS := <id: Number, created_at: Number>
+		    Thing<DEFAULT_COLUMNS> {}
+		CODE
+		assert_equal %w(id created_at), type.tag_info_declaration.names
+		assert_equal %w(Number Number), type.tag_info_declaration.tag_types.map(&:name)
+	end
+
+	def test_spread_tag_info_slots_bind_correctly_at_construction
+		out = Ore.interp <<~CODE
+		    DEFAULT_COLUMNS := <id: Number, created_at: Number>
+		    Thing<DEFAULT_COLUMNS> {}
+
+		    t := Thing<5, 1234>()
+		    (t.tags.id, t.tags.created_at)
+		CODE
+		assert_equal [5, 1234], out.values
 	end
 
 	def test_redeclaring_same_shape_extends_the_same_variant

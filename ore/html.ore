@@ -12,7 +12,7 @@ Dom {
 	# Renders this element, and its children, to a string.
 	to_s {;
 		inner   := render()
-		content := if inner.?uniq()
+		content := if inner.?uniq # Checking whether inner responds to uniq{;}, without actually calling it.
 			final := ''
 			for inner
 				final += it.?to_s() or it

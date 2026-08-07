@@ -11,3 +11,7 @@ Table {
 	../update { id, dict; @ruby }
 	../delete { id; @ruby }
 }
+
+DEFAULT_COLUMNS := <id: Number, created_at: Number>
+Record<DEFAULT_COLUMNS> | Table {
+}

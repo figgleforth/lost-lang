@@ -21,6 +21,7 @@
 - [ ] calling () on a dict field that shadows a builtin method but isn't callable raises a misleading error instead of a clear not-callable error. `dict := {keys: 4}, dict.keys()` raises `Cannot_Initialize_Non_Type_Identifier`
 - [ ] `<=>` works for Numbers/Strings only by accident: it falls through to `left.send('<=>', right)` in `interp_infix`, which works because number/string literals decay to plain Ruby values with a native `<=>`. Custom Instances have no `<=>` defined, so `<=>` on user-defined types raises rather than erroring cleanly or doing something sensible.
 - [ ] Cannot call any members on a bare Number: `123.numerator` (Undeclared_Identifier). This works though: `Number(123).numerator`
+- [ ] `Number.what := 456` interprets and returns 456, but subsequent `Number.what` expressions result in `Undeclared_Identifier`
 
 **Parser robustness:**
 - [ ] `src/compiler/parser.rb`: a comma is discarded instead of implying a tuple in `#complete_expression` (possibly related to tuple unpacking).

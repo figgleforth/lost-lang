@@ -1417,10 +1417,10 @@ module Ore
 					# *that value's own* family name rather than treating "X" itself as a type name --
 					# `X<duck>` should behave exactly like `String<duck>`, since `.name` on any Type
 					# object (dup'd or not) always reflects its true declared family.
-					aliased    = stack.last.has?(expr.name) && stack.last[expr.name]
+					aliased     = stack.last.has?(expr.name) && stack.last[expr.name]
 					lookup_name = aliased.is_a?(Ore::Type) ? aliased.name : expr.name
 
-					existing = find_tagged_type_variant lookup_name, supplied.types
+					existing = find_tagged_type_variant lookup_name, supplied.tag_types
 					unless existing.is_a? Ore::Type
 						raise Ore::Undeclared_Tagged_Type.new(expr, self)
 					end
@@ -1440,11 +1440,11 @@ module Ore
 					# Eventually I want to support named arguments like <key='hello'>.
 					declaration          = existing.tag_info_declaration
 					declaration_names    = declaration.is_a?(Ore::Tag_Info) ? declaration.names : []
-					declaration_types    = declaration.is_a?(Ore::Tag_Info) ? declaration.types : []
+					declaration_types    = declaration.is_a?(Ore::Tag_Info) ? declaration.tag_types : []
 					declaration_defaults = declaration.is_a?(Ore::Tag_Info) ? declaration.defaults : {}
 
 					# A default only fills in for a slot that just re-asserts the declaration's own declared type for that slot (`Abc<Dictionary>()`, re-stating `dict`'s own type rather than giving it a value) — never when a real value was actually supplied there (`Abc<{x=1}>()` must keep {x=1}, not fall back to the default).
-					resolved_values = supplied.types.each_with_index.map do |value, i|
+					resolved_values = supplied.tag_types.each_with_index.map do |value, i|
 						name = declaration_names[i]
 						if name && declaration_defaults.key?(name) && value.equal?(declaration_types[i])
 							declaration_defaults[name]
@@ -1497,7 +1497,7 @@ module Ore
 		# Stored under a mangled key (e.g. "String<Dictionary>") built from the shape's types only, never names, since a reference can only ever supply values positionally. See #tag_variant_key/#tag_type_name.
 		def interp_tagged_type_declaration expr
 			shape      = interpret expr.tags
-			type_names = shape.types.map { |value| tag_type_name value }
+			type_names = shape.tag_types.map { |value| tag_type_name value }
 			lookup_key = tag_variant_key expr.name, type_names
 
 			existing = stack.last.has?(lookup_key) && stack.last[lookup_key]
@@ -2294,21 +2294,34 @@ module Ore
 		end
 
 		def interp_tags expr
+			values   = []
+			names    = []
 			defaults = {}
 
-			values = expr.types.each_with_index.map do |tag, i|
+			expr.types.each_with_index do |tag, i|
 				if expr.names[i]
 					# Named slot, e.g. `some_string: String` — the slot's own identifier (`some_string`) is just a label, not something to look up; resolve its declared type instead. A default (`some_string: String = 'x'`) is what gets bound onto an instance's.tags in place of this shape's type, when nothing overrides it at construction — see #interp_type_call.
 					type_ref                = Ore::Identifier_Expr.new
 					type_ref.lexeme         = tag.type
 					defaults[expr.names[i]] = interpret(tag.tag_default) if tag.tag_default
-					interpret type_ref
+					values << interpret(type_ref)
+					names << expr.names[i]
 				else
-					interpret tag
+					value = interpret tag
+
+					if value.is_a? Ore::Tag_Info
+						# Spread: an unnamed slot whose value is itself a Tag_Info splices that Tag_Info's own slots into this position instead of nesting it as one opaque value.
+						values.concat value.tag_types
+						names.concat value.names
+						defaults.merge! value.defaults
+					else
+						values << value
+						names << nil
+					end
 				end
 			end
 
-			tag_info = Ore::Tag_Info.new values, expr.names, defaults
+			tag_info = Ore::Tag_Info.new values, names, defaults
 			link_instance_to_type tag_info, 'Tag_Info'
 			tag_info
 		end

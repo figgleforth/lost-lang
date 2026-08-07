@@ -701,7 +701,7 @@ module Ore
 			elsif (curr?('{') || curr?(:identifier, '{') || curr?(:identifier, ':', :Identifier, '{') || curr?(SCOPE_OPERATORS, :identifier, '{')) && peek_contains?(Ore::FUNCTION_DELIMITER, '}')
 				parse_func precedence, named: curr?(:identifier)
 
-			elsif curr?('<', TYPE_IDENTIFIER, '>') || curr?('<', TYPE_IDENTIFIER, ',')
+			elsif curr?('<', TYPE_IDENTIFIER, '>') || curr?('<', TYPE_IDENTIFIER, ',') || curr?('<', :identifier, ':')
 				parse_tags
 
 			elsif curr?(:Identifier, '{') || curr?(:Identifier, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, '{') || curr?(TYPE_IDENTIFIER, '<')
