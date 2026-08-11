@@ -1,0 +1,22 @@
+``` Introduction
+
+A constant's name must be UPPERCASE, and once declared it can never be reassigned -- attempting to `=` a new value onto it raises `Ore::Cannot_Reassign_Constant`.
+```
+TOTAL_SURVIVORS := 48
+FLIGHT_NUMBER := 815
+
+@puts "total survivors: `TOTAL_SURVIVORS`"   # total survivors: 48
+@puts "flight number: `FLIGHT_NUMBER`"       # flight number: 815
+
+# TOTAL_SURVIVORS = 47  -- raises Ore::Cannot_Reassign_Constant
+
+
+``` The rule applies to any declaration form
+
+The same protection holds whether the constant was declared with `:=` or `: Type =` -- what matters is that the identifier itself is UPPERCASE, not how it was declared.
+```
+MAX_RAFT_CAPACITY: Number = 4
+
+@puts "max raft capacity: `MAX_RAFT_CAPACITY`"   # max raft capacity: 4
+
+# MAX_RAFT_CAPACITY = 6  -- raises Ore::Cannot_Reassign_Constant

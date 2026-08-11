@@ -11,6 +11,14 @@ String {
 		./value = value
 	}
 
+	to_s {;
+		value
+	}
+
+	@operator == @infix { left: String, right: String;
+		left.value == right.value
+	}
+
 	downcase {; @ruby }
 	upcase {; @ruby }
 	split { delimiter := nil; @ruby }

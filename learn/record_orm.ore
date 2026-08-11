@@ -1,0 +1,57 @@
+``` Introduction
+
+`Table` (`ore/table.ore`) is an ActiveRecord-style ORM on top of `ore/database.ore` -- see learn/database.ore first if `Sqlite`/`@connect` are new to you. Compose a type with `Table`, point its static `../database` at a connected database, and give it a `table_name`.
+```
+@load 'ore/database.ore'
+@load 'ore/table.ore'
+
+db := Sqlite(':memory:')
+@connect db
+
+db.create_table('survivors', {
+	id: 'primary_key',
+	name: 'String'
+})
+
+Survivor | Table {
+	../database := ~/db
+	table_name := 'survivors'
+}
+
+
+``` infer_table_name_from_class!
+
+Instead of writing `table_name` out by hand, an instance can derive it from its own composed type name -- `Survivor` becomes `'survivors'`.
+```
+s := Survivor()
+s.infer_table_name_from_class!()
+@puts "table_name: `s.table_name`"   # table_name: survivors
+
+
+``` create and all
+
+`create` inserts a row and returns its new id. `all` fetches every row back as an Array of Dictionaries.
+```
+jack_id := Survivor.create({name: 'Jack'})
+Survivor.create({name: 'Kate'})
+
+@puts "all survivors: `Survivor.all()`"   # all survivors: [{id: 1, name: "Jack"}, {id: 2, name: "Kate"}]
+
+
+``` find, find_by, where
+
+`find` looks up by id. `find_by` returns the first row matching a Dictionary of conditions, or nil. `where` returns every matching row.
+```
+@puts "found by id: `Survivor.find(jack_id)`"           # found by id: {id: 1, name: Jack}
+@puts "found by name: `Survivor.find_by({name: 'Kate'})`"   # found by name: {id: 2, name: Kate}
+@puts "where name is Jack: `Survivor.where({name: 'Jack'})`"   # where name is Jack: [{id: 1, name: "Jack"}]
+
+
+``` update and delete
+
+```
+Survivor.update(jack_id, {name: 'Jack Shephard'})
+@puts "after update: `Survivor.find(jack_id)`"   # after update: {id: 1, name: Jack Shephard}
+
+Survivor.delete(jack_id)
+@puts "after delete: `Survivor.all()`"   # after delete: [{id: 2, name: "Kate"}]

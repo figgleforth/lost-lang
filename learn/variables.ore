@@ -1,0 +1,35 @@
+``` Introduction
+
+A variable's name must start with a lowercase letter or `_`, and may optionally end with `?` or `!` -- everything else about it is left to context, not punctuation. Capitalized names are reserved for types, UPPERCASE for constants, so lowercase is what's left for ordinary variables and functions.
+```
+survivors := 4
+_headcount := 4
+rescued? := false
+signal_fire! := true
+
+@puts "survivors: `survivors`"       # survivors: 4
+@puts "_headcount: `_headcount`"     # _headcount: 4
+@puts "rescued?: `rescued?`"         # rescued?: false
+@puts "signal_fire!: `signal_fire!`"   # signal_fire!: true
+
+
+``` Inferred declaration: :=
+
+`:=` declares a variable and infers its type from whatever's on the right -- no annotation needed, the value speaks for itself.
+```
+castaways := 48
+island_name := 'The Island'
+
+@puts "castaways: `castaways`"       # castaways: 48
+@puts "island_name: `island_name`"   # island_name: The Island
+
+
+``` Annotated declaration: : Type =
+
+`: Type =` declares a variable with an explicit type instead of leaving it to inference -- useful as documentation, or when the value alone doesn't make the intent obvious.
+```
+days_stranded: Number = 1
+distress_code: String = 'mayday'
+
+@puts "days_stranded: `days_stranded`"   # days_stranded: 1
+@puts "distress_code: `distress_code`"   # distress_code: mayday

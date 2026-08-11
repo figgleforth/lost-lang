@@ -1,0 +1,228 @@
+module Ore
+	class Expression
+		attr_accessor :value, :type, :l0, :c0, :l1, :c1, :source_file
+		attr_reader :lexeme
+
+		def initialize lexeme = nil
+			self.lexeme = lexeme
+		end
+
+		def lexeme= lexeme
+			case lexeme
+			when Ore::Lexeme
+				@value  = lexeme.value
+				@lexeme = lexeme
+			when ::String
+				@value  = lexeme
+				@lexeme = Ore::Lexeme.new Helpers.type_identifier?(lexeme), lexeme
+			end
+		end
+
+		# note; this was a stupid idea
+		def is compare
+			if compare.is_a? Symbol
+				compare == type
+			elsif compare.is_a? ::String
+				compare == value
+			elsif compare.is_a? Class
+				self.is_a? compare
+			else
+				compare == self
+			end
+		end
+
+		def isnt compare
+			is(compare) == false
+		end
+
+		def location
+			return nil unless l0 && c0
+			"#{source_file}:#{l0}:#{c0}" if source_file
+			"#{l0}:#{c0}"
+		end
+
+		def line_col
+			"#{l0}:#{c0}..#{l1}:#{c1}" if l0
+		end
+	end
+
+	class Param_Expr < Expression
+		attr_accessor :name, :label, :type, :default, :unpack
+	end
+
+	class Func_Expr < Expression
+		attr_accessor :name, :expressions, :signature
+
+		def signature
+			sig         = name&.value || ''
+			sig         += '{'
+			param_decls = expressions.select do |expr|
+				expr.is_a? Param_Expr
+			end
+			sig         += param_decls.map do |param|
+				label   = param.label ? "#{param.label.value}:" : ''
+				default = param.default ? "=#{param.default.value}" : ''
+				"#{label}#{param.name.value}#{default}"
+			end.join(',')
+			sig         += Ore::FUNCTION_DELIMITER
+			sig         += '}'
+			sig
+			# todo, Maybe bring back extra signature details.
+			# if expressions.any?
+			# 	n << '['
+			# 	n << expressions.join(',')
+			# 	n << ']'
+			# end
+		end
+	end
+
+	# get:// {;}
+	# put://whatever/:id {id;}
+	# post://book/:id/publish {id;}
+	class Route_Expr < Func_Expr
+		attr_accessor :http_method, :path, :expression, :param_names # The expression can be a function or an identifier
+	end
+
+	class Func_Signature_Expr < Expression
+		attr_accessor :signature, :params, :name
+	end
+
+	class Directive_Expr < Expression
+		attr_accessor :name, :expression, :message, :arguments
+	end
+
+	class Shape_Expr < Expression
+		attr_accessor :types, :names # names[i] is nil for unnamed fields, e.g. `Type<String>` but has value for named fields, e.g. `Type<str: String>`
+
+		def to_s
+			::String.new("<").tap do |str|
+				types.zip(names).each_with_index do |it, at|
+					type = it[0]
+					name = it[1] # Optional, may be nil
+
+					# For a named field (`s: String`), `type` is the whole Identifier_Expr
+					# (`.value` is the name "s", already captured in `name`) -- the actual
+					# type annotation lives on its `.type` Lexeme instead. An unnamed field can
+					# be any expression, not just a bare type-name identifier (`Abc<'users'>`,
+					# `Abc<1+2+3>`, ...) -- every Expression subtype carries a `.value` off its
+					# own lexeme via the shared base, even if it's not a perfect rendering of
+					# a compound expression; `.inspect` is the last-resort fallback for
+					# anything that isn't an Expression at all, so this never raises.
+					type = if name
+						type.type.value
+					elsif type.respond_to? :value
+						type.value
+					else
+						type.inspect
+					end
+
+					str << if name
+						"#{name}: #{type}"
+					else
+						type.to_s
+					end
+					str << "," unless at == types.length - 1
+				end
+
+				str << ">"
+			end
+		end
+	end
+
+	class Type_Expr < Expression
+		attr_accessor :name, :expressions, :shape
+		# A composition chain (`Abc|Def`, `A & B`, ...) with no `{ }` body -- a reference to an
+		# anonymous type built by applying the chain (`.expressions`, all Composition_Expr), not a
+		# declaration. See #Parser#parse_type_decl/#Interpreter#interp_type.
+		attr_accessor :anonymous_composition
+	end
+
+	class Number_Expr < Expression
+		# Useful reading.
+		# https://stackoverflow.com/a/18533211/1426880
+		# https://stackoverflow.com/a/1235891/1426880
+	end
+
+	class Symbol_Expr < Expression
+	end
+
+	class String_Expr < Expression
+		STYLES = %i(single double).freeze
+		attr_accessor :interpolated, :quotation_style
+
+		def initialize lexeme
+			super lexeme
+			@interpolated    = value.include? INTERPOLATE_CHAR
+			@quotation_style = lexeme.respond_to?(:quotation_style) ? lexeme.quotation_style : nil
+		end
+	end
+
+	class Prefix_Expr < Expression
+		attr_accessor :operator, :expression, :requires_expression
+	end
+
+	class Postfix_Expr < Expression
+		attr_accessor :operator, :expression
+	end
+
+	# :operator, :left, :right
+	class Infix_Expr < Expression
+		attr_accessor :operator, :left, :right
+	end
+
+	class Circumfix_Expr < Expression
+		attr_accessor :grouping, :expressions
+	end
+
+	class Nil_Init_Expr < Infix_Expr
+	end
+
+	class Operator_Expr < Expression
+		attr_accessor :custom, :precedence
+	end
+
+	class Operator_Overload_Expr < Expression
+		attr_accessor :func_expr, :fixity, :precedence
+	end
+
+	class Identifier_Expr < Expression
+		attr_accessor :kind, :unpack, :scope_operator, :directive, :privacy, :binding, :type_tags, :tag_default
+	end
+
+	class Composition_Expr < Expression
+		attr_accessor :operator, :identifier
+	end
+
+	class Conditional_Expr < Expression
+		attr_accessor :condition, :when_true, :when_false
+	end
+
+	class Call_Expr < Expression
+		attr_accessor :receiver, :arguments
+	end
+
+	class Subscript_Expr < Expression
+		attr_accessor :receiver, :expression
+	end
+
+	class Array_Index_Expr < Expression
+		attr_accessor :indices_in_order
+	end
+
+	class For_Loop_Expr < Expression
+		attr_accessor :collection, :stride, :body
+	end
+
+	class Fence_Expr < Expression
+	end
+
+	class Comment_Expr < Expression
+		attr_accessor :body
+	end
+
+	class Html_Fence_Expr < Expression
+		# ```html
+		# ```
+		attr_accessor :body, :element
+	end
+end

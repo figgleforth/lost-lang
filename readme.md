@@ -3,7 +3,7 @@
 [![justforfunnoreally.dev badge](https://img.shields.io/badge/justforfunnoreally-dev-2B7FFF)](https://justforfunnoreally.dev)
 ![Status of project Ruby tests](https://github.com/figgleforth/ore-lang/actions/workflows/tests.yml/badge.svg)
 
-Learn about the language below, or *[click here to get started using it](getting_started.md)*.
+Learn about the language below, or [in the learn section](learn/readme.md), or *[click here to get started using it](getting_started.md)*.
 
 ---
 
@@ -867,18 +867,20 @@ Currency { amount, name, code, }
 
 $42  # Currency(amount: 42, name: 'US Dollar', code: 'USD')
 
-# A type's own overload beats a same-named global one
-@operator -> @infix 300 { left, right; 999 }
+# A type's own overload beats a same-named global one. A fresh symbol (~>, not ->) since
+# declaring another global -> here would just overwrite the pipeline -> declared above it,
+# in the same global scope.
+@operator ~> @infix 300 { left, right; 999 }
 
 Wrapped {
     val,
     new { v; ./val = v }
-    @operator -> @infix 300 { left, right; left.val }
+    @operator ~> @infix 300 { left, right; left.val }
 }
 
 a := Wrapped(42)
-a -> 1          # 42 — Wrapped's own -> wins
-5 -> double     # 10 — global -> still applies to everything else
+a ~> 1          # 42 — Wrapped's own ~> wins
+5 ~> double     # 999 — global ~> still applies to everything else
 ```
 
 ## Runtime Type Contracts
@@ -896,18 +898,18 @@ x := 4
 x := 'hello'  # fine — re-declaring with := re-infers and re-locks the type
 x             # 'hello'
 
-y = 4         # raises Ore::Cannot_Reassign_Undeclared_Identifier — y was never declared
+y = 4         # raises Ore::Cannot_Assign_Undeclared_Identifier — y was never declared
 ```
 
 ## Function Signatures
 
-1. `Type{Param, Param;}` is a signature — a value describing a function's shape (its param types and return type), with no implementation
-2. A real function always declares its own return type inside its body, with `-> Type` at the end of its param list — `name: Type { }` on the outside is reserved for signatures only, never a real implementation
+1. `{Param, Param -> Type;}` is a signature — a value describing a function's shape (its param types and return type), with no implementation — same `-> Type` placement a real function uses, just with no body
+2. A real function always declares its own return type inside its body, with `-> Type` at the end of its param list before `;` — a self-declaring signature uses the same shape under its name (`double: {Number -> Number;}`)
 3. Assigning a function to a signature-typed identifier checks its actual shape, not just a name — mismatches raise `Ore::Type_Contract_Violation`, the same runtime type contract `:=` uses
 4. Any function with a declared return type is checked on every call — what it actually returns has to match, signature or not
 
 ```ore
-Currency_Formatter := String{Number;}    # takes a Number, returns a String
+Currency_Formatter := {Number -> String;}    # takes a Number, returns a String
 
 format_usd { cents: Number -> String;
     "$" + (cents / 100.0).to_s()

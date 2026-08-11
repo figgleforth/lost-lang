@@ -1,0 +1,44 @@
+@load 'ore/field.ore'
+
+# Valid fields:
+# <Field, m: Field, m2: Field = Field(), m3 := Field()>
+Shape {
+	fields: Array<Field> = []
+
+	names: Array<String> = []
+	type_names: Array<String> = []
+	values: Array = []
+
+	has? { field: Field -> Bool;
+		fields.include?(field)
+	}
+
+	include? { query;
+		fields.include?({;
+			it.name == query or it.type == query
+		})
+	}
+
+	to_s {;
+		formatted_fields := fields.map({; it.to_s() }).join(', ')
+		"<`formatted_fields`>"
+	}
+
+	# todo; implement set comparison as well
+	@operator == @infix { left, right;
+		left.fields == right.fields
+	}
+
+	@operator === @infix { left, right;
+		pairs := left.fields.zip(right.fields)
+		pairs.all?({;
+			it.0 === it.1
+		})
+	}
+
+	@operator + @infix { left, right;
+		info := Shape()
+		info.fields = left.fields + right.fields
+		info
+	}
+}

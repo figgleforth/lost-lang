@@ -1,0 +1,31 @@
+``` Introduction
+
+A trailing comma after a bare identifier declares it as `nil` -- shorthand for writing `identifier := nil` in full.
+```
+rescue_boat,
+@puts "rescue_boat: `rescue_boat`"   # rescue_boat: nil
+
+
+``` Same idiom inside a type body
+
+Declaring a field this way inside a `Type { }` body works exactly the same -- one uninitialized field per instance, defaulting to `nil` until something sets it.
+```
+Raft {
+	captain,
+	crew,
+}
+
+r := Raft()
+@puts "r.captain: `r.captain`"   # r.captain: nil
+@puts "r.crew: `r.crew`"         # r.crew: nil
+
+
+``` A bare annotation self-declares too
+
+`x: Number` with no `=` at all behaves the same way -- it's already self-declaring by virtue of the annotation, so it doesn't need `= nil` tacked on just to actually declare something. A bare tag annotation (`<...>`) works the same way.
+```
+altitude: Number
+@puts "altitude: `altitude`"   # altitude: nil
+
+cargo: <String, Number>
+@puts "cargo: `cargo`"   # cargo: nil

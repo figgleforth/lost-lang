@@ -1,0 +1,51 @@
+``` Introduction
+
+Arrays are created with `[]`. Backed by `Ore::Array`, a thin wrapper around a real Ruby array kept in `.values`. Elements are reachable by subscript or by dot notation -- both just index into the same underlying array.
+```
+raft_supplies := ['water', 'rope', 'tarp']
+@puts "by dot notation: `raft_supplies.0`"    # by dot notation: water
+@puts "by subscript: `raft_supplies[0]`"      # by subscript: water
+
+
+``` push and pop
+
+`push` adds to the end, `pop` removes from the end and returns what it removed.
+```
+raft_supplies.push('flare')
+@puts "after push: `raft_supplies`"          # after push: [water, rope, tarp, flare]
+@puts "popped: `raft_supplies.pop()`"        # popped: flare
+@puts "after pop: `raft_supplies`"           # after pop: [water, rope, tarp]
+
+
+``` length, first, last, reverse
+
+```
+@puts "length: `raft_supplies.length()`"      # length: 3
+@puts "first 2: `raft_supplies.first(2)`"     # first 2: [water, rope]
+@puts "last 2: `raft_supplies.last(2)`"       # last 2: [rope, tarp]
+@puts "reversed: `raft_supplies.reverse()`"   # reversed: [tarp, rope, water]
+
+
+``` include? and empty?
+
+```
+@puts "has rope? `raft_supplies.include?('rope')`"   # has rope? true
+@puts "raft_supplies empty? `raft_supplies.empty?()`"  # raft_supplies empty? false
+@puts "[] empty? `[].empty?()`"                       # [] empty? true
+
+
+``` map and filter
+
+Both take a function and run it against every element -- `map` collects each return value, `filter` keeps only elements the function returns truthy for.
+```
+survivors := ['Jack', 'Kate', 'Sawyer', 'Hurley']
+
+shouted := survivors.map({ name;
+	name.upcase()
+})
+@puts "shouted: `shouted`"   # shouted: [JACK, KATE, SAWYER, HURLEY]
+
+long_names := survivors.filter({ name;
+	name.length > 4
+})
+@puts "names longer than 4 letters: `long_names`"   # names longer than 4 letters: [Sawyer, Hurley]

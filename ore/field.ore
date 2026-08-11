@@ -1,0 +1,51 @@
+Field {
+	name: String
+	type: Any
+	value: Any
+
+	new { name: String, value := nil, type := nil;
+		./name  = name
+		./value = value
+		./type  = type
+	}
+
+	to_s {;
+		displayed_value := if value and type.?name == 'String'
+			if value.?quotation_style == 'single'
+				"'`value`'"
+			else
+				'"`value`"'
+			end
+		else
+			value
+		end
+
+		if name
+			if type and value
+				"`name`: `type.?name` = `displayed_value`"
+			elif type and not value
+				"`name`: `type.?name`"
+			elif value and not type
+				"`name` := `displayed_value`"
+			else
+				"`name`: Any"
+			end
+		else
+			if value
+				"`displayed_value`"
+			elif type
+				"`type.?name`"
+			else
+				"Any"
+			end
+		end
+	}
+
+	@operator == @infix { left: Field, right: Field;
+		left.name == right.name and left.type == right.type and left.value == right.value
+	}
+
+	@operator === @infix { left: Field, right: Field;
+		left.name == right.name and left.type == right.type
+	}
+}

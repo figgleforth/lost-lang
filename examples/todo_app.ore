@@ -44,7 +44,7 @@ Task_Item | Li {
 List_Of_Tasks | Ul {
 	tasks,
 
-	new { tasks = [];
+	new { tasks := [];
 		./tasks = tasks
 	}
 
@@ -137,7 +137,7 @@ Tasks_Controller {
 }
 
 App | Server | Tasks_Controller {
-	port := 80
+	port := 8080
 
 	controller := Tasks_Controller()
 

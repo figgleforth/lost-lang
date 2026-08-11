@@ -1,0 +1,40 @@
+``` Introduction
+
+Dictionaries are `{}` literals of key-value pairs. Backed by `Ore::Dictionary`, wrapping a real Ruby hash in `.hash`. Keys can be symbols, strings, or identifiers referencing those. Subscript access reads by key. Dot-access also reads by key.
+```
+survivor := {name: 'Jack', number: 23}
+@puts "by subscript: `survivor[:name]`"   # by subscript: Jack
+@puts "by dot-access: `survivor.number`"  # by dot-access: 23
+
+``` Subscript assignment
+
+An existing dictionary accepts new keys the same way it reads them -- through the subscript.
+```
+survivor[:status] = 'alive'
+@puts "after assignment: `survivor`"   # after assignment: {name: Jack, number: 23, status: alive}
+
+
+``` keys, values, count, empty?
+
+```
+@puts "keys: `survivor.keys()`"       # keys: [name, number, status]
+@puts "values: `survivor.values()`"   # values: [Jack, 23, alive]
+@puts "count: `survivor.count()`"     # count: 3
+@puts "survivor empty? `survivor.empty?()`"   # survivor empty? false
+@puts "{} empty? `{}.empty?()`"               # {} empty? true
+
+
+``` has_key?, delete, merge, fetch
+
+`merge` returns a new dictionary rather than changing the receiver. `fetch` looks up a key and falls back to a given default instead of raising when it's missing.
+```
+@puts "has :number? `survivor.has_key?(:number)`"   # has :number? true
+
+survivor.delete(:status)
+@puts "after delete: `survivor`"   # after delete: {name: Jack, number: 23}
+
+merged := survivor.merge({island: 'The Island'})
+@puts "merged: `merged`"     # merged: {name: Jack, number: 23, island: The Island}
+@puts "survivor after merge: `survivor`"   # survivor after merge: {name: Jack, number: 23} -- merge didn't mutate it
+
+@puts "fetch missing key with default: `survivor.fetch(:callsign, 'unknown')`"   # fetch missing key with default: unknown

@@ -1,0 +1,61 @@
+``` Introduction
+
+`if`/`elif`/`else`/`end` branches on a condition, and the whole thing is an expression -- its last-evaluated branch is its value, so it can be assigned directly.
+```
+water := 2
+
+mood := if water > 5
+	'plenty'
+elif water > 0
+	'rationing'
+else
+	'desperate'
+end
+
+@puts "mood: `mood`"   # mood: rationing
+
+
+``` unless is negated if
+
+`unless condition` runs its body when `condition` is falsy -- exactly `if !condition` spelled differently for readability.
+```
+raining := false
+
+shelter_note := unless raining
+	'no rush building the shelter'
+else
+	'get the shelter up now'
+end
+
+@puts "shelter_note: `shelter_note`"   # shelter_note: no rush building the shelter
+
+
+``` Inline modifier form
+
+`if` can trail a single statement instead of wrapping it in a block -- reads like a plain sentence.
+```
+rescued := true
+@puts 'someone is coming' if rescued   # someone is coming
+
+found_water := true
+@puts 'fill the bottles' if found_water   # fill the bottles
+
+
+``` Truthiness
+
+`nil`, `false`, `0`, and `0.0` are falsy. Everything else -- empty strings, empty arrays, any instance -- is truthy.
+```
+describe { value;
+	if value
+		'truthy'
+	else
+		'falsy'
+	end
+}
+
+@puts "nil is `describe(nil)`"       # nil is falsy
+@puts "false is `describe(false)`"   # false is falsy
+@puts "0 is `describe(0)`"           # 0 is falsy
+@puts "0.0 is `describe(0.0)`"       # 0.0 is falsy
+@puts "'' is `describe('')`"         # '' is truthy
+@puts "[] is `describe([])`"         # [] is truthy

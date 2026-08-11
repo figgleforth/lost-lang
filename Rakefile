@@ -1,5 +1,5 @@
 require 'minitest/test_task'
-require_relative 'src/ruby/ore'
+require_relative 'src/ore'
 require 'pp'
 
 task :default => [:test, :cloc]

@@ -1,5 +1,5 @@
 require 'minitest/autorun'
-require_relative '../src/ruby/ore'
+require_relative '../src/ore'
 require_relative 'base_test'
 
 class Regression_Test < Base_Test
@@ -544,5 +544,347 @@ class Regression_Test < Base_Test
 
 		out = Ore.lex '!(b)'
 		assert_equal '!', out[0].value
+	end
+
+	def test_operator_overload_with_omitted_precedence_falls_back_to_default_regression
+		out = Ore.interp '
+			@operator <+> @infix { left, right;
+				left + right
+			}
+			2 <+> 3 + 1
+		'
+		assert_equal 6, out
+
+		# A real, explicit precedence must still work exactly as before.
+		out = Ore.interp '
+			@operator <-> @infix 500 { left, right;
+				left - right
+			}
+			10 <-> 4
+		'
+		assert_equal 6, out
+	end
+
+	def test_bare_return_with_no_expression_yields_nil_regression
+		out = Ore.interp '
+			foo { ;
+				return
+			}
+			foo()
+		'
+		assert_nil out
+	end
+
+	def test_safe_navigation_swallows_missing_member_on_every_receiver_kind_regression
+		assert_nil Ore.interp 'Array().?missing'
+		assert_nil Ore.interp '[].?missing'
+		assert_nil Ore.interp '{}.?missing'
+		assert_nil Ore.interp '(1...5).?missing'
+		assert_nil Ore.interp 'Array.?uniq'
+
+		# Real member access must still work, and plain `.` must still raise.
+		assert_equal 3, Ore.interp('[1,2,3].?length()')
+		assert_raises(Ore::Undeclared_Identifier) { Ore.interp '[].missing' }
+		assert_raises(Ore::Cannot_Call_Instance_Member_On_Type) { Ore.interp 'Array.uniq' }
+	end
+
+	def test_range_dot_access_raises_for_undeclared_members_regression
+		assert_raises(Ore::Undeclared_Identifier) { Ore.interp '(1...5).missing' }
+
+		# `.each` must still work through the normal (non-fallback) path.
+		out = Ore.interp '
+			sum := 0
+			for (1...3)
+				sum += it
+			end
+			sum
+		'
+		assert_equal 6, out
+	end
+
+	def test_not_equal_derives_from_custom_equality_overload_regression
+		src = <<~CODE
+		    Point {
+		    	x,
+		    	y,
+
+		    	new { x, y;
+		    		./x = x
+		    		./y = y
+		    	}
+
+		    	@operator == @infix 500 { left, right;
+		    		left.x == right.x and left.y == right.y
+		    	}
+		    }
+
+		    a := Point(1, 2)
+		    b := Point(1, 2)
+		    c := Point(9, 9)
+		    (a != b, a != c)
+		CODE
+		out = Ore.interp src
+		assert_equal false, out.values[0]
+		assert_equal true, out.values[1]
+
+		# Types with no `==` overload at all are unaffected -- still plain Ruby `!=` on primitives.
+		refute Ore.interp '5 != 5'
+		assert Ore.interp '5 != 9'
+	end
+
+	def test_calling_a_bare_shape_literal_constructs_an_instance_regression
+		out = Ore.interp <<~CODE
+		    @load 'ore/shape.ore'
+		    s := <name: String, age: Number>('Alice', 30)
+		    s.fields.0.value.value
+		CODE
+		assert_equal 'Alice', out
+
+		# Also works with no matching `Shape` type loaded (bare Ore::Shape fallback).
+		refute_raises do
+			Ore.interp '<id: Number>(5)'
+		end
+	end
+
+	def test_string_interpolation_calls_declared_to_s_regression
+		out = Ore.interp <<~CODE
+		    Thing {
+		    	x,
+		    	new { x; ./x = x }
+		    	to_s {; "Thing(`x`)" }
+		    }
+		    t := Thing(5)
+		    "value: `t`"
+		CODE
+		assert_equal 'value: Thing(5)', out
+
+		# A type with no to_s still falls back to the raw dump -- no change there.
+		out = Ore.interp <<~CODE
+		    Bare { x, new { x; ./x = x } }
+		    b := Bare(5)
+		    "value: `b`"
+		CODE
+		assert_includes out, 'Ore::Instance'
+
+		# Primitives unaffected.
+		assert_equal 'n: 8', Ore.interp('x := 5+3
+			"n: `x`"')
+	end
+
+	def test_stringify_for_display_finds_to_s_on_shorthand_constructed_literals_regression
+		interpreter = Ore::Interpreter.new
+		result      = interpreter.run '[1, 2, 3]'
+		assert_equal '[1, 2, 3]', interpreter.stringify_for_display(result)
+
+		# @puts and bin/ore's `-p` both go through this same path.
+		assert_equal '[1, 2, 3]', Ore.interp('[1,2,3].to_s()')
+	end
+
+	def test_nested_array_to_s_regression
+		interpreter = Ore::Interpreter.new
+		result      = interpreter.run '[].push([1,2,3])'
+		assert_equal '[[1, 2, 3]]', interpreter.stringify_for_display(result)
+
+		# String had no to_s{;} at all until this fix -- an array of strings would have raised
+		# Undeclared_Identifier trying to call .to_s() on each element.
+		assert_equal '[a, b, c]', Ore.interp("['a','b','c'].to_s()")
+	end
+
+	def test_array_of_symbols_to_s_regression
+		out = Ore.interp <<~CODE
+		    d := {x: 1, y: 2}
+		    d.keys().to_s()
+		CODE
+		assert_equal '[x, y]', out
+	end
+
+	def test_dictionary_and_tuple_literals_find_declared_to_s_regression
+		assert_equal '{x: 1, y: 2}', Ore.interp('{x: 1, y: 2}.to_s()')
+		assert_equal '(1, 2, 3)', Ore.interp('(1, 2, 3).to_s()')
+	end
+
+	def test_tuple_values_are_not_the_stale_type_name_regression
+		out = Ore.interp <<~CODE
+		    t := (1, 2, 3)
+		    t.values
+		CODE
+		assert_equal [1, 2, 3], out
+	end
+
+	def test_nil_and_bool_find_declared_to_s_and_truthiness_regression
+		assert_equal 'nil', Ore.interp('nil.to_s()')
+		assert_equal 'true', Ore.interp('true.to_s()')
+		assert_equal 'false', Ore.interp('false.to_s()')
+	end
+
+	def test_composition_chain_without_a_body_does_not_hang_the_parser_regression
+		refute_raises { Ore.parse 'A & B' }
+		refute_raises { Ore.parse 'A | B | C' }
+	end
+
+	def test_anonymous_composition_regression
+		src = <<~CODE
+		    A { x := 1, shared {; 'from A' } }
+		    B { y := 2, shared {; 'from B' } }
+
+		    union        := (A | B)()
+		    intersection := (A & B)()
+		    difference   := (A ~ B)()
+		    symmetric    := (A ^ B)()
+
+		    (union.x, union.y, union.shared(), intersection.shared(), difference.x, symmetric.x, symmetric.y)
+		CODE
+		out = Ore.interp src
+		assert_equal [1, 2, 'from A', 'from A', 1, 1, 2], out.values
+
+		# Intersection/difference correctly DON'T keep what they're supposed to drop.
+		assert_raises(Ore::Undeclared_Identifier) { Ore.interp "#{src}\nintersection.x" }
+		assert_raises(Ore::Undeclared_Identifier) { Ore.interp "#{src}\ndifference.shared()" }
+
+		# Comparable with the existing Type comparison operators, same as any named composed type.
+		out = Ore.interp <<~CODE
+		    Flying { can_fly := true }
+		    Swimming { can_swim := true }
+		    Duck | Flying | Swimming { name := 'duck' }
+
+		    (Duck =>= (Flying | Swimming), (Flying | Swimming) =>= Duck)
+		CODE
+		assert_equal [true, false], out.values
+	end
+
+	def test_bare_scope_operator_does_not_corrupt_parsing_regression
+		%w(./ ../ ~/).each do |op|
+			# Not the last thing in the program -- this used to crash.
+			out = Ore.interp "x := #{op}\ny := 1\nx"
+			assert_nil out
+
+			# Bare, unassigned, not the last statement -- this used to silently vanish (harmless in
+			# itself, but confirms the newline it used to eat is no longer swallowed).
+			out = Ore.interp "#{op}\n5"
+			assert_equal 5, out
+
+			# Still fine as the literal last token in the file (the case that always worked).
+			assert_nil Ore.interp(op)
+		end
+	end
+
+	def test_labeled_call_arguments_regression
+		src = <<~CODE
+		    send_greeting { to person; person }
+		CODE
+
+		# A labeled call matches the declared label at that position.
+		assert_equal 42, Ore.interp("#{src}\nsend_greeting(to: 42)")
+
+		# Labels are opt-in at the call site -- a bare positional call still works even though the
+		# param declares a label.
+		assert_equal 42, Ore.interp("#{src}\nsend_greeting(42)")
+
+		# A label that doesn't match the declared one raises, whether the param has a different label...
+		assert_raises(Ore::Argument_Label_Mismatch) do
+			Ore.interp("#{src}\nsend_greeting(wrong: 42)")
+		end
+
+		# ...or no label at all.
+		assert_raises(Ore::Argument_Label_Mismatch) do
+			Ore.interp('add { a, b; a + b }
+				add(a: 1, 2)')
+		end
+
+		# Labels work through constructors too (`new{;}` params).
+		out = Ore.interp <<~CODE
+		    Point {
+		    	x,
+		    	y,
+		    	new { at x, at y;
+		    		./x = x
+		    		./y = y
+		    	}
+		    }
+		    p := Point(at: 3, at: 4)
+		    (p.x, p.y)
+		CODE
+		assert_equal [3, 4], out.values
+
+		# Labels compose with defaults normally -- omitting a labeled, defaulted arg still falls back.
+		out = Ore.interp <<~CODE
+		    greet { with name := "World"; "Hello, `name`" }
+		    (greet(), greet(with: "Ore"))
+		CODE
+		assert_equal ['Hello, World', 'Hello, Ore'], out.values
+	end
+
+	def test_circumfix_elements_do_not_swallow_nil_init_regression
+		# The actual bug: an undeclared non-last element used to silently become nil.
+		assert_raises(Ore::Undeclared_Identifier) do
+			Ore.interp 'foo { a, b; a + b }
+				foo(undeclared_var, 5)'
+		end
+		assert_raises(Ore::Undeclared_Identifier) do
+			Ore.interp 'x := 1
+				[undeclared_var, x]'
+		end
+		assert_raises(Ore::Undeclared_Identifier) do
+			Ore.interp 'x := 1
+				(undeclared_var, x)'
+		end
+
+		# Already-declared identifiers still pass through as plain references, not fresh
+		# shadow-declarations, for calls, arrays, and tuples alike.
+		out = Ore.interp 'foo { a, b; a + b }
+			x := 5
+			y := 8
+			foo(x, y)'
+		assert_equal 13, out
+
+		out = Ore.interp 'x := 1
+			y := 2
+			[x, y]'
+		assert_equal [1, 2], out.values
+
+		out = Ore.interp 'x := 1
+			y := 2
+			(x, y)'
+		assert_equal [1, 2], out.values
+	end
+
+	def test_postfix_unless_and_until_regression
+		assert_nil Ore.interp('5 unless true')
+		assert_equal 5, Ore.interp('5 unless false')
+
+		out = Ore.interp('x := 0
+			x += 1 until x >= 3
+			x')
+		assert_equal 3, out
+	end
+
+	def test_string_literal_matching_a_prefix_symbol_regression
+		assert_equal true, Ore.interp('"hi!".end_with?("!")')
+		assert_equal 1, Ore.interp("'!'.length")
+		assert_equal 1, Ore.interp("'-'.length")
+		assert_equal 6, Ore.interp("'return'.length")
+
+		# Real prefix operators are unaffected.
+		assert_equal false, Ore.interp('!true')
+		assert_equal(-5, Ore.interp('-5'))
+	end
+
+	def test_comparing_two_type_objects_does_not_dispatch_instance_operator_overload_regression
+		out = Ore.interp <<~CODE
+		    @load 'ore/shape.ore'
+		    a := Field('id', nil, String)
+		    b := Field('id', nil, String)
+		    a == b
+		CODE
+		assert_equal true, out
+
+		out = Ore.interp <<~CODE
+		    @load 'ore/shape.ore'
+		    sa := <name: String, age: Number>('Alice', 30)
+		    sb := <name: String, age: Number>('Alice', 30)
+		    sc := <name: String, age: Number>('Alice', 99)
+		    (sa == sb, sa == sc)
+		CODE
+		assert_equal [true, false], out.values
 	end
 end

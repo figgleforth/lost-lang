@@ -1,0 +1,37 @@
+``` Introduction
+
+`@cd <Type or instance>` pushes that scope directly onto the stack, so declarations made inside it become real members of the target -- unlike sibling scopes (see learn/sibling_scopes.ore), which only add a fallback lookup place without mutating anything. `@cd ..` pops back out to whatever scope was active before.
+```
+Button {
+	label := 'default'
+}
+
+@cd Button
+	css_filter := 'invert()'
+@cd ..
+
+b := Button()
+@puts "b.css_filter: `b.css_filter`"   # b.css_filter: invert()
+
+
+``` Reopening a Type extends every instance
+
+`css_filter` above was added to the `Button` type, not to any one instance -- so every `Button()` built afterward (and even ones already built) sees it, the same as if it had been declared in the original body:
+```
+another_button := Button()
+@puts "another_button.css_filter: `another_button.css_filter`"   # another_button.css_filter: invert() -- same declaration, shared by every Button
+
+
+``` Reopening one instance changes just that instance
+
+`@cd` also accepts an instance directly, in which case the new declarations land only on that one value -- every other instance of the same type is untouched:
+```
+c := Button()
+d := Button()
+
+@cd c
+	onclick := 'clicked'
+@cd ..
+
+@puts "c.onclick: `c.onclick`"   # c.onclick: clicked
+# d.onclick would raise Ore::Undeclared_Identifier -- only c was reopened, not the Button type

@@ -1,0 +1,36 @@
+``` Introduction
+
+`ore/database.ore` isn't part of the default preload -- it needs an explicit `@load`. `Sqlite` composes with the built-in `Database` type; `':memory:'` opens a database that only lives for this run, so nothing gets left on disk. The static ../in_memory{;} function is shorthand.
+```
+@load 'ore/database.ore'
+
+db := Sqlite.memory()
+@connect db   # establishes the actual connection
+
+
+``` create_table and table_exists?
+
+A table's schema is a Dictionary from column name to column type.
+```
+db.create_table('survivors', {
+	id: 'primary_key',
+	name: 'String'
+})
+
+@puts "survivors table exists? `db.table_exists?('survivors')`"   # survivors table exists? true
+@puts "rafts table exists? `db.table_exists?('rafts')`"           # rafts table exists? false
+
+
+``` tables
+
+Lists every table currently in the database.
+```
+@puts "tables: `db.tables()`"   # tables: [survivors]
+
+
+``` delete_table
+
+Drops a table entirely.
+```
+db.delete_table('survivors')
+@puts "survivors table exists after delete? `db.table_exists?('survivors')`"   # survivors table exists after delete? false

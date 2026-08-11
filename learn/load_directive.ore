@@ -1,0 +1,23 @@
+``` Introduction
+
+`@load 'file'` reads another `.ore` file and merges its top-level declarations directly into the current scope. Bare `@load` is how `ore/preload.ore` brings in the whole standard library -- afterward, everything the file declared is just there, as a normal global identifier:
+
+You may omit .ore from filenames, they're added automatically upon file lookup.
+```
+@load 'ore/string'
+
+s := String('shipwrecked')
+@puts "shouted: `s.upcase()`"   # shouted: SHIPWRECKED
+
+
+``` Scoping a load into its own namespace
+
+`name := @load 'file'` instead creates a fresh scope named after the identifier, loads the file into THAT, and assigns it -- giving real namespace isolation instead of dumping everything into the current scope:
+```
+strings := @load 'ore/string.ore'
+
+t := strings.String('the island')
+@puts "shouted: `t.upcase()`"   # shouted: THE ISLAND
+
+# String() (unscoped) still refers to whatever was already global before this --
+# strings.String is a separate, isolated reference to the same file's declarations

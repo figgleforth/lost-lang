@@ -1,5 +1,5 @@
 Database {
-	adapter,
+	adapter: String
 	connection, # todo: Make a type for this, currently it stores an Sequel::SQLite::Database instance
 	url,
 
@@ -17,5 +17,9 @@ Sqlite | Database {
 
 	../local { url := './test/fixtures/sqlite_test.db';
 		Sqlite(url)
+	}
+
+	../memory {;
+		Sqlite(':memory:')
 	}
 }
