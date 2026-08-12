@@ -6,8 +6,8 @@ module Ore
 			@input  = input
 			@scopes = [new_scope_frame]
 
-			# Per-declared-type field/method registry, keyed by qualified type name ("Web_Application", "Array<Web_Server>" for a structured type
-			@type_info  = Hash.new { |h, k| h[k] = { fields: {}, methods: {} } }
+			# Per-declared-type member/method registry, keyed by qualified type name ("Web_Application", "Array<Web_Server>" for a structured type
+			@type_info  = Hash.new { |h, k| h[k] = { members: {}, methods: {} } }
 			@type_stack = [] # qualified type names currently being walked, innermost last
 		end
 
@@ -28,7 +28,7 @@ module Ore
 			end
 		end
 
-		# Resolves `receiver`'s own static type, then looks up `member` as a declared field on that type. Returns nil the moment any link in the chain isn't statically known (an untyped local, a plain untagged bare type, etc), same "skip rather than guess" philosophy as the rest of this checker.
+		# Resolves `receiver`'s own static type, then looks up `member` as a declared member on that type. Returns nil the moment any link in the chain isn't statically known (an untyped local, a plain unstructured bare type, etc), same "skip rather than guess" philosophy as the rest of this checker.
 		def infer_dot_type expr
 			return nil unless expr.operator&.value == '.'
 			return nil unless expr.right.is_a? Ore::Identifier_Expr
@@ -36,7 +36,7 @@ module Ore
 			receiver_type = infer_type expr.left
 			return nil unless receiver_type
 
-			@type_info[receiver_type][:fields][expr.right.value]
+			@type_info[receiver_type][:members][expr.right.value]
 		end
 
 		# Looks up `name`'s declared type, searching from the current scope outward.
@@ -97,7 +97,7 @@ module Ore
 			return nil unless expr.left.respond_to?(:type) && expr.left.type
 
 			declared = expr.left.type.value # e.g. "String"
-			declare_field expr.left.value, declared
+			declare_member expr.left.value, declared
 			inferred = infer_type expr.right # e.g. "Number" or nil
 
 			return nil if inferred.nil?
@@ -113,12 +113,12 @@ module Ore
 			constructed = constructed_type_name expr.right
 			return unless constructed
 
-			declare_field expr.left.value, constructed
+			declare_member expr.left.value, constructed
 		end
 
-		def declare_field name, type_name
+		def declare_member name, type_name
 			declare :types, name, type_name
-			@type_info[@type_stack.last][:fields][name] = type_name if @type_stack.last
+			@type_info[@type_stack.last][:members][name] = type_name if @type_stack.last
 		end
 
 		def constructed_type_name expr
@@ -135,12 +135,12 @@ module Ore
 
 		def qualified_type_name expr
 			return nil unless expr.is_a? Ore::Type_Expr
-			return expr.name unless expr.shape
+			return expr.name unless expr.struct
 
-			tag_names = expr.shape.types.map { |t| t.value if t.is_a? Ore::Identifier_Expr }
-			return nil if tag_names.any?(&:nil?)
+			member_names = expr.struct.types.map { |t| t.value if t.is_a? Ore::Identifier_Expr }
+			return nil if member_names.any?(&:nil?)
 
-			"#{expr.name}<#{tag_names.join(',')}>"
+			"#{expr.name}<#{member_names.join(',')}>"
 		end
 
 		def check_param expr

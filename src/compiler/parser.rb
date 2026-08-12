@@ -250,7 +250,7 @@ module Ore
 
 			it.expressions = []
 			until curr? closing
-				# note; A bare identifier immediately followed by `,` is special-cased here rather than going through #parse_expression, same fix #parse_shape already needed for `<...>`: #begin_expression's nil-init dispatch would otherwise interfere.
+				# note; A bare identifier immediately followed by `,` is special-cased here rather than going through #parse_expression, same fix #parse_struct already needed for `<...>`: #begin_expression's nil-init dispatch would otherwise interfere.
 				it.expressions << if curr?(ANY_IDENTIFIER, ',')
 					parse_identifier_expr
 				else
@@ -278,7 +278,7 @@ module Ore
 				func.name = parse_identifier_expr
 			end
 
-			# note; A bare `identifier: { ... ;}` (no type between the colon and the brace) is the new self-declaring signature form (`double: {Number -> Number;}`) of a function. parse_identifier_expr only consumes the colon itself when it's followed by an actual `: Type`/`: <...>` (or Shape)
+			# note; A bare `identifier: { ... ;}` (no type between the colon and the brace) is the new self-declaring signature form (`double: {Number -> Number;}`) of a function. parse_identifier_expr only consumes the colon itself when it's followed by an actual `: Type`/`: <...>` (or Struct)
 			eat ':' if curr? ':'
 
 			func.lexeme = func.name&.lexeme
@@ -365,34 +365,34 @@ module Ore
 			copy_location func, start
 		end
 
-		def parse_shape
+		def parse_struct
 			return nil unless curr? '<'
 			start = curr_lexeme
-			Ore::Shape_Expr.new.tap do |it|
-				it.lexeme = Ore::Lexeme.new :shape, '<>'
+			Ore::Struct_Expr.new.tap do |it|
+				it.lexeme = Ore::Lexeme.new :struct, '<>'
 				it.types  = []
 				it.names  = []
 				eat '<'
 				until curr? '>'
 					# Each element is a full expression (`Number`, `4815`, `1+2+3/123`, `this`, ...). A named element (`some_string: String`) parses as an Identifier_Expr with #type set, via #parse_identifier_expr's existing `: Type` annotation handling.
-					# A bare identifier directly followed by `,` (`<String, Number>`) is special-cased here rather than going through #parse_expression, because #begin_expression would otherwise mistake it for the nil-init idiom (`ident,` => `ident = ident or nil`), which is unrelated to tags and only coincidentally shares the same shape.
+					# A bare identifier directly followed by `,` (`<String, Number>`) is special-cased here rather than going through #parse_expression, because #begin_expression would otherwise mistake it for the nil-init idiom (`ident,` => `ident = ident or nil`), which is unrelated to struct members and only coincidentally shares the same shape.
 					element = if curr?(ANY_IDENTIFIER, ',')
 						parse_identifier_expr
 					else
 						parse_expression(precedence_for('<'))
 					end
 
-					# A named field can carry a default, either typed (`dict: Dictionary = {}`) or bare (`id := 4815`, type inferred from the default at interpret time -- see #interp_shape). Both `=` and `:=` bind looser than `precedence_for('<')`, so #parse_expression above already stopped right before either, leaving them for us here.
+					# A named member can carry a default, either typed (`dict: Dictionary = {}`) or bare (`id := 4815`, type inferred from the default at interpret time -- see #interp_struct). Both `=` and `:=` bind looser than `precedence_for('<')`, so #parse_expression above already stopped right before either, leaving them for us here.
 					if curr? ':='
 						eat ':='
-						element.tag_default = parse_expression(precedence_for('<'))
+						element.member_default = parse_expression(precedence_for('<'))
 					elsif element.is_a?(Ore::Identifier_Expr) && element.type && curr?('=')
 						eat '='
-						element.tag_default = parse_expression(precedence_for('<'))
+						element.member_default = parse_expression(precedence_for('<'))
 					end
 
 					it.types << element
-					it.names << (element.is_a?(Ore::Identifier_Expr) && (element.type || element.tag_default) ? element.value : nil)
+					it.names << (element.is_a?(Ore::Identifier_Expr) && (element.type || element.member_default) ? element.value : nil)
 					eat if curr? ','
 				end
 				closing = eat '>'
@@ -426,7 +426,7 @@ module Ore
 
 			Ore.assert is_type || is_const, "Type names can only be Capitalized or UPPERCASE"
 
-			it.shape = parse_shape # returns nil if none was found
+			it.struct = parse_struct # returns nil if none was found
 
 			# When no body and no composition chain follow e.g.
 			#
@@ -435,7 +435,7 @@ module Ore
 			#   Abc<Number>()
 			#   Abc<4815>()
 			#
-			# Then this is a reference to an existing type (optionally shaped), not a declaration. `it.expressions` stays nil here so callers (like #interp_type) can tell this apart from a real, even if empty, `{}` body. Whatever follows (like a trailing `(...)` call) is picked up in #complete_expression, same as any other primary expression.
+			# Then this is a reference to an existing type (optionally structured), not a declaration. `it.expressions` stays nil here so callers (like #interp_type) can tell this apart from a real, even if empty, `{}` body. Whatever follows (like a trailing `(...)` call) is picked up in #complete_expression, same as any other primary expression.
 			unless curr?('{') || curr?(TYPE_COMPOSITION_OPERATORS, ANY_IDENTIFIER)
 				return copy_location it, start
 			end
@@ -511,11 +511,11 @@ module Ore
 				ident = infix
 			end
 
-			# A composed operand can itself be a shaped type reference (`| Other<'users'>`), not just a bare type reference. Wrap it into a Type_Expr (mirroring #parse_type_decl's own reference form) so #interp_composition resolves it through the normal shaped-type matching. Without this the trailing `<...>` is left unconsumed and #parse_type_decl's `until curr? '{'` loop spins forever re-checking the same token.
+			# A composed operand can itself be a structured type reference (`| Other<'users'>`), not just a bare type reference. Wrap it into a Type_Expr (mirroring #parse_type_decl's own reference form) so #interp_composition resolves it through the normal structured-type matching. Without this the trailing `<...>` is left unconsumed and #parse_type_decl's `until curr? '{'` loop spins forever re-checking the same token.
 			if curr?('<') && ident.is_a?(Ore::Identifier_Expr)
-				type_ref       = Ore::Type_Expr.new
-				type_ref.name  = ident.value
-				type_ref.shape = parse_shape
+				type_ref        = Ore::Type_Expr.new
+				type_ref.name   = ident.value
+				type_ref.struct = parse_struct
 				copy_location type_ref, ident
 				ident = type_ref
 			end
@@ -542,11 +542,11 @@ module Ore
 
 			if curr?(':', :Identifier)
 				eat ':'
-				expr.type      = eat(:Identifier)
-				expr.type_tags = parse_shape # returns nil if none was found
+				expr.type        = eat(:Identifier)
+				expr.type_struct = parse_struct # returns nil if none was found
 			elsif curr?(':', '<')
 				eat ':'
-				expr.type_tags = parse_shape # bare tag-set annotation, e.g. `thing: <String, Number>`
+				expr.type_struct = parse_struct # bare struct annotation, e.g. `thing: <String, Number>`
 			end
 
 			expr.kind = Ore.type_of_identifier expr.value
@@ -688,9 +688,9 @@ module Ore
 			elsif peek_contains?(Ore::FUNCTION_DELIMITER, '}') && (curr?('{') || curr?(:identifier, '{') || curr?(:identifier, ':', '{') || curr?(SCOPE_OPERATORS, :identifier, '{') || curr?(SCOPE_OPERATORS, :identifier, ':', '{'))
 				parse_func precedence
 
-				# note; A leading `<` can never be a legitimate infix `<` so we can safely parse a shape.
+				# note; A leading `<` can never be a legitimate infix `<` so we can safely parse a struct.
 			elsif curr?('<') && !@custom_prefix.include?('<')
-				parse_shape
+				parse_struct
 
 			elsif curr?(:Identifier, '{') || curr?(:Identifier, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, '{') || curr?(TYPE_IDENTIFIER, '<')
 				parse_type_decl
@@ -838,7 +838,7 @@ module Ore
 
 				return complete_expression directive, precedence
 			end
-			
+
 			if SCOPE_OPERATORS.any? { |it| expr.is it } && !expr.is_a?(Ore::Nil_Init_Expr)
 				return expr
 			end
@@ -955,7 +955,7 @@ module Ore
 				it.type       = eat # One of %w(if while unless until)
 				it_prec       = precedence_for it.type.value
 				it.condition  = parse_expression
-				it.when_true = [expr]
+				it.when_true  = [expr]
 				return complete_expression it, precedence
 			end
 

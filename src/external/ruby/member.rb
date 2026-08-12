@@ -2,11 +2,11 @@ module Ore
 	# name: String
 	# type: Any
 	# value: Any
-	class Field < Instance
+	class Member < Instance
 		attr_accessor :name, :type, :value
 
 		def initialize name = nil, type = nil, value = nil
-			super 'Field'
+			super 'Member'
 			@name  = name
 			@type  = type
 			@value = value

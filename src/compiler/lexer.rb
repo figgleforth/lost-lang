@@ -208,7 +208,7 @@ module Ore
 			# note; Operators cannot start with or end with: ' " { } ( ) [ ] and that is a strict rule.
 			it = ::String.new
 			while chars? && symbol?
-				# Don't append `.` onto a trailing `>` unless it's forming a genuine range operator (`>..`, `>.<`). Otherwise `Type<Tag>.member` would lex `>.` as one bogus operator token, swallowing the `>` that's supposed to close the tag list on its own.
+				# Don't append `.` onto a trailing `>` unless it's forming a genuine range operator (`>..`, `>.<`). Otherwise `Type<Struct>.member` would lex `>.` as one bogus operator token, swallowing the `>` that's supposed to close the struct's member list on its own.
 				break if it == '>' && curr == '.' && !%w(. <).include?(peek)
 
 				it << eat
@@ -297,9 +297,9 @@ module Ore
 						it.value = lex_number
 
 					elsif %w(' ").include? curr
-						it.type             = :string
-						it.quotation_style  = curr == "'" ? :single : :double
-						it.value            = lex_string
+						it.type            = :string
+						it.quotation_style = curr == "'" ? :single : :double
+						it.value           = lex_string
 
 					elsif route_pattern?
 						it.type  = :route

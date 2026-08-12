@@ -8,7 +8,7 @@ rescue_boat,
 
 ``` Same idiom inside a type body
 
-Declaring a field this way inside a `Type { }` body works exactly the same -- one uninitialized field per instance, defaulting to `nil` until something sets it.
+Declaring a member this way inside a `Type { }` body works exactly the same -- one uninitialized member per instance, defaulting to `nil` until something sets it.
 ```
 Raft {
 	captain,
@@ -22,7 +22,7 @@ r := Raft()
 
 ``` A bare annotation self-declares too
 
-`x: Number` with no `=` at all behaves the same way -- it's already self-declaring by virtue of the annotation, so it doesn't need `= nil` tacked on just to actually declare something. A bare tag annotation (`<...>`) works the same way.
+`x: Number` with no `=` at all behaves the same way -- it's already self-declaring by virtue of the annotation, so it doesn't need `= nil` tacked on just to actually declare something. A bare struct annotation (`<...>`) works the same way.
 ```
 altitude: Number
 @puts "altitude: `altitude`"   # altitude: nil

@@ -157,7 +157,7 @@ class Composition_Test < Base_Test
 		assert_equal [true, true, true, false, 'luxury_electric'], out.values
 	end
 
-	def test_api_public_user_response_has_only_shared_fields
+	def test_api_public_user_response_has_only_shared_members
 		refute_raises Ore::Undeclared_Identifier do
 			out = Ore.interp "
 			@load 'examples/composition_examples.ore'
@@ -181,7 +181,7 @@ class Composition_Test < Base_Test
 		end
 	end
 
-	def test_api_private_user_response_has_all_fields
+	def test_api_private_user_response_has_all_members
 		out = Ore.interp "
 		@load 'examples/composition_examples.ore'
 		p := Private_User_Response()
@@ -190,7 +190,7 @@ class Composition_Test < Base_Test
 		assert_equal [200, 0, '', '', 'private'], out.values
 	end
 
-	def test_api_limited_user_response_removes_private_fields
+	def test_api_limited_user_response_removes_private_members
 		refute_raises Ore::Undeclared_Identifier do
 			out = Ore.interp "
 			@load 'examples/composition_examples.ore'

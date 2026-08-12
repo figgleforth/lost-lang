@@ -2700,7 +2700,7 @@ class Interpreter_Test < Base_Test
 		end
 	end
 
-	def test_tuple_and_shape_destructuring
+	def test_tuple_and_struct_destructuring
 		# Tuple source.
 		out = Ore.interp <<~CODE
 		    (a, b) := (1, 2)
@@ -2708,7 +2708,7 @@ class Interpreter_Test < Base_Test
 		CODE
 		assert_equal 3, out
 
-		# Shape source.
+		# Struct source.
 		out = Ore.interp <<~CODE
 		    (a, b) := <1, 2>
 		    a + b
@@ -2747,12 +2747,12 @@ class Interpreter_Test < Base_Test
 			a + b'
 		assert_equal 3, out
 
-		# Only a Tuple/Shape can be destructured.
+		# Only a Tuple/Struct can be destructured.
 		assert_raises Ore::Invalid_Destructuring_Source do
 			Ore.interp '(a, b) := 5'
 		end
 
-		# Every target must be a plain identifier or an existing-field dot-target.
+		# Every target must be a plain identifier or an existing-member dot-target.
 		assert_raises Ore::Invalid_Destructuring_Target do
 			Ore.interp '(1, c) := (1, 2)'
 		end
@@ -2763,60 +2763,60 @@ class Interpreter_Test < Base_Test
 		assert_equal [1, 2], out.values
 	end
 
-	def test_field_destructuring_targets
-		# `thing.field` reassigns an existing field, same as plain `thing.field = value`.
+	def test_member_destructuring_targets
+		# `thing.member` reassigns an existing member, same as plain `thing.member = value`.
 		out = Ore.interp <<~CODE
-		    Thing { field, new {; ./field = 0 } }
+		    Thing { member, new {; ./member = 0 } }
 		    thing := Thing()
-		    (thing.field, local) := <Number, Number>(1, 1)
-		    (thing.field, local)
+		    (thing.member, local) := <Number, Number>(1, 1)
+		    (thing.member, local)
 		CODE
 		assert_equal [1, 1], out.values
 
-		# The field must already exist -- destructuring can't silently create one.
+		# The member must already exist -- destructuring can't silently create one.
 		assert_raises Ore::Cannot_Assign_Undeclared_Identifier do
 			Ore.interp <<~CODE
-			    Thing { field, new {; ./field = 0 } }
+			    Thing { member, new {; ./member = 0 } }
 			    thing := Thing()
 			    (thing.missing, local) := <Number, Number>(1, 1)
 			CODE
 		end
 
-		# A constant field can't be reassigned this way either.
+		# A constant member can't be reassigned this way either.
 		assert_raises Ore::Cannot_Reassign_Constant do
 			Ore.interp <<~CODE
-			    Thing { FIELD, new {; ./FIELD = 0 } }
+			    Thing { MEMBER, new {; ./MEMBER = 0 } }
 			    thing := Thing()
-			    (thing.FIELD, local) := <Number, Number>(1, 1)
+			    (thing.MEMBER, local) := <Number, Number>(1, 1)
 			CODE
 		end
 
-		# If the field has a previously-recorded type (via `:=`), the extracted value must match it.
+		# If the member has a previously-recorded type (via `:=`), the extracted value must match it.
 		error = assert_raises Ore::Type_Contract_Violation do
 			Ore.interp <<~CODE
 			    Thing {
 					new {;
-						./field := 0
+						./member := 0
 					}
 				}
 			    thing := Thing()
-			    (thing.field, local) := <String, Number>("oops", 1)
+			    (thing.member, local) := <String, Number>("oops", 1)
 			CODE
 		end
 		assert_equal 'Number', error.contract
 		assert_equal 'String', error.actual
 	end
 
-	def test_shape_field_display_regression
+	def test_struct_member_display_regression
 		out = Ore.interp <<~CODE
-		    @load 'ore/shape.ore'
+		    @load 'ore/struct.ore'
 		    quad := <1, id := 2, ix: Number, String>(4, 8, 1, "five")
 		    quad.to_s()
 		CODE
 		assert_equal '<4, id: Number = 8, ix: Number = 1, "five">', out
 
 		out = Ore.interp <<~CODE
-		    @load 'ore/shape.ore'
+		    @load 'ore/struct.ore'
 		    quad := <1, id := 2, ix: Number, String>(4, 8, 1, 'five')
 		    quad.to_s()
 		CODE
@@ -2826,9 +2826,9 @@ class Interpreter_Test < Base_Test
 	def test_string_equality_regression
 		assert Ore.interp('String("Alice") == String("Alice")')
 		out = Ore.interp <<~CODE
-		    @load 'ore/shape.ore'
+		    @load 'ore/struct.ore'
 		    s := <name: String>("Alice")
-		    s.fields.0.value == "Alice"
+		    s.members.0.value == "Alice"
 		CODE
 		assert out
 	end
@@ -2849,20 +2849,20 @@ class Interpreter_Test < Base_Test
 		out = Ore.interp <<~CODE
 		    Thing {
 		        new {;
-		            ./field := 123
+		            ./member := 123
 		        }
 		    }
 		    t := Thing()
-		    t.field
+		    t.member
 		CODE
 		assert_equal 123, out
 
 		assert_raises Ore::Cannot_Assign_Undeclared_Identifier do
-			# but actually it raises something about not being able to declare fields on the type outside of new{;} or the explicit class body declarations
+			# but actually it raises something about not being able to declare members on the type outside of new{;} or the explicit class body declarations
 			Ore.interp <<~CODE
 			    Thing {
 			        not_new_func {;
-			            ./field := 123
+			            ./member := 123
 			        }
 			    }
 			    t := Thing()
@@ -2880,7 +2880,7 @@ class Interpreter_Test < Base_Test
 
 		assert_raises Ore::Cannot_Assign_Undeclared_Identifier do
 			Ore.interp <<~CODE
-			    Thing { field, new {; ./field = 0 } }
+			    Thing { member, new {; ./member = 0 } }
 			    thing := Thing()
 			    thing.missing = 5
 			CODE

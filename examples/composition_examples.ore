@@ -160,27 +160,27 @@ Base_Response {
 	timestamp := '2024-01-01'
 }
 
-User_Fields {
+User_Members {
 	user_id := 0
 	username := ''
 	email := ''
 }
 
-Public_Fields {
+Public_Members {
 	user_id := 0
 	username := ''
 	avatar_url := ''
 }
 
-Private_Fields {
+Private_Members {
 	email := ''
 	phone := ''
 	address := ''
 }
 
-# Public API response - only non-sensitive fields
-# First create the intersection of user fields
-Public_User_Data | User_Fields & Public_Fields {}
+# Public API response - only non-sensitive members
+# First create the intersection of user members
+Public_User_Data | User_Members & Public_Members {}
 
 # Then combine with base response
 Public_User_Response | Base_Response | Public_User_Data {
@@ -189,12 +189,12 @@ Public_User_Response | Base_Response | Public_User_Data {
 }
 
 # Private API response - all user data
-Private_User_Response | Base_Response | User_Fields | Private_Fields {
+Private_User_Response | Base_Response | User_Members | Private_Members {
 	response_type := 'private'
 }
 
-# Limited response - user data without private fields
-Limited_User_Response | User_Fields ~ Private_Fields {
+# Limited response - user data without private members
+Limited_User_Response | User_Members ~ Private_Members {
 	response_type := 'limited'
 	# Keeps user_id, username but removes email
 }

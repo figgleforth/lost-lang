@@ -684,7 +684,7 @@ module Ore
 					end
 					result
 				elsif scope.respond_to? proxy_method
-					# Prefer the instance's own owning Type first -- for a tagged variant
+					# Prefer the instance's own owning Type first -- for a structured variant
 					# (e.g. `Array<Web_Server>`) this is a distinct Type from the plain
 					# global one, and holds the actual override. Only fall back to a blind
 					# by-name search of the stack (which only ever finds the plain global
@@ -709,7 +709,7 @@ module Ore
 						return scope.send(proxy_method)
 					end
 				elsif scope.is_a?(Ore::Instance) && scope.enclosing_scope&.is_a?(Ore::Type) && scope.enclosing_scope&.has?(expr.value)
-					if expr.type || expr.type_tags
+					if expr.type || expr.type_struct
 						# A bare annotated identifier (`x: Number`) must self-declare its own per-instance copy, exactly like the nil-init idiom (`x,`) already does (see #interp_nil_init's identical shadowing fix) -- reading straight through to the enclosing Type's own nil placeholder instead would mean the instance never gets its own key, so a later `./x = value` would wrongly raise Cannot_Assign_Undeclared_Identifier.
 						self_declare_annotated_identifier expr
 					else
@@ -724,7 +724,7 @@ module Ore
 							return value
 						end
 					end
-				elsif expr.type || expr.type_tags
+				elsif expr.type || expr.type_struct
 					self_declare_annotated_identifier expr
 				else
 					raise Ore::Undeclared_Identifier.new(expr, self)
@@ -735,7 +735,7 @@ module Ore
 					raise Ore::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr, self)
 				elsif expr.scope_operator&.value == './'
 					raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr, self)
-				elsif expr.type || expr.type_tags
+				elsif expr.type || expr.type_struct
 					self_declare_annotated_identifier expr
 				else
 					raise Ore::Undeclared_Identifier.new(expr, self)
@@ -814,8 +814,8 @@ module Ore
 		def interp_infix_assignment expr
 			assignment_scope = scope_for_identifier expr.left # Reminder; this returns a scope whether or not the identifier exists
 
-			# A type annotation (`x: Number = value`) is itself a declaration, so it's allowed to introduce a brand-new identifier just like `:=`, even though plain `=` otherwise requires the identifier to already exist. An inline signature (`x: Type{Param;} = value`) is the same idea — expr.left is a Func_Signature_Expr instead of a plain annotated Identifier_Expr, but it's just as self-declaring. A bare tag-set annotation (`thing: <String, Number> = value`) is self-declaring the same way, even with no `expr.left.type`.
-			has_type_annotation = (expr.left.is_a?(Ore::Identifier_Expr) && (expr.left.type || expr.left.type_tags)) ||
+			# A type annotation (`x: Number = value`) is itself a declaration, so it's allowed to introduce a brand-new identifier just like `:=`, even though plain `=` otherwise requires the identifier to already exist. An inline signature (`x: Type{Param;} = value`) is the same idea — expr.left is a Func_Signature_Expr instead of a plain annotated Identifier_Expr, but it's just as self-declaring. A bare struct annotation (`thing: <String, Number> = value`) is self-declaring the same way, even with no `expr.left.type`.
+			has_type_annotation = (expr.left.is_a?(Ore::Identifier_Expr) && (expr.left.type || expr.left.type_struct)) ||
 			                      expr.left.is_a?(Ore::Func_Signature_Expr)
 			assignment_scope    ||= stack.last if has_type_annotation
 
@@ -867,7 +867,7 @@ module Ore
 
 			# Handle dot assignment
 			if expr.left.is_a?(Ore::Infix_Expr) && expr.left.operator.value == '.'
-				return assign_dot_field expr, expr.left, interpret(expr.right)
+				return assign_dot_member expr, expr.left, interpret(expr.right)
 			end
 
 			if expr.right.is_a?(Ore::Directive_Expr) && expr.right.name.value == Ore::IMPORT_FILE_DIRECTIVE
@@ -945,23 +945,23 @@ module Ore
 		# todo; Types may be composed of multiple types, what happens in that case?
 		# @param expr [Ore::Infix_Expr]
 		def interp_infix_declaration expr
-			# `(a, b) := <tuple-or-shape-valued expr>` -- destructuring, handled entirely separately
+			# `(a, b) := <tuple-or-struct-valued expr>` -- destructuring, handled entirely separately
 			# from the single-identifier case below (no scope operators, no type-by-identifier
 			# locking against a bare `.value`, none of it applies to a target list).
 			if expr.left.is_a?(Ore::Circumfix_Expr) && expr.left.grouping == '()'
 				return interp_destructuring_declaration expr
 			end
 
-			# `thing.field := value` -- an external dot target, categorically different from
-			# `./field := value` (a scope *operator*, parsed onto the Identifier_Expr itself, handled
+			# `thing.member := value` -- an external dot target, categorically different from
+			# `./member := value` (a scope *operator*, parsed onto the Identifier_Expr itself, handled
 			# by the has_scope_operator branch below -- this is a real Infix_Expr with `.` as the
-			# receiver-and-member access operator). Strict: `.` never creates a field regardless of
-			# `=` vs `:=` -- #assign_dot_field raises Cannot_Assign_Undeclared_Identifier if `field`
-			# isn't already declared on whatever `thing` resolves to. For an existing field, `:=`
+			# receiver-and-member access operator). Strict: `.` never creates a member regardless of
+			# `=` vs `:=` -- #assign_dot_member raises Cannot_Assign_Undeclared_Identifier if `member`
+			# isn't already declared on whatever `thing` resolves to. For an existing member, `:=`
 			# still means something distinct from `=` here: it re-infers/overwrites the recorded type
 			# rather than checking the new value against it.
 			if expr.left.is_a?(Ore::Infix_Expr) && expr.left.operator&.value == '.'
-				return assign_dot_field expr, expr.left, interpret(expr.right), declare: true
+				return assign_dot_member expr, expr.left, interpret(expr.right), declare: true
 			end
 
 			# Only scope-operator forms (`../x`, `./x`, `.x`) target a specific scope. A plain `:=`
@@ -985,7 +985,7 @@ module Ore
 
 			assignment_scope ||= stack.last
 
-			# note; `./`, `../` self-declaring a field that doesn't exist yet is valid but only while the instance is still under construction. Like within the class body's own declarations, or inside of new{;}
+			# note; `./`, `../` self-declaring a member that doesn't exist yet is valid but only while the instance is still under construction. Like within the class body's own declarations, or inside of new{;}
 			if has_scope_operator && assignment_scope.is_a?(Ore::Instance) &&
 			   !assignment_scope.has?(expr.left.value) && !assignment_scope.has?('new')
 				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr, self)
@@ -1013,8 +1013,8 @@ module Ore
 		#     scope, same as the single-identifier `:=` case. An explicit `: Type` is checked against
 		#     that position's extracted value.
 		#
-		#   - An existing field (`thing.field`) -- reassigns rather than declares, same as plain
-		#     `thing.field = value`: the field must already exist, must not be a constant, and (if it
+		#   - An existing member (`thing.member`) -- reassigns rather than declares, same as plain
+		#     `thing.member = value`: the member must already exist, must not be a constant, and (if it
 		#     has a previously-recorded type) the extracted value must match it.
 		#
 		def interp_destructuring_declaration expr
@@ -1041,7 +1041,7 @@ module Ore
 				if target.is_a? Ore::Identifier_Expr
 					declare_destructuring_local expr, target, value
 				else
-					assign_dot_field expr, target, value
+					assign_dot_member expr, target, value
 				end
 			end
 
@@ -1068,17 +1068,17 @@ module Ore
 		end
 
 		# Shared by every way of writing through `.` onto an already-interpreted receiver: plain
-		# `thing.field = value` / `thing.field := value`, and destructuring dot-targets
-		# (`(thing.field, ...) := ...`). Strict: `.` never creates a field, no matter which of these
+		# `thing.member = value` / `thing.member := value`, and destructuring dot-targets
+		# (`(thing.member, ...) := ...`). Strict: `.` never creates a member, no matter which of these
 		# forms is used -- only `./`/`../` self-declaration, from inside a type's own body (its own
 		# `new{;}` or any other method), gets to do that (handled entirely separately, by the
 		# existing scope-operator path in #interp_infix_declaration/#interp_infix_assignment). So the
-		# field must already be declared on the receiver, and must not be a constant (an UPPERCASE
-		# member name). `declare: true` (the `:=` forms) re-infers/overwrites the field's recorded
+		# member must already be declared on the receiver, and must not be a constant (an UPPERCASE
+		# member name). `declare: true` (the `:=` forms) re-infers/overwrites the member's recorded
 		# type instead of checking it, same as re-running `:=` on a plain identifier does; `declare:
 		# false` (the `=` forms, including destructuring targets) checks the extracted/assigned value
 		# against any previously recorded type, raising Type_Contract_Violation on mismatch.
-		def assign_dot_field expr, target, value, declare: false
+		def assign_dot_member expr, target, value, declare: false
 			receiver = interpret target.left
 			property = target.right.value
 
@@ -1106,10 +1106,10 @@ module Ore
 			value
 		end
 
-		# Ore::Tuple/Ore::Shape both carry a plain Ruby-level `.values` reader holding the raw backing array (distinct from their Ore-level `.values` dot-access, which wraps the same data in an Ore::Array for Ore code to read).
+		# Ore::Tuple/Ore::Struct both carry a plain Ruby-level `.values` reader holding the raw backing array (distinct from their Ore-level `.values` dot-access, which wraps the same data in an Ore::Array for Ore code to read).
 		def destructurable_values value
 			case value
-			when Ore::Tuple, Ore::Shape
+			when Ore::Tuple, Ore::Struct
 				value.values
 			end
 		end
@@ -1132,7 +1132,7 @@ module Ore
 			when Ore::Dictionary
 				interp_dot_dictionary receiver, expr
 			else
-				# A tagged type reference on the right (`ns.Abc<Number>`) isn't an Identifier_Expr, so it bypasses #interp_dot_scope's right-operand validation.
+				# A structured type reference on the right (`ns.Abc<Number>`) isn't an Identifier_Expr, so it bypasses #interp_dot_scope's right-operand validation.
 				if expr.right.instance_of? Ore::Type_Expr
 					return interp_member_access receiver, expr.right
 				end
@@ -1380,8 +1380,8 @@ module Ore
 		def interp_comparison_infix expr, left, right
 			case expr.operator.value
 			when '===', '=!=', '=>=', '=<=', '=/='
-				left_structure  = left.is_a?(Ore::Type) ? left.shape_instance&.types : nil
-				right_structure = right.is_a?(Ore::Type) ? right.shape_instance&.types : nil
+				left_structure  = left.is_a?(Ore::Type) ? left.structure_instance&.types : nil
+				right_structure = right.is_a?(Ore::Type) ? right.structure_instance&.types : nil
 
 				# note; `left`/`right` are whatever #interpret returned (a raw Ruby Integer/String/etc for literals, not necessarily an Ore::Type/Instance), so `.types` can't be called on them directly. Using #composed_types_for here which resolves the correct composed-type set.
 				left_types  = composed_types_for left
@@ -1395,33 +1395,33 @@ module Ore
 					left_types != right_types || left_structure != right_structure
 
 				when '=>='
-					left_is_superset       = right_types.all? do |type|
+					left_is_superset          = right_types.all? do |type|
 						left_types.include? type
 					end
-					left_tags_are_superset = (right_structure || []).all? do |tag|
-						(left_structure || []).include? tag
+					left_members_are_superset = (right_structure || []).all? do |member|
+						(left_structure || []).include? member
 					end
 
-					left_is_superset && left_tags_are_superset
+					left_is_superset && left_members_are_superset
 				when '=<='
 					right_is_superset = left_types.all? do |type|
 						right_types.include? type
 					end
 
-					right_tags_are_superset = (left_structure || []).all? do |tag|
-						(right_structure || []).include? tag
+					right_members_are_superset = (left_structure || []).all? do |member|
+						(right_structure || []).include? member
 					end
 
-					right_is_superset && right_tags_are_superset
+					right_is_superset && right_members_are_superset
 				when '=/='
-					shared_types = left_types.any? do |type|
+					shared_types   = left_types.any? do |type|
 						right_types.include? type
 					end
-					shared_tags  = (left_structure || []).any? do |tag|
-						(right_structure || []).include? tag
+					shared_members = (left_structure || []).any? do |member|
+						(right_structure || []).include? member
 					end
 
-					!shared_types && !shared_tags
+					!shared_types && !shared_members
 				end
 
 			when '=~', '!~'
@@ -1436,7 +1436,7 @@ module Ore
 				# note; ==, !=, <, >, <=, >=, <=> aren't given fixed set-comparison semantics above, so — same as arithmetic — check for a user-declared @operator overload (on left itself, or falling back to left.enclosing_scope for shorthand-constructed instances, or a same-named global operator) before falling back to Ruby's own #==/#<=>/etc.
 				overload = find_operator_overload expr.operator.value, left
 
-				# note; A type declaring `@operator ==` but no `@operator !=` of its own (the common case ore/shape.ore's Field/Shape are exactly this) used to fall straight through to Ruby's own #!= for `!=`, which is identity-based and ignores the custom == entirely, two structurally-equal Fields compared unequal with `!=` even though `==` correctly said they were equal. `!=` now derives from a declared `==` overload (negated) when it has no overload of its own, matching how most languages auto-derive != from ==.
+				# note; A type declaring `@operator ==` but no `@operator !=` of its own (the common case ore/struct.ore's Member/Struct are exactly this) used to fall straight through to Ruby's own #!= for `!=`, which is identity-based and ignores the custom == entirely, two structurally-equal Members compared unequal with `!=` even though `==` correctly said they were equal. `!=` now derives from a declared `==` overload (negated) when it has no overload of its own, matching how most languages auto-derive != from ==.
 				if !overload.is_a?(Ore::Func) && expr.operator.value == '!='
 					overload      = find_operator_overload '==', left
 					negate_result = true
@@ -1602,8 +1602,8 @@ module Ore
 			when Ore::Func
 				interp_func_body receiver, expr
 
-			when Ore::Shape
-				interp_shape_call receiver, expr
+			when Ore::Struct
+				interp_struct_call receiver, expr
 
 			when Ore::Instance, Ore::Type
 				interp_type_call receiver, expr
@@ -1620,18 +1620,18 @@ module Ore
 		def interp_type expr
 			return interp_anonymous_composition expr if expr.anonymous_composition
 
-			# No body was parsed (`x: Abc<Number>`, `y := Abc<Number>`, `Abc<Number>()`, `Abc<4815>()`) so this references an existing type rather than declaring one. Dup it so tagging this reference with tags doesn't mutate the shared declaration every other reference sees.
+			# No body was parsed (`x: Abc<Number>`, `y := Abc<Number>`, `Abc<Number>()`, `Abc<4815>()`) so this references an existing type rather than declaring one. Dup it so structuring this reference doesn't mutate the shared declaration every other reference sees.
 			if expr.expressions.nil?
-				if expr.shape
-					supplied = interp_shape expr.shape, allow_spread: false
+				if expr.struct
+					supplied = interp_struct expr.struct, allow_spread: false
 
 					# note; `expr.name` is normally a real type name ("String"), but if it's instead a local alias bound to an earlier structured reference (`X := String<Flying>`), re-structure against *that value's own* family name rather than treating "X" itself as a type name. So `X<duck>` should behave exactly like `String<duck>`, since `.name` on any Type object (dup'd or not) always reflects its true declared family.
 					aliased     = find_in_stack expr.name
 					lookup_name = aliased.is_a?(Ore::Type) ? aliased.name : expr.name
 
-					existing = find_shaped_type_variant lookup_name, supplied
+					existing = find_structured_type_variant lookup_name, supplied
 					unless existing.is_a? Ore::Type
-						raise Ore::Undeclared_Type_Shape.new(expr, self)
+						raise Ore::Undeclared_Type_Structure.new(expr, self)
 					end
 				else
 					existing = find_in_stack expr.name
@@ -1640,20 +1640,20 @@ module Ore
 					end
 				end
 
-				# Object#dup is shallow so  @declarations/@static_declarations would still be the exact same Hash/Set every reference and the matched variant share, so tagging one would silently mutate all the others (and the variant itself). Fork them explicitly.
+				# Object#dup is shallow so  @declarations/@static_declarations would still be the exact same Hash/Set every reference and the matched variant share, so structuring one would silently mutate all the others (and the variant itself). Fork them explicitly.
 				referenced                     = existing.dup
 				referenced.declarations        = existing.declarations.dup
 				referenced.static_declarations = (existing.static_declarations || Set.new).dup
-				if expr.shape
-					# Call-site tag values are always positional (`Woof<'hello', 4815>`, never `Woof<key: 'hello'>`) for now! Here we re-associate them with the names — and pick up any defaults — from the matched variant's own tag declaration (`Woof<String, key: Dictionary> {}`) so `.shape.key` still works on the resulting instance.
+				if expr.struct
+					# Call-site member values are always positional (`Woof<'hello', 4815>`, never `Woof<key: 'hello'>`) for now! Here we re-associate them with the names — and pick up any defaults — from the matched variant's own struct declaration (`Woof<String, key: Dictionary> {}`) so `.structure.key` still works on the resulting instance.
 					# Eventually I want to support named arguments like <key='hello'>.
-					declaration            = existing.shape_declaration
-					declaration_names      = declaration.is_a?(Ore::Shape) ? declaration.names : []
-					declaration_types      = declaration.is_a?(Ore::Shape) ? declaration.type_objects : [] # declared type objects, used below only to detect an unfilled default via identity
-					declaration_type_names = declaration.is_a?(Ore::Shape) ? declaration.type_names : []
-					declaration_values     = declaration.is_a?(Ore::Shape) ? declaration.values : []
+					declaration            = existing.structure_declaration
+					declaration_names      = declaration.is_a?(Ore::Struct) ? declaration.names : []
+					declaration_types      = declaration.is_a?(Ore::Struct) ? declaration.type_objects : [] # declared type objects, used below only to detect an unfilled default via identity
+					declaration_type_names = declaration.is_a?(Ore::Struct) ? declaration.type_names : []
+					declaration_values     = declaration.is_a?(Ore::Struct) ? declaration.values : []
 
-					# A default only fills in for a field that just re-asserts the declaration's own declared type for that field (`Abc<Dictionary>()`, re-stating `dict`'s own type rather than giving it a value) — never when a real value was actually supplied there (`Abc<{x=1}>()` must keep {x=1}, not fall back to the default).
+					# A default only fills in for a member that just re-asserts the declaration's own declared type for that member (`Abc<Dictionary>()`, re-stating `dict`'s own type rather than giving it a value) — never when a real value was actually supplied there (`Abc<{x=1}>()` must keep {x=1}, not fall back to the default).
 					resolved_values = supplied.type_objects.each_with_index.map do |value, i|
 						name = declaration_names[i]
 						if name && !declaration_values[i].nil? && value.equal?(declaration_types[i])
@@ -1663,13 +1663,13 @@ module Ore
 						end
 					end
 
-					referenced.shape_instance = build_shape declaration_names, declaration_type_names, resolved_values, resolved_values
+					referenced.structure_instance = build_struct declaration_names, declaration_type_names, resolved_values, resolved_values
 				end
-				declare_shape referenced
+				declare_structure referenced
 				return referenced
 			end
 
-			if expr.shape
+			if expr.struct
 				interp_structured_type_declaration expr
 			else
 				interp_bare_type_declaration expr
@@ -1715,7 +1715,7 @@ module Ore
 			type
 		end
 
-		# A plain, untagged declaration (`String { ... }`) -- reopens/extends the same shared Type object across multiple declarations of the same bare name, e.g. how preload.ore's files each contribute to the same base String/Array/etc.
+		# A plain, unstructured declaration (`String { ... }`) -- reopens/extends the same shared Type object across multiple declarations of the same bare name, e.g. how preload.ore's files each contribute to the same base String/Array/etc.
 		def interp_bare_type_declaration expr
 			existing = stack.last.has?(expr.name) && stack.last[expr.name]
 			type     = existing.is_a?(Ore::Type) ? existing : Ore::Type.new(expr.name)
@@ -1729,10 +1729,10 @@ module Ore
 
 		# A structured declaration (`String<dict: Dictionary> { ... }`) is its own type, separate from the bare `String` and every other struct under the same name -- this stops one variant's `new`/methods from clobbering another's (a real bug this fixed).
 		def interp_structured_type_declaration expr
-			shape = interpret expr.shape
+			struct = interpret expr.struct
 
-			existing = shaped_variants_for(expr.name, current_scope_only: true).find do |variant|
-				variant.shape_declaration.shape_declaration_equal? shape
+			existing = structured_variants_for(expr.name, current_scope_only: true).find do |variant|
+				variant.structure_declaration.structure_declaration_equal? struct
 			end
 
 			if existing
@@ -1743,18 +1743,18 @@ module Ore
 				variant.expressions = blueprint.is_a?(Ore::Type) ? (blueprint.expressions || []).dup : []
 			end
 
-			variant.expressions       = (variant.expressions || []) + expr.expressions
-			variant.shape_declaration = shape
+			variant.expressions           = (variant.expressions || []) + expr.expressions
+			variant.structure_declaration = struct
 
 			# A reopened variant already ran its earlier body when it was declared, so only the new expressions run now (matching the bare path). A fresh variant runs everything, including the bare blueprint's copied body.
 			finish_type_declaration variant, (existing ? expr.expressions : variant.expressions)
 
-			stack.last.shaped_type_variants[expr.name] << variant unless existing
+			stack.last.structured_type_variants[expr.name] << variant unless existing
 			variant
 		end
 
-		# All type names a supplied tag value could match a declared shape's field under -- its own primary name first, then everything it composes, so e.g. a `Div` satisfies a field declared `Dom` without being named Dom itself. See #find_shaped_type_variant.
-		def tag_candidate_type_names value
+		# All type names a supplied member value could match a declared struct's member under -- its own primary name first, then everything it composes, so e.g. a `Div` satisfies a member declared `Dom` without being named Dom itself. See #find_structured_type_variant.
+		def member_candidate_type_names value
 			case value
 			when ::Integer, ::Float
 				['Number']
@@ -1773,37 +1773,37 @@ module Ore
 			end
 		end
 
-		# Finds the declared variant a reference's supplied structure matches. A reference field can optionally be named (`String<other := {x=1}>()`, reusing the same bare-`:=` idiom declarations use) to disambiguate when more than one declared variant would otherwise match by type alone. Narrows to variants agreeing on every explicitly-named field first, then prefers an exact type match before falling back to anything a value merely composes.
-		def find_shaped_type_variant base_name, supplied
+		# Finds the declared variant a reference's supplied structure matches. A reference member can optionally be named (`String<other := {x=1}>()`, reusing the same bare-`:=` idiom declarations use) to disambiguate when more than one declared variant would otherwise match by type alone. Narrows to variants agreeing on every explicitly-named member first, then prefers an exact type match before falling back to anything a value merely composes.
+		def find_structured_type_variant base_name, supplied
 			values = supplied.type_objects
 			return nil if values.nil? || values.empty?
 
-			variants = shaped_variants_for base_name
+			variants = structured_variants_for base_name
 			return nil if variants.empty?
 
-			candidate_lists = values.map { |value| tag_candidate_type_names value }
+			candidate_lists = values.map { |value| member_candidate_type_names value }
 			return nil if candidate_lists.any?(&:empty?)
 
 			names      = supplied.names || []
 			candidates = variants.select do |variant|
-				declared_names = variant.shape_declaration.names
+				declared_names = variant.structure_declaration.names
 				names.each_with_index.all? { |name, i| name.nil? || declared_names[i] == name }
 			end
 
 			exact_types = candidate_lists.map(&:first)
-			candidates.find { |variant| variant.shape_declaration.type_names == exact_types } ||
-				candidates.find { |variant| variant.shape_declaration.satisfied_by_candidates? candidate_lists }
+			candidates.find { |variant| variant.structure_declaration.type_names == exact_types } ||
+				candidates.find { |variant| variant.structure_declaration.satisfied_by_candidates? candidate_lists }
 		end
 
-		# Shaped variants declared under `base_name`, searched the same way #find_in_stack resolves a
+		# Structured variants declared under `base_name`, searched the same way #find_in_stack resolves a
 		# plain identifier -- innermost to outermost, stopping at the first scope that has any (lexical
 		# shadowing, not merging). `current_scope_only` restricts the search to `stack.last` alone, for
-		# declaration-time collision checks -- a nested tagged declaration should only ever collide with
+		# declaration-time collision checks -- a nested structured declaration should only ever collide with
 		# another declared in that exact scope, never one from an enclosing one.
-		def shaped_variants_for base_name, current_scope_only: false
+		def structured_variants_for base_name, current_scope_only: false
 			scopes = current_scope_only ? [stack.last] : stack.reverse_each
 			scopes.each do |scope|
-				list = scope.shaped_type_variants.fetch(base_name, [])
+				list = scope.structured_type_variants.fetch(base_name, [])
 				return list unless list.empty?
 			end
 			[]
@@ -1817,12 +1817,12 @@ module Ore
 			nil
 		end
 
-		# Makes `.shape` readable via Ore dot-access on a Type, Instance, or type reference, and marks it static so it's also readable straight off a bare Type (not just an instance). Only adds the declaration when this particular one actually has tags, so plain untagged types don't pick up a stray `tags` member.
-		def declare_shape scope
-			return unless scope.shape_instance
+		# Makes `.structure` readable via Ore dot-access on a Type, Instance, or type reference, and marks it static so it's also readable straight off a bare Type (not just an instance). Only adds the declaration when this particular one actually has a structure, so plain unstructured types don't pick up a stray `structure` member.
+		def declare_structure scope
+			return unless scope.structure_instance
 
-			scope.declarations['shape'] = scope.shape_instance # Ore-level name stays `.shape` regardless of the Ruby-side `shape` rename
-			scope.static_declarations   = (scope.static_declarations || Set.new) + ['shape']
+			scope.declarations['structure'] = scope.structure_instance
+			scope.static_declarations       = (scope.static_declarations || Set.new) + ['structure']
 		end
 
 		#
@@ -1880,7 +1880,7 @@ module Ore
 			end
 		end
 
-		# Builds the raw instance for #interp_type_call: backed by its Ore:: Ruby class when one exists, linked to its type, shape bound, and the type's body run on it. `new{;}` is invoked afterward by #interp_type_call itself.
+		# Builds the raw instance for #interp_type_call: backed by its Ore:: Ruby class when one exists, linked to its type, struct bound, and the type's body run on it. `new{;}` is invoked afterward by #interp_type_call itself.
 		def build_instance_of_type type
 			ruby_class = find_ruby_class_for_type type
 			instance   = ruby_class ? ruby_class.new : Ore::Instance.new(type.name)
@@ -1890,11 +1890,11 @@ module Ore
 			instance.enclosing_scope = type
 			instance.expressions     = type.expressions
 
-			# note; Bind structs onto the instance before the type's expressions (and therefore `new`) are interpreted below, so `new{;}`'s own body can reference `.shape`. This is a completely separate binding path from the call's own arguments — tag values never get forwarded into `new`'s params.
-			effective_shape = type.shape_instance || type.shape_declaration
-			if effective_shape
-				instance.shape_instance = effective_shape
-				declare_shape instance
+			# note; Bind structs onto the instance before the type's expressions (and therefore `new`) are interpreted below, so `new{;}`'s own body can reference `.structure`. This is a completely separate binding path from the call's own arguments — member values never get forwarded into `new`'s params.
+			effective_structure = type.structure_instance || type.structure_declaration
+			if effective_structure
+				instance.structure_instance = effective_structure
+				declare_structure instance
 			end
 
 			run_type_body_on_instance type, instance
@@ -1961,7 +1961,7 @@ module Ore
 				expr.is_a? Ore::Param_Expr
 			end
 
-			# note; Evaluate arguments in caller's scope (before pushing function scopes). A labeled argument (`to: someone`) parses as a plain `:` Infix_Expr (same production named shape fields use) so unwrap it here rather than letting #interpret try to resolve `to` as an identifier and raise Undeclared_Identifier.
+			# note; Evaluate arguments in caller's scope (before pushing function scopes). A labeled argument (`to: someone`) parses as a plain `:` Infix_Expr (same production named struct members use) so unwrap it here rather than letting #interpret try to resolve `to` as an identifier and raise Undeclared_Identifier.
 			# A caller that already evaluated the operands (operator-overload dispatch in #interp_infix) passes them via arg_values so their side effects don't run a second time; labels only exist in real call syntax, so none apply there.
 			arg_labels = []
 			arg_values ||= expr.arguments.map do |arg|
@@ -2045,7 +2045,7 @@ module Ore
 			return_value
 		end
 
-		# A call argument written as `label: value` parses as a plain `:` Infix_Expr (same production named shape fields use). returns [label, value_expr] for that shape, or [nil, arg] for a plain positional argument. Never interprets `arg`/the label side itself; that's the caller's job once it knows which expression actually holds the real value.
+		# A call argument written as `label: value` parses as a plain `:` Infix_Expr (same production named struct members use). returns [label, value_expr] for that shape, or [nil, arg] for a plain positional argument. Never interprets `arg`/the label side itself; that's the caller's job once it knows which expression actually holds the real value.
 		def argument_label_and_expr arg
 			if arg.is_a?(Ore::Infix_Expr) && arg.operator&.value == ':' && arg.left.is_a?(Ore::Identifier_Expr)
 				[arg.left.value, arg.right]
@@ -2054,13 +2054,13 @@ module Ore
 			end
 		end
 
-		# `<name: String, age: Number>` alone is a structure-only (each named field's declared type, no real data yet; see #interp_shape). `()` is how you turn that struct into an actual instance: the call's own arguments become each field's real value, positionally, same order as declared. Goes through #build_shape like every other shape construction so a declared `Shape` type's own body/methods still run.
+		# `<name: String, age: Number>` alone is a structure-only (each named member's declared type, no real data yet; see #interp_struct). `()` is how you turn that struct into an actual instance: the call's own arguments become each member's real value, positionally, same order as declared. Goes through #build_struct like every other struct construction so a declared `Struct` type's own body/methods still run.
 		#
-		# @param shape [Ore::Shape]
+		# @param struct [Ore::Struct]
 		# @param expr [Ore::Call_Expr]
-		def interp_shape_call shape, expr
-			values = expr.arguments.map { |arg| wrap_shape_string_value(arg, interpret(arg)) }
-			build_shape shape.names, shape.type_names, shape.type_objects, values
+		def interp_struct_call struct, expr
+			values = expr.arguments.map { |arg| wrap_struct_string_value(arg, interpret(arg)) }
+			build_struct struct.names, struct.type_names, struct.type_objects, values
 		end
 
 		# @param expr [Ore::Route_Expr]
@@ -2305,8 +2305,9 @@ module Ore
 				when Ore::String
 					collection.value.chars
 
-				when Ore::Shape
-					collection.types_by_tag_name
+				when Ore::Struct
+					# `.members` (an `Ore::Array` of `Ore::Member`) is only populated when the opt-in `ore/struct.ore` layer is loaded (see #build_struct) -- a bare Struct with no matching declared `Struct` type has nothing to iterate.
+					collection.declarations['members']&.values || []
 
 				else
 					collection # todo; This could be a number, and every other object in the language.
@@ -2468,13 +2469,13 @@ module Ore
 			case expr.name.value
 			when 'declare'
 				# todo; `@declare "ident", value, Type`
-				if expr.expression.is_a? Ore::Shape
-					# then declare all the fields
-					expr.expression.fields.each do |field|
-						next unless field.name
-						# @param field [Ore::Field]
+				if expr.expression.is_a? Ore::Struct
+					# then declare all the members
+					expr.expression.members.each do |member|
+						next unless member.name
+						# @param member [Ore::Member]
 						# :name, :type, :value
-						stack.last.declare field.name, field.value, field.type
+						stack.last.declare member.name, member.value, member.type
 					end
 					return interpret expr.expression
 				end
@@ -2614,98 +2615,98 @@ module Ore
 			end
 		end
 
-		def interp_shape expr, allow_spread: true
-			types      = [] # per-field type object (or the raw value itself for unnamed fields)
-			values     = [] # per-field real value, nil when a named field has none
-			names      = []
-			single_tag = allow_spread && expr.types.length == 1 # only a lone unnamed field spreads -- see below
+		def interp_struct expr, allow_spread: true
+			types         = [] # per-member type object (or the raw value itself for unnamed members)
+			values        = [] # per-member real value, nil when a named member has none
+			names         = []
+			single_member = allow_spread && expr.types.length == 1 # only a lone unnamed member spreads -- see below
 
-			expr.types.each_with_index do |tag, i|
+			expr.types.each_with_index do |member, i|
 				if expr.names[i]
-					# note; Named field (e.g. `some_string: String`), the field's own identifier (`some_string`) is just a label, not something to look up; resolve its declared type instead. Named fields are never spread: the name is always its namespace (`.shape.columns`), even when the value is itself a Shape.
-					if tag.type
+					# note; Named member (e.g. `some_string: String`), the member's own identifier (`some_string`) is just a label, not something to look up; resolve its declared type instead. Named members are never spread: the name is always its namespace (`.structure.columns`), even when the value is itself a Struct.
+					if member.type
 						type_ref        = Ore::Identifier_Expr.new
-						type_ref.lexeme = tag.type
+						type_ref.lexeme = member.type
 						types << interpret(type_ref)
-						if tag.tag_default
-							default_value = interpret(tag.tag_default)
-							values << wrap_shape_string_value(tag.tag_default, default_value)
+						if member.member_default
+							default_value = interpret(member.member_default)
+							values << wrap_struct_string_value(member.member_default, default_value)
 						else
 							values << nil
 						end
 					else
-						# Bare `name := value` field, no `: Type` annotation -- infer the field's declared type from the default's own runtime type, same as plain `:=` does everywhere else.
-						default_value = interpret(tag.tag_default)
+						# Bare `name := value` member, no `: Type` annotation -- infer the member's declared type from the default's own runtime type, same as plain `:=` does everywhere else.
+						default_value = interpret(member.member_default)
 						types << find_in_stack(type_name_to_string(default_value))
-						values << wrap_shape_string_value(tag.tag_default, default_value)
+						values << wrap_struct_string_value(member.member_default, default_value)
 					end
 					names << expr.names[i]
 				else
-					value = interpret tag
+					value = interpret member
 
-					if single_tag && value.is_a?(Ore::Shape)
+					if single_member && value.is_a?(Ore::Struct)
 						types.concat value.type_objects
 						values.concat value.values
 						names.concat value.names
 					else
 						types << value
-						values << wrap_shape_string_value(tag, value)
+						values << wrap_struct_string_value(member, value)
 						names << nil
 					end
 				end
 			end
 
-			# Each field's "type" here is just its value's own inferred type name
+			# Each member's "type" here is just its value's own inferred type name
 			type_names = types.map { |value| type_name_to_string value }
-			build_shape names, type_names, types, values
+			build_struct names, type_names, types, values
 		end
 
-		# A shape/field value built from a string literal gets wrapped into a real Ore::String carrying the literal's own `quotation_style`, instead of staying the bare Ruby string #interp_string normally returns. Fieldto_s{;} (ore/field.ore) reads `.quotation_style` straight off the value to decide how to quote it for idsplay.
-		def wrap_shape_string_value source_expr, value
+		# A struct/member value built from a string literal gets wrapped into a real Ore::String carrying the literal's own `quotation_style`, instead of staying the bare Ruby string #interp_string normally returns. Member's to_s{;} (ore/member.ore) reads `.quotation_style` straight off the value to decide how to quote it for display.
+		def wrap_struct_string_value source_expr, value
 			return value unless source_expr.is_a?(Ore::String_Expr) && value.is_a?(::String)
 			finish_intrinsic_instance Ore::String.new(value, source_expr.quotation_style), 'String'
 		end
 
-		def build_shape names, type_names, types, values
-			shape_type = find_in_stack 'Shape'
+		def build_struct names, type_names, types, values
+			struct_type = find_in_stack 'Struct'
 
-			# The low-level Ore::Shape object is always built first and exactly the same way
-			# regardless of `shape_type` -- it's what #type_objects/etc. read from, and every existing
-			# tag-matching call site depends on it being real.
-			shape = Ore::Shape.new names, type_names, types, values
+			# The low-level Ore::Struct object is always built first and exactly the same way
+			# regardless of `struct_type` -- it's what #type_objects/etc. read from, and every existing
+			# member-matching call site depends on it being real.
+			struct = Ore::Struct.new names, type_names, types, values
 
-			unless shape_type.is_a? Ore::Type
-				link_instance_to_type shape, 'Shape'
-				return shape
+			unless struct_type.is_a? Ore::Type
+				link_instance_to_type struct, 'Struct'
+				return struct
 			end
 
-			shape.name            = shape_type.name
-			shape.types           = shape_type.types
-			shape.enclosing_scope = shape_type
+			struct.name            = struct_type.name
+			struct.types           = struct_type.types
+			struct.enclosing_scope = struct_type
 
-			run_type_body_on_instance shape_type, shape
+			run_type_body_on_instance struct_type, struct
 
 			{ 'names' => names, 'type_names' => type_names, 'types' => types, 'values' => values }.each do |key, list|
 				array = Ore::Array.new list
 				link_instance_to_type array, 'Array'
-				shape.declarations[key] = array
+				struct.declarations[key] = array
 			end
 
-			field_type = find_in_stack 'Field'
-			if field_type.is_a?(Ore::Type) && shape.has?('fields')
-				fields = names.each_index.map do |i|
-					field_display_type = names[i] ? types[i] : find_in_stack(type_names[i])
-					field              = Ore::Field.new names[i], field_display_type, values[i]
-					link_instance_to_type field, 'Field'
-					field
+			member_type = find_in_stack 'Member'
+			if member_type.is_a?(Ore::Type) && struct.has?('members')
+				members = names.each_index.map do |i|
+					member_display_type = names[i] ? types[i] : find_in_stack(type_names[i])
+					member              = Ore::Member.new names[i], member_display_type, values[i]
+					link_instance_to_type member, 'Member'
+					member
 				end
 
-				fields_array = Ore::Array.new fields
-				link_instance_to_type fields_array, 'Array'
-				shape.declarations['fields'] = fields_array
+				members_array = Ore::Array.new members
+				link_instance_to_type members_array, 'Array'
+				struct.declarations['members'] = members_array
 			end
 
-			shape
+			struct
 		end
 
 		# @param expr [Ore::Operator_Overload_Expr]
@@ -2797,8 +2798,8 @@ module Ore
 					throw :stop
 				end
 
-			when Ore::Shape_Expr
-				interp_shape expr
+			when Ore::Struct_Expr
+				interp_struct expr
 
 			else
 				raise Ore::Interpret_Expr_Not_Implemented.new(expr, self)

@@ -1,4 +1,4 @@
-# A variety of [tagged](#tbd) Types.
+# A variety of [structured](#tbd) Types.
 
 ```
 dict := { x=0, y=0 }
@@ -13,7 +13,7 @@ String<dict: Dictionary> {
 	to_s {;
 		final := ./value
 		final += '{'
-		for tags.dict
+		for structure.dict
 			final += " `key`::`value` "
 		end
 		final += '}'
@@ -23,7 +23,7 @@ String<dict: Dictionary> {
 
 ```
 @load 'ore/html.ore'
-@load 'examples/tagged_types.ore'
+@load 'examples/structured_types.ore'
 
 dom := Div([H1('Hello')])
 
@@ -33,6 +33,6 @@ str.to_s()  # '<div> <h1>Hello</h1> </div>'
 @load 'ore/html.ore'
 String<dom: Dom> {
 	to_s {;
-		tags.dom.?to_s() # Dom renders the Html through a to_s{;} call.
+		structure.dom.?to_s() # Dom renders the Html through a to_s{;} call.
 	}
 }

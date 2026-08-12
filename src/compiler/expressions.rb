@@ -91,8 +91,8 @@ module Ore
 		attr_accessor :name, :expression, :message, :arguments
 	end
 
-	class Shape_Expr < Expression
-		attr_accessor :types, :names # names[i] is nil for unnamed fields, e.g. `Type<String>` but has value for named fields, e.g. `Type<str: String>`
+	class Struct_Expr < Expression
+		attr_accessor :types, :names # names[i] is nil for unnamed members, e.g. `Type<String>` but has value for named members, e.g. `Type<str: String>`
 
 		def to_s
 			::String.new("<").tap do |str|
@@ -100,9 +100,9 @@ module Ore
 					type = it[0]
 					name = it[1] # Optional, may be nil
 
-					# For a named field (`s: String`), `type` is the whole Identifier_Expr
+					# For a named member (`s: String`), `type` is the whole Identifier_Expr
 					# (`.value` is the name "s", already captured in `name`) -- the actual
-					# type annotation lives on its `.type` Lexeme instead. An unnamed field can
+					# type annotation lives on its `.type` Lexeme instead. An unnamed member can
 					# be any expression, not just a bare type-name identifier (`Abc<'users'>`,
 					# `Abc<1+2+3>`, ...) -- every Expression subtype carries a `.value` off its
 					# own lexeme via the shared base, even if it's not a perfect rendering of
@@ -130,7 +130,7 @@ module Ore
 	end
 
 	class Type_Expr < Expression
-		attr_accessor :name, :expressions, :shape
+		attr_accessor :name, :expressions, :struct
 		# A composition chain (`Abc|Def`, `A & B`, ...) with no `{ }` body -- a reference to an
 		# anonymous type built by applying the chain (`.expressions`, all Composition_Expr), not a
 		# declaration. See #Parser#parse_type_decl/#Interpreter#interp_type.
@@ -186,7 +186,7 @@ module Ore
 	end
 
 	class Identifier_Expr < Expression
-		attr_accessor :kind, :unpack, :scope_operator, :directive, :privacy, :binding, :type_tags, :tag_default
+		attr_accessor :kind, :unpack, :scope_operator, :directive, :privacy, :binding, :type_struct, :member_default
 	end
 
 	class Composition_Expr < Expression

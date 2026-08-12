@@ -1,8 +1,8 @@
 ``` Introduction by Claude
 
-Tuples (`(...)`) and Shapes (`<...>`) both hold an ordered list of values, and both can be pulled apart into their individual pieces with the same destructuring syntax: `(targets) := source`. This file is about how the two work together through that. See learn/shapes.ore and learn/shaped_types.ore for Shapes on their own first if you haven't already. Loading `ore/shape.ore` (like those two files do) is what gives a Shape's `.values` a proper `to_s` for display below -- not required for destructuring itself, which works either way.
+Tuples (`(...)`) and Structs (`<...>`) both hold an ordered list of values, and both can be pulled apart into their individual pieces with the same destructuring syntax: `(targets) := source`. This file is about how the two work together through that. See learn/structs.ore and learn/structured_types.ore for Structs on their own first if you haven't already. Loading `ore/struct.ore` (like those two files do) is what gives a Struct's `.values` a proper `to_s` for display below -- not required for destructuring itself, which works either way.
 ```
-@load 'ore/shape.ore'
+@load 'ore/struct.ore'
 
 pair := (1, 2)
 trio := <1, 2, 3>
@@ -18,7 +18,7 @@ quad := <1, id := 2, ix: Number, String>(4, 8, 1, 'five')
 
 ``` Same destructuring syntax, either source
 
-`(a, b) := source` extracts values positionally into fresh locals -- works identically whether `source` is a Tuple or a Shape, since both are just an ordered list of values underneath:
+`(a, b) := source` extracts values positionally into fresh locals -- works identically whether `source` is a Tuple or a Struct, since both are just an ordered list of values underneath:
 ```
 (a, b) := (1, 2)
 @puts "a + b: `a + b`"   # a + b: 3
@@ -53,9 +53,9 @@ Annotate a target with `: Type` and the extracted value has to match it:
 # (x: String, y) := (1, 2)  -- raises Type_Contract_Violation: extracted value is a Number, not a String
 
 
-``` Destructuring straight into an existing field
+``` Destructuring straight into an existing member
 
-A target doesn't have to be a fresh local -- `thing.field` reassigns an existing field instead, same rules as writing `thing.field = value` directly: the field has to already exist, can't be a constant, and (if it has a locked type) the extracted value has to match it. See CLAUDE.md's "Field Creation Is Strict" for why the field has to already exist.
+A target doesn't have to be a fresh local -- `thing.member` reassigns an existing member instead, same rules as writing `thing.member = value` directly: the member has to already exist, can't be a constant, and (if it has a locked type) the extracted value has to match it. See CLAUDE.md's "Member Creation Is Strict" for why the member has to already exist.
 ```
 Point {
 	x, y,
@@ -73,7 +73,7 @@ p := Point(0, 0)
 
 ``` The two target kinds mix freely in one destructure
 
-A fresh local and an existing field can sit side by side in the same `(...)`:
+A fresh local and an existing member can sit side by side in the same `(...)`:
 ```
 p2 := Point(0, 0)
 (p2.x, offset_y) := (5, 9)
@@ -81,9 +81,9 @@ p2 := Point(0, 0)
 @puts "offset_y: `offset_y`"   # offset_y: 9
 
 
-``` Shapes as a "return multiple values" convention
+``` Structs as a "return multiple values" convention
 
-Since `<...>` is just a value like any other, a function can hand back several results by returning a Shape (or Tuple) literal, and the caller destructures it immediately:
+Since `<...>` is just a value like any other, a function can hand back several results by returning a Struct (or Tuple) literal, and the caller destructures it immediately:
 ```
 min_and_max { a, b;
 	if a < b
@@ -98,9 +98,9 @@ min_and_max { a, b;
 @puts "hi: `hi`"   # hi: 9
 
 
-``` Named shapes still destructure positionally
+``` Named structs still destructure positionally
 
-Field names don't change how destructuring reads a Shape -- it only ever goes by position, so a named Shape works exactly like an unnamed one here:
+Member names don't change how destructuring reads a Struct -- it only ever goes by position, so a named Struct works exactly like an unnamed one here:
 ```
 (name, age) := <name: String = 'Alice', age: Number = 30>
 @puts "name: `name`"   # name: Alice

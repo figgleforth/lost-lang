@@ -1,6 +1,6 @@
 ``` Introduction
 
-`@` unpacks an instance's members into a sibling scope, so its fields are reachable without an `instance.` prefix. A sibling scope is only checked as a fallback, after a scope's own declarations -- it doesn't override anything already reachable, it just adds another place to look.
+`@` unpacks an instance's members into a sibling scope, so its members are reachable without an `instance.` prefix. A sibling scope is only checked as a fallback, after a scope's own declarations -- it doesn't override anything already reachable, it just adds another place to look.
 ```
 Raft {
 	length := 0

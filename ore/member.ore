@@ -1,4 +1,4 @@
-Field {
+Member {
 	name: String
 	type: Any
 	value: Any
@@ -41,11 +41,11 @@ Field {
 		end
 	}
 
-	@operator == @infix { left: Field, right: Field;
+	@operator == @infix { left: Member, right: Member;
 		left.name == right.name and left.type == right.type and left.value == right.value
 	}
 
-	@operator === @infix { left: Field, right: Field;
+	@operator === @infix { left: Member, right: Member;
 		left.name == right.name and left.type == right.type
 	}
 }

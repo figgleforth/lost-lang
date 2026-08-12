@@ -1,0 +1,68 @@
+``` Introduction
+
+Sometimes you want to attach a small bundle of typed data to something without declaring a whole new Type for it. Structs are Ore's answer: `<...>` builds a small, structured, runtime-inspectable value on the spot.
+
+This file is about Structs as standalone values. Attaching `<...>` to a Type name instead (to create independent variants of that type) is a related but separate feature -- see learn/structured_types.ore for that.
+```
+pair := <String, Number>
+type_names := pair.types.values.map({;
+	it.name
+}).join(', ')
+@puts "pair's member types: `type_names`"   # pair's member types: String, Number
+
+
+``` Two layers, don't confuse them
+
+- Ore::Member/Ore::Struct (Ruby, src/external/ruby/struct.rb + member.rb) -- the low-level engine behind every `<...>` literal above. Always present, no load required.
+- Member/Struct (Ore, ore/struct.ore + member.ore) -- a separate, higher-level layer built on top, loaded by default as part of the standard library (`ore/preload.ore` -- `@load 'ore/struct.ore'` here is redundant, just explicit). Gives you a proper Ore-level Struct type with a real `.members` array, `has?`/`include?`, and custom `==`/`+` operators, so a `<...>` literal actually runs a real declared type's body instead of being a bare Ruby struct.
+```
+@load 'ore/struct.ore'
+
+
+``` Members
+
+A Member just remembers a name, a value, and a type, and knows how to describe itself. The constructor order is name, value, type -- not name, type, value:
+```
+f1 := Member('age', 42, Number)
+f2 := Member('name', nil, String)
+
+@puts "f1: `f1.to_s()`"   # f1: age: Number = 42
+@puts "f2: `f2.to_s()`"   # f2: name: String -- no value supplied
+
+
+``` Instantiating a struct directly
+
+`<name: String, age: Number>` alone is schema-only -- as shown in the Introduction, each member's "value" there is its declared type, not real data. Calling `()` on a struct literal is how you turn that schema into an actual instance: the arguments become each member's real value, positionally, same order as declared:
+```
+s := <name: String, age: Number>('Alice', 30)
+@puts "s: `s.to_s()`"                       # s: <name: String = 'Alice', age: Number = 30>
+@puts "s.members.0: `s.members.0.to_s()`"   # s.members.0: name: String = 'Alice'
+@puts "s.members.1: `s.members.1.to_s()`"   # s.members.1: age: Number = 30
+
+
+``` Equality
+
+Member declares two different comparisons. `==` compares name, type, AND value -- "is this the exact same member, value included". `===` compares only name and type, ignoring value entirely -- "is this the same kind of member":
+```
+a := Member('id', nil, Number)
+b := Member('id', nil, Number)
+c := Member('id', 5, Number)
+
+@puts "a == b: `a == b`"     # a == b: true  -- same name, type, and value (both nil)
+@puts "a === b: `a === b`"   # a === b: true  -- same name and type
+@puts "a == c: `a == c`"     # a == c: false -- different value (nil vs 5)
+@puts "a === c: `a === c`"   # a === c: true  -- still the same name and type
+
+
+``` Struct equality
+
+Struct's `==`/`===` just delegate to its `.members` array, comparing element-wise with the exact same rules as above -- `==` needs every member's value to match too, `===` only needs the same members to exist with the same types:
+```
+sa := <name: String, age: Number>('Alice', 30)
+sb := <name: String, age: Number>('Alice', 30)
+sc := <name: String, age: Number>('Alice', 99)
+
+@puts "sa == sb: `sa == sb`"     # sa == sb: true  -- identical values
+@puts "sa === sb: `sa === sb`"   # sa === sb: true
+@puts "sa == sc: `sa == sc`"     # sa == sc: false -- age differs (30 vs 99)
+@puts "sa === sc: `sa === sc`"   # sa === sc: true  -- still the same structure of members

@@ -632,15 +632,15 @@ class Regression_Test < Base_Test
 		assert Ore.interp '5 != 9'
 	end
 
-	def test_calling_a_bare_shape_literal_constructs_an_instance_regression
+	def test_calling_a_bare_struct_literal_constructs_an_instance_regression
 		out = Ore.interp <<~CODE
-		    @load 'ore/shape.ore'
+		    @load 'ore/struct.ore'
 		    s := <name: String, age: Number>('Alice', 30)
-		    s.fields.0.value.value
+		    s.members.0.value.value
 		CODE
 		assert_equal 'Alice', out
 
-		# Also works with no matching `Shape` type loaded (bare Ore::Shape fallback).
+		# Also works with no matching `Struct` type loaded (bare Ore::Struct fallback).
 		refute_raises do
 			Ore.interp '<id: Number>(5)'
 		end
@@ -871,15 +871,15 @@ class Regression_Test < Base_Test
 
 	def test_comparing_two_type_objects_does_not_dispatch_instance_operator_overload_regression
 		out = Ore.interp <<~CODE
-		    @load 'ore/shape.ore'
-		    a := Field('id', nil, String)
-		    b := Field('id', nil, String)
+		    @load 'ore/struct.ore'
+		    a := Member('id', nil, String)
+		    b := Member('id', nil, String)
 		    a == b
 		CODE
 		assert_equal true, out
 
 		out = Ore.interp <<~CODE
-		    @load 'ore/shape.ore'
+		    @load 'ore/struct.ore'
 		    sa := <name: String, age: Number>('Alice', 30)
 		    sb := <name: String, age: Number>('Alice', 30)
 		    sc := <name: String, age: Number>('Alice', 99)

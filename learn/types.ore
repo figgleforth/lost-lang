@@ -123,7 +123,7 @@ s := Steve()
 
 ``` Composition: & intersection, ~ difference, ^ symmetric difference
 
-The other three operators only make sense once two sides might disagree. `Castaway` and `Other` both declare a `faction` method (with different bodies) here, alongside their own unique fields, to show how each operator treats a genuine name collision differently:
+The other three operators only make sense once two sides might disagree. `Castaway` and `Other` both declare a `faction` method (with different bodies) here, alongside their own unique members, to show how each operator treats a genuine name collision differently:
 
   &  keeps only what BOTH sides declare (here: just `faction` -- the shared name)
   ~  removes the right side's declarations from the left (drops `faction`, keeps `survived_815`)
@@ -149,7 +149,7 @@ both := (Castaway & Other)()
 @puts "both.faction(): `both.faction()`"   # both.faction(): Survivors -- the only shared name, left side's version wins
 
 just_theirs := (Castaway ~ Other)()
-@puts "just_theirs.survived_815: `just_theirs.survived_815`"   # just_theirs.survived_815: true -- Castaway's own, un-shared field survives
+@puts "just_theirs.survived_815: `just_theirs.survived_815`"   # just_theirs.survived_815: true -- Castaway's own, un-shared member survives
 
 unique := (Castaway ^ Other)()
 @puts "unique.survived_815: `unique.survived_815`"   # unique.survived_815: true -- unique to Castaway

@@ -28,16 +28,16 @@ module Ore
 		end
 	end
 
-	class Undeclared_Type_Shape < Error
-		# When a tagged-type reference (`Abc<Number>`) has no declared variant matching its shape (`Abc<Number> {}`)
+	class Undeclared_Type_Structure < Error
+		# When a structured-type reference (`Abc<Number>`) has no declared variant matching its structure (`Abc<Number> {}`)
 		# @expression: Ore::Type_Expr
 
 		def detail_message
-			name                 = expression.name
-			shape                = expression.shape.to_s
-			expected_shaped_type = "#{name}#{shape} {}"
-			existing_type        = "#{name} {}"
-			"#{Ascii.bold name} shaped with #{Ascii.bold shape} not found:\n\n\t#{Ascii.bold expected_shaped_type}"
+			name                     = expression.name
+			structure                = expression.struct.to_s
+			expected_structured_type = "#{name}#{structure} {}"
+			existing_type            = "#{name} {}"
+			"#{Ascii.bold name} structured with #{Ascii.bold structure} not found:\n\n\t#{Ascii.bold expected_structured_type}"
 		end
 	end
 
@@ -271,7 +271,7 @@ module Ore
 
 	class Invalid_Destructuring_Source < Error
 		def detail_message
-			'Only a Tuple or Shape can be destructured with `(...) := ...`'
+			'Only a Tuple or Struct can be destructured with `(...) := ...`'
 		end
 	end
 

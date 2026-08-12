@@ -1,6 +1,6 @@
 module Ore
 	class Scope
-		attr_accessor :enclosing_scope, :sibling_scopes, :declarations, :name, :type_by_identifier, :static_declarations, :shaped_type_variants
+		attr_accessor :enclosing_scope, :sibling_scopes, :declarations, :name, :type_by_identifier, :static_declarations, :structured_type_variants
 
 		def initialize name = nil
 			@name                = name
@@ -8,12 +8,12 @@ module Ore
 			@sibling_scopes      = []
 			@type_by_identifier  = {}
 			@static_declarations = Set.new
-			# `Type<Shape> { }` declarations of the same base name (e.g. every shaped variant of
+			# `Type<Struct> { }` declarations of the same base name (e.g. every structured variant of
 			# "String") are kept here, separate from @declarations -- see
-			# #Interpreter#interp_structured_type_declaration/#find_shaped_type_variant. A base name maps
-			# to every variant declared under it in this scope; matching is by real shape equality
+			# #Interpreter#interp_structured_type_declaration/#find_structured_type_variant. A base name maps
+			# to every variant declared under it in this scope; matching is by real structure equality
 			# (names + types), not a mangled string key.
-			@shaped_type_variants = Hash.new { |h, k| h[k] = [] }
+			@structured_type_variants = Hash.new { |h, k| h[k] = [] }
 		end
 
 		def declare identifier, value, type = nil
@@ -82,11 +82,11 @@ module Ore
 
 	class Type < Scope
 		attr_accessor :expressions, :types, :routes
-		# Holds an Ore::Shape, exposed to Ore code as `.shape_instance` regardless (see #declare_shape) -- this is just the Ruby-side name.
-		attr_accessor :shape_instance
-		# A type's own tag declaration (e.g. `Abc<dict: Dictionary = {}> {}`)'s named/positional fields, annotations, and defaults -- kept separate from `.shape`, which is only ever set on an explicit `Abc<...>` reference, never the bare type (see #interp_type_call).
-		# Both live on Type, not Scope, since a tagged reference is a dup of the type (same class), so Type/Instance can't stand in for this distinction.
-		attr_accessor :shape_declaration
+		# Holds an Ore::Struct, exposed to Ore code as `.structure` (see #declare_structure) -- `structure_instance` is just the Ruby-side name.
+		attr_accessor :structure_instance
+		# A type's own struct declaration (e.g. `Abc<dict: Dictionary = {}> {}`)'s named/positional members, annotations, and defaults -- kept separate from `.structure`, which is only ever set on an explicit `Abc<...>` reference, never the bare type (see #interp_type_call).
+		# Both live on Type, not Scope, since a structured reference is a dup of the type (same class), so Type/Instance can't stand in for this distinction.
+		attr_accessor :structure_declaration
 
 		def initialize name = nil
 			super name
