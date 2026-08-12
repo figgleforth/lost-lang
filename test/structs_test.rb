@@ -479,4 +479,23 @@ class Structs_Test < Base_Test
 			assert_equal 0, out
 		end
 	end
+
+	# A struct member's only two named forms are `name: Type` and `name := value` -- there's no general `name: value` the way Dictionaries have. A lowercase value right after `:` used to be silently accepted: #parse_identifier_expr's own `: Type` lookahead declined to consume the `:` (since a lowercase identifier can never be a type), leaving it for the next loop iteration to reparse as an unrelated `:symbol` prefix literal -- `<columns: cols>` silently became the two elements `columns, :cols` instead of raising anywhere.
+	def test_lowercase_value_after_colon_in_struct_raises
+		assert_raises Ore::Invalid_Struct_Member_Annotation do
+			Ore.interp 'columns := 99
+				<columns: cols>'
+		end
+	end
+
+	# The two legitimate ways to read as "two elements" instead: an explicit comma, or `:=` to actually give a member a value.
+	def test_struct_still_supports_the_forms_that_look_similar
+		out = Ore.interp 'columns := 99
+			<columns, :cols>'
+		assert_equal [99, :cols], out.values
+
+		out = Ore.interp 'cols := <name: String>
+			<columns := cols>'
+		assert_kind_of Ore::Struct, out.values.first
+	end
 end

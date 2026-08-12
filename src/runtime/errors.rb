@@ -41,6 +41,13 @@ module Ore
 		end
 	end
 
+	# A struct member (`<...>`) named identifier is immediately followed by `:` and something that isn't a valid type (a capitalized identifier, or `<...>`) -- almost always a lowercase value, as if `:` worked like a Dictionary's `key: value`. It doesn't inside `<...>`: a struct member's only two named forms are `name: Type` and `name := value`. Raised at parse time rather than silently leaving the `:` unconsumed, which would otherwise reparse it as an unrelated `:symbol` prefix literal starting a brand-new element (commas are optional between struct members, same as any other list) -- `<columns: cols>` would silently become the two elements `columns, :cols`.
+	class Invalid_Struct_Member_Annotation < Error
+		def detail_message
+			"A struct member's type must be capitalized (or `<...>`) right after `:` -- got a lowercase value instead. Use `name := value` to give a member a real value, or add a comma if two separate members were intended."
+		end
+	end
+
 	class Cannot_Reassign_Constant < Error
 	end
 

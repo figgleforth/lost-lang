@@ -391,8 +391,16 @@ module Ore
 						element.member_default = parse_expression(precedence_for('<'))
 					end
 
+					# A `:` still sitting here means #parse_identifier_expr's own `: Type` lookahead (above, inside `element`) saw a `:` but declined to consume it, because what followed wasn't a valid type -- almost always a lowercase value, as if `:` worked like a Dictionary's `key: value`. It doesn't in a struct member list, so raise here rather than silently leaving the `:` to be reparsed as an unrelated `:symbol` prefix literal starting a whole new element next iteration (commas are optional between struct members, same as any other list).
+					raise Ore::Invalid_Struct_Member_Annotation.new(curr_lexeme) if curr? ':'
+
 					it.types << element
-					it.names << (element.is_a?(Ore::Identifier_Expr) && (element.type || element.member_default) ? element.value : nil)
+					it.names << if element.is_a?(Ore::Identifier_Expr) && (element.type || element.member_default)
+						element.value
+					else
+						nil
+					end
+
 					eat if curr? ','
 				end
 				closing = eat '>'
