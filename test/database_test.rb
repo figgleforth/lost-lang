@@ -1,5 +1,5 @@
 require 'minitest/autorun'
-require_relative '../src/ruby/ore'
+require_relative '../src/ore'
 require_relative 'base_test'
 require 'net/http'
 require 'uri'

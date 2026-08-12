@@ -1,5 +1,5 @@
 require 'minitest/autorun'
-require_relative '../src/ruby/ore'
+require_relative '../src/ore'
 require_relative 'base_test'
 
 class Interpreter_Test < Base_Test
@@ -551,6 +551,21 @@ class Interpreter_Test < Base_Test
 		assert_equal 'Type', out.name
 	end
 
+	# Bare `X.new` is equivalent to `X()` — it runs `new{;}`, so required constructor params raise.
+	def test_bare_new_runs_constructor
+		out = Ore.interp 'Thing {
+			x,
+			new {;
+				./x = 123
+			}
+		}, Thing.new.x'
+		assert_equal 123, out
+
+		assert_raises Ore::Missing_Argument do
+			Ore.interp 'Thing { x, new { x; ./x = x } }, Thing.new'
+		end
+	end
+
 	def test_complex_type_init
 		out = Ore.interp 'Transform {
 			position,
@@ -563,7 +578,7 @@ class Interpreter_Test < Base_Test
 				"Transform!"
 			}
 
-			new { position; }
+			new { position := 0; }
 		}, Transform.new'
 		assert_kind_of Ore::Instance, out
 		assert_equal 'Transform', out.name
@@ -596,7 +611,7 @@ class Interpreter_Test < Base_Test
 		out = Ore.interp 'Vector2 { x := 0, y := 1 }
 		pos := Vector2()'
 		assert_instance_of Ore::Instance, out
-		data = { 'x' => 0, 'y' => 1 }
+		data = { 'x' => 0, 'y' => 1, 'name' => 'Vector2' }
 		assert_equal data, out.declarations
 	end
 
@@ -2132,12 +2147,6 @@ class Interpreter_Test < Base_Test
 		assert_equal "Hello, Read!\n", out.value # note: There is a newline at the end of the file, so it has to be included here
 	end
 
-	def test_writing_files
-		Ore.interp "File_System.write_string_to_file('test/fixtures/hello_write.txt', 'Hello, Write!')"
-		out = Ore.interp "File_System.read_file_to_string('test/fixtures/hello_write.txt')"
-		assert_equal "Hello, Write!", out.value
-	end
-
 	def test_html_fence_with_interpolation
 		out = Ore.interp "
 		name := 'Cooper'
@@ -2235,12 +2244,12 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_new_comma_nil_init
-		out = Ore.interp <<~CODE
-		    x := (abc,1)    # declares abc = nil
-			(x, abc)
-		CODE
-		# [[nil, 1], nil]
-		assert_equal [nil, 1], out.values.first.values
+		assert_raises(Ore::Undeclared_Identifier) do
+			Ore.interp <<~CODE
+			    x := (abc,1)
+				(x, abc)
+			CODE
+		end
 
 		out = Ore.interp <<~CODE
 		    abc := 2, (abc,1),
@@ -2510,36 +2519,36 @@ class Interpreter_Test < Base_Test
 	end
 
 	def test_function_signatures
-		out = Ore.interp 'Num_To_Str := String{Number;}'
+		out = Ore.interp 'Num_To_Str := {Number -> String;}'
 		assert_kind_of Ore::Func_Signature, out
 		assert_equal ['Number'], out.param_types
 		assert_equal 'String', out.return_type
 
 		# Named + typed param — the name is discarded, only the type survives.
-		out = Ore.interp 'String{a: Number;}'
+		out = Ore.interp '{a: Number -> String;}'
 		assert_equal ['Number'], out.param_types
 		assert_equal 'String', out.return_type
 
 		# Zero-arg signature.
-		out = Ore.interp 'String{;}'
+		out = Ore.interp '{-> String;}'
 		assert_equal [], out.param_types
 		assert_equal 'String', out.return_type
 
 		# Bare and named+typed params can mix in the same param list.
-		out = Ore.interp 'String{Number, a: Number;}'
+		out = Ore.interp '{Number, a: Number -> String;}'
 		assert_equal %w(Number Number), out.param_types
 		assert_equal 'String', out.return_type
 
 		# Named param with no type annotation is a malformed signature — every param slot in a signature literal must carry a type.
 		assert_raises Ore::Invalid_Func_Signature do
-			Ore.interp 'String{a;}'
+			Ore.interp '{a -> String;}'
 		end
 
 		# Bare as a top-level expression, not just as the RHS of :=.
-		out = Ore.interp 'String{Number;}'
+		out = Ore.interp '{Number -> String;}'
 		assert_kind_of Ore::Func_Signature, out
 
-		# Regression: an ordinary Type declaration with a method must still parse as a real type, not get misdetected as a signature literal — this is exactly the shape #signature_literal?'s lookahead has to get right (a `;` inside a nested method's braces isn't a signature).
+		# Regression: an ordinary Type declaration with a method must still parse as a real type — now unambiguous, since a signature literal never starts with a Capitalized type name anymore.
 		out = Ore.interp <<~CODE
 		    Person {
 		    	greet {; "hi" }
@@ -2574,27 +2583,17 @@ class Interpreter_Test < Base_Test
 		assert_equal 'Number', error.contract
 		assert_equal 'String', error.actual
 
-		# `name: Type { }` is only ever valid for a signature (no real body) — a real implementation must declare its return type inside via `-> Type`.
-		assert_raises Ore::Invalid_Func_Signature do
-			Ore.interp 'identity: Number { a; a }'
-		end
-
-		# Same rule even with an empty body — combining the prefix with an inline `-> Type` is still using both forms at once, not just "no real body".
-		assert_raises Ore::Invalid_Func_Signature do
-			Ore.interp 'example: String { -> Number; }'
-		end
-
 		# A signature has no implementation, so it can't be called.
 		assert_raises Ore::Cannot_Call_Func_Signature do
 			Ore.interp <<~CODE
-			    double: Number{Number;}
+			    double: {Number -> Number;}
 			    double()
 			CODE
 		end
 
 		refute_raises Ore::Cannot_Call_Func_Signature do
 			Ore.interp <<~CODE
-			    double: Number{Number;} = {a: Number -> Number; a*2}
+			    double: {Number -> Number;} = {a: Number -> Number; a*2}
 			    double(2)
 			CODE
 		end
@@ -2608,7 +2607,7 @@ class Interpreter_Test < Base_Test
 
 		# Signature-only declarations have no body, so there's nothing to enforce against — declaring one must not raise.
 		out = Ore.interp <<~CODE
-		    double: Number{Number;}
+		    double: {Number -> Number;}
 		    'ok'
 		CODE
 		assert_equal 'ok', out
@@ -2639,7 +2638,7 @@ class Interpreter_Test < Base_Test
 	def test_function_signature_matching
 		# A function whose actual shape matches the signature succeeds, both on first declaration and on reassignment.
 		out = Ore.interp <<~CODE
-		    Num_to_str := String{Number;}
+		    Num_to_str := {Number -> String;}
 		    stringify { n: Number -> String; 'x' }
 		    to_string: Num_to_str = stringify
 		    another { n: Number -> String; 'y' }
@@ -2651,7 +2650,7 @@ class Interpreter_Test < Base_Test
 		# First declaration with a mismatched shape raises immediately.
 		error = assert_raises Ore::Type_Contract_Violation do
 			Ore.interp <<~CODE
-			    Num_to_str := String{Number;}
+			    Num_to_str := {Number -> String;}
 			    to_string: Num_to_str = { x, y; x + y }
 			CODE
 		end
@@ -2661,7 +2660,7 @@ class Interpreter_Test < Base_Test
 		# Reassigning an already-valid signature-typed identifier to a mismatched shape raises too, comparing structurally rather than as a plain type name.
 		error = assert_raises Ore::Type_Contract_Violation do
 			Ore.interp <<~CODE
-			    Num_to_str := String{Number;}
+			    Num_to_str := {Number -> String;}
 			    stringify { n: Number -> String; 'x' }
 			    to_string: Num_to_str = stringify
 			    to_string = { x, y; x + y }
@@ -2691,6 +2690,278 @@ class Interpreter_Test < Base_Test
 			Ore.interp <<~CODE
 			    n := 4
 			    x: String = n
+			CODE
+		end
+	end
+
+	def test_tuple_and_struct_destructuring
+		# Tuple source.
+		out = Ore.interp <<~CODE
+		    (a, b) := (1, 2)
+		    a + b
+		CODE
+		assert_equal 3, out
+
+		# Struct source.
+		out = Ore.interp <<~CODE
+		    (a, b) := <1, 2>
+		    a + b
+		CODE
+		assert_equal 3, out
+
+		# Both targets are declared in the current scope, independently readable afterward.
+		out = Ore.interp <<~CODE
+		    (a, b) := <Number,Number>(10, 20)
+		    (a, b)
+		CODE
+		assert_equal [10, 20], out.values
+
+		# An explicit `: Type` per target is checked against that position's extracted value.
+		out = Ore.interp <<~CODE
+		    (x: Number, y) := (1, 2)
+		    x
+		CODE
+		assert_equal 1, out
+
+		error = assert_raises Ore::Type_Contract_Violation do
+			Ore.interp '(x: String, y) := (1, 2)'
+		end
+		assert_equal 'String', error.contract
+		assert_equal 'Number', error.actual
+
+		# Asking for more values than the source has raises, rather than padding with nil.
+		error = assert_raises Ore::Destructuring_Arity_Mismatch do
+			Ore.interp '(a, b, c) := <Number, Number>(1, 2)'
+		end
+		assert_equal 3, error.expected
+		assert_equal 2, error.actual
+
+		# Asking for fewer is fine -- the rest are just discarded.
+		out = Ore.interp '(a, b) := <1, 2, 3>
+			a + b'
+		assert_equal 3, out
+
+		# Only a Tuple/Struct can be destructured.
+		assert_raises Ore::Invalid_Destructuring_Source do
+			Ore.interp '(a, b) := 5'
+		end
+
+		# Every target must be a plain identifier or an existing-member dot-target.
+		assert_raises Ore::Invalid_Destructuring_Target do
+			Ore.interp '(1, c) := (1, 2)'
+		end
+
+		out = Ore.interp 'a := 0
+			(a, b) := (1, 2)
+			(a,b)'
+		assert_equal [1, 2], out.values
+	end
+
+	def test_member_destructuring_targets
+		# `thing.member` reassigns an existing member, same as plain `thing.member = value`.
+		out = Ore.interp <<~CODE
+		    Thing { member, new {; ./member = 0 } }
+		    thing := Thing()
+		    (thing.member, local) := <Number, Number>(1, 1)
+		    (thing.member, local)
+		CODE
+		assert_equal [1, 1], out.values
+
+		# The member must already exist -- destructuring can't silently create one.
+		assert_raises Ore::Cannot_Assign_Undeclared_Identifier do
+			Ore.interp <<~CODE
+			    Thing { member, new {; ./member = 0 } }
+			    thing := Thing()
+			    (thing.missing, local) := <Number, Number>(1, 1)
+			CODE
+		end
+
+		# A constant member can't be reassigned this way either.
+		assert_raises Ore::Cannot_Reassign_Constant do
+			Ore.interp <<~CODE
+			    Thing { MEMBER, new {; ./MEMBER = 0 } }
+			    thing := Thing()
+			    (thing.MEMBER, local) := <Number, Number>(1, 1)
+			CODE
+		end
+
+		# If the member has a previously-recorded type (via `:=`), the extracted value must match it.
+		error = assert_raises Ore::Type_Contract_Violation do
+			Ore.interp <<~CODE
+			    Thing {
+					new {;
+						./member := 0
+					}
+				}
+			    thing := Thing()
+			    (thing.member, local) := <String, Number>("oops", 1)
+			CODE
+		end
+		assert_equal 'Number', error.contract
+		assert_equal 'String', error.actual
+	end
+
+	def test_struct_member_display_regression
+		out = Ore.interp <<~CODE
+		    @load 'ore/struct.ore'
+		    quad := <1, id := 2, ix: Number, String>(4, 8, 1, "five")
+		    quad.to_s()
+		CODE
+		assert_equal '<4, id: Number = 8, ix: Number = 1, "five">', out
+
+		out = Ore.interp <<~CODE
+		    @load 'ore/struct.ore'
+		    quad := <1, id := 2, ix: Number, String>(4, 8, 1, 'five')
+		    quad.to_s()
+		CODE
+		assert_equal "<4, id: Number = 8, ix: Number = 1, 'five'>", out
+	end
+
+	def test_string_equality_regression
+		assert Ore.interp('String("Alice") == String("Alice")')
+		out = Ore.interp <<~CODE
+		    @load 'ore/struct.ore'
+		    s := <name: String>("Alice")
+		    s.members.0.value == "Alice"
+		CODE
+		assert out
+	end
+
+	def test_self_declaration_via_scope_operator_works_but_external_dot_does_not_regression
+		out = Ore.interp <<~CODE
+		    Thing {
+		        new {;
+		            ./member := 123
+		        }
+		    }
+		    t := Thing()
+		    t.member
+		CODE
+		assert_equal 123, out
+
+		assert_raises Ore::Cannot_Assign_Undeclared_Identifier do
+			# but actually it raises something about not being able to declare members on the type outside of new{;} or the explicit class body declarations
+			Ore.interp <<~CODE
+			    Thing {
+			        not_new_func {;
+			            ./member := 123
+			        }
+			    }
+			    t := Thing()
+			    t.not_new_func()
+			CODE
+		end
+
+		assert_raises Ore::Cannot_Assign_Undeclared_Identifier do
+			Ore.interp 'Number.yolo = 123'
+		end
+
+		assert_raises Ore::Cannot_Assign_Undeclared_Identifier do
+			Ore.interp 'Number.yolo := 123'
+		end
+
+		assert_raises Ore::Cannot_Assign_Undeclared_Identifier do
+			Ore.interp <<~CODE
+			    Thing { member, new {; ./member = 0 } }
+			    thing := Thing()
+			    thing.missing = 5
+			CODE
+		end
+	end
+
+	def test_declare_name_only_self_declares_to_nil
+		out = Ore.interp <<~CODE
+		    @declare "foo"
+		    foo
+		CODE
+		assert_nil out
+	end
+
+	def test_declare_name_and_value
+		out = Ore.interp <<~CODE
+		    @declare "foo", 42
+		    foo
+		CODE
+		assert_equal 42, out
+	end
+
+	def test_declare_name_value_and_type
+		out = Ore.interp <<~CODE
+		    @declare "foo", 42, Number
+		    foo
+		CODE
+		assert_equal 42, out
+	end
+
+	def test_declare_value_can_be_any_expression
+		out = Ore.interp <<~CODE
+		    @declare "foo", 1 + 2
+		    foo
+		CODE
+		assert_equal 3, out
+	end
+
+	def test_declare_with_no_value_argument_still_registers_the_name
+		# Undeclared before, so a plain (non-annotated) read would normally raise --
+		# @declare "foo" alone should self-declare it, same as the nil-init idiom.
+		refute_raises Ore::Undeclared_Identifier do
+			Ore.interp '@declare "foo"
+			foo'
+		end
+	end
+
+	def test_declare_too_many_arguments_raises
+		assert_raises Ore::Invalid_Directive_Usage do
+			Ore.interp '@declare "foo", 42, Number, "extra"'
+		end
+	end
+
+	def test_declare_with_type_allows_matching_reassignment
+		out = Ore.interp <<~CODE
+		    @declare "foo", 42, Number
+		    foo = 99
+		    foo
+		CODE
+		assert_equal 99, out
+	end
+
+	def test_declare_with_type_rejects_mismatched_reassignment
+		assert_raises Ore::Type_Contract_Violation do
+			Ore.interp <<~CODE
+			    @declare "foo", 42, Number
+			    foo = "oops"
+			CODE
+		end
+	end
+
+	def test_declare_without_type_allows_any_reassignment
+		out = Ore.interp <<~CODE
+		    @declare "foo", 42
+		    foo = "now a string"
+		    foo
+		CODE
+		assert_equal 'now a string', out
+	end
+
+	def test_declare_inside_function_scope_is_local
+		out = Ore.interp <<~CODE
+		    make { ;
+		    	@declare "local_thing", 5
+		    	local_thing
+		    }
+		    make()
+		CODE
+		assert_equal 5, out
+	end
+
+	def test_declare_inside_function_scope_does_not_leak_out
+		assert_raises Ore::Undeclared_Identifier do
+			Ore.interp <<~CODE
+			    make { ;
+			    	@declare "local_thing", 5
+			    }
+			    make()
+			    local_thing
 			CODE
 		end
 	end

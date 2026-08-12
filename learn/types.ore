@@ -1,0 +1,187 @@
+``` Introduction
+
+Capitalization tells Ore what something is, instead of a keyword. UPPERCASE is a constant (`ISLAND`), Capitalized is a type (`Survivor`), lowercase is a variable or function (`name`, `push_button`). A type is declared with `Identifier { body }` -- no `class` keyword needed, the capital letter already said it.
+```
+Survivor {
+	name,
+	number,
+
+	new { name, number;
+		./name   = name
+		./number = number
+	}
+
+	to_s {;
+		"`name` (`number`)"
+	}
+}
+
+jack := Survivor('Jack Shephard', 23)
+@puts "jack: `jack.to_s()`"   # jack: Jack Shephard (23)
+
+
+``` Static declarations: the hatch
+
+The `../` prefix declares (and accesses) a STATIC member -- shared across every instance of the type, instead of one copy per instance. `../presses` is one single counter, not one per Hatch.
+```
+Hatch {
+	../presses := 0
+
+	../push_button {;
+		presses += 1
+	}
+
+	enter {;
+		../push_button()
+	}
+}
+
+Hatch().enter()
+Hatch().enter()
+Hatch().enter()
+@puts "Hatch.presses: `Hatch.presses`"   # Hatch.presses: 3 -- every Hatch() shares the same counter
+
+
+``` Scope operators
+
+Three operators reach into a specific scope explicitly, rather than searching outward through everything in reach: `./` is the current instance only, `../` is the current type (static members) only, `~/` is the global scope only. All three skip the normal "search everything in reach" fallback a bare identifier gets -- each looks in exactly one place, so a name collision elsewhere can't quietly shadow the one you meant.
+```
+ISLAND := 'The Island'
+
+Dharma_Station {
+	../station_count := 0
+	station_name,
+
+	new { station_name;
+		./station_name = station_name
+		../station_count += 1
+	}
+
+	describe {;
+		"`./station_name` on `~/ISLAND` (station #`../station_count`)"
+	}
+}
+
+swan   := Dharma_Station('The Swan')
+orchid := Dharma_Station('The Orchid')
+@puts "swan.describe(): `swan.describe()`"       # swan.describe(): The Swan on The Island (station #2) -- ../station_count is shared, not per-instance
+@puts "orchid.describe(): `orchid.describe()`"   # orchid.describe(): The Orchid on The Island (station #2), same shared counter
+
+
+``` Privacy convention
+
+An identifier starting with `_` is private by convention -- reachable from inside the type's own methods, but calling it from outside raises `Cannot_Call_Private_Instance_Member`.
+```
+Smoke_Monster {
+	_true_agenda,
+	name,
+
+	new { name, agenda;
+		./name          = name
+		./_true_agenda  = agenda
+	}
+
+	confess { claim;
+		claim == ./_true_agenda
+	}
+}
+
+monster := Smoke_Monster('Smoke Monster', 'control the Island')
+@puts "confess('control the Island'): `monster.confess('control the Island')`"   # confess('control the Island'): true
+@puts "confess('help the survivors'): `monster.confess('help the survivors')`"   # confess('help the survivors'): false
+# monster._true_agenda would raise Cannot_Call_Private_Instance_Member -- outsiders don't get to ask directly
+
+
+``` Composition: | union
+
+Ore has no inheritance -- types compose instead, with four operators borrowed from set theory. `|` (union) merges every declaration from the right side into the left, with the LEFT side winning any name conflicts. Multiple operators chain freely:
+```
+Castaway {
+	survived_815 := true
+}
+
+Other {
+	survivor := false
+}
+
+Jack | Castaway {
+	name := 'Jack'
+}
+
+Richard | Other {
+	name := 'Richard'
+}
+
+Steve | Castaway | Other {
+	name := 'Steve'
+}
+
+s := Steve()
+@puts "s.survived_815: `s.survived_815`"   # s.survived_815: true, from Castaway
+@puts "s.survivor: `s.survivor`"           # s.survivor: false, from Other
+
+
+``` Composition: & intersection, ~ difference, ^ symmetric difference
+
+The other three operators only make sense once two sides might disagree. `Castaway` and `Other` both declare a `faction` method (with different bodies) here, alongside their own unique members, to show how each operator treats a genuine name collision differently:
+
+  &  keeps only what BOTH sides declare (here: just `faction` -- the shared name)
+  ~  removes the right side's declarations from the left (drops `faction`, keeps `survived_815`)
+  ^  keeps only what's unique to each side (drops the shared `faction`, keeps everything else)
+```
+Castaway {
+	survived_815 := true
+
+	faction {;
+		'Survivors'
+	}
+}
+
+Other {
+	survivor := false
+
+	faction {;
+		'Others'
+	}
+}
+
+both := (Castaway & Other)()
+@puts "both.faction(): `both.faction()`"   # both.faction(): Survivors -- the only shared name, left side's version wins
+
+just_theirs := (Castaway ~ Other)()
+@puts "just_theirs.survived_815: `just_theirs.survived_815`"   # just_theirs.survived_815: true -- Castaway's own, un-shared member survives
+
+unique := (Castaway ^ Other)()
+@puts "unique.survived_815: `unique.survived_815`"   # unique.survived_815: true -- unique to Castaway
+@puts "unique.survivor: `unique.survivor`"   # unique.survivor: false -- unique to Other
+
+
+``` A composition chain needs no name at all
+
+Any of the four operators can stand alone with no `{ }` body and no name -- `(Castaway & Other)()` above already did exactly this. It builds an anonymous type on the spot by applying the chain, exactly as if you'd written `X | Castaway | Other { }` for some unnamed `X` -- usable immediately, assignable, comparable, instantiable, without ever needing a name of its own.
+```
+Survivors_And_Others := Castaway & Other   # a Type value, just like any named one -- not an instance yet
+survivor             := Survivors_And_Others()
+@puts "survivor.faction(): `survivor.faction()`"   # survivor.faction(): Survivors
+
+
+``` Type comparison operators
+
+Five operators compare the composed-type SET two types or instances carry -- every type a value's own type composes, via any of the four operators above, plus its own name. All five share the `=X=` shape:
+
+  ===  exact type-set equality
+  =!=  negation of ===
+  =>=  is left a superset of right (left composes at least everything right does)
+  =<=  mirror of =>= with operands reversed
+  =/=  disjoint -- the two share no composed type at all
+
+Only `=>=` carries genuinely new information; the rest are readability sugar built on it, the same reason most languages ship both `<=`/`>=` alongside `==`/`!=`.
+```
+@puts "Jack === Jack: `Jack === Jack`"             # Jack === Jack: true  -- identical composed-type sets
+@puts "Jack === Richard: `Jack === Richard`"       # Jack === Richard: false -- Jack composes Castaway, Richard composes Other
+@puts "Jack =!= Richard: `Jack =!= Richard`"       # Jack =!= Richard: true
+@puts "Steve =>= Castaway: `Steve =>= Castaway`"   # Steve =>= Castaway: true  -- Steve composes with at least everything Castaway does
+@puts "Castaway =>= Steve: `Castaway =>= Steve`"   # Castaway =>= Steve: false -- Castaway doesn't compose Steve's extra (Other) side
+@puts "Castaway =<= Steve: `Castaway =<= Steve`"   # Castaway =<= Steve: true  -- mirror of the line above
+@puts "Jack =/= Richard: `Jack =/= Richard`"       # Jack =/= Richard: true  -- share nothing (Castaway vs Other, no overlap)
+@puts "Castaway =/= Other: `Castaway =/= Other`"   # Castaway =/= Other: true  -- the two traits themselves share nothing either

@@ -1,7 +1,7 @@
 Dictionary {
 	hash,
 
-	new { hash := nil; # bug; cannot assign {} as default, reserved something something.
+	new { hash := {};
 		./hash = hash
 	}
 
@@ -14,4 +14,13 @@ Dictionary {
 	empty? {; @ruby }
 	clear {; @ruby }
 	fetch { key, default; @ruby }
+
+	to_s {;
+		ks     := keys()
+		vs     := values()
+		pieces := ks.map({ key, at;
+			"`key`: `vs.get(at)`"
+		})
+		"{`pieces.join(', ')`}"
+	}
 }

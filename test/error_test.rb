@@ -1,5 +1,5 @@
 require 'minitest/autorun'
-require_relative '../src/ruby/ore'
+require_relative '../src/ore'
 require_relative 'base_test'
 
 class Error_Test < Base_Test
@@ -104,6 +104,16 @@ class Error_Test < Base_Test
 	def test_invalid_composition_with_a_non_scope_type
 		assert_raises Ore::Invalid_Composition_With_A_Non_Scope_type do
 			Ore.interp 'Foo := :bar, Person | Foo { name, }'
+		end
+	end
+
+	# The parser's pre-scan registers a custom operator file-wide, but the overload itself is a regular declaration — using the operator outside the scope that declares it finds no overload. Used to silently evaluate to nil.
+	def test_undeclared_infix_operator
+		assert_raises Ore::Undeclared_Infix_Operator do
+			Ore.interp 'scoped {;
+				@operator ~> @infix 300 { l, r; l }
+			}
+			1 ~> 2'
 		end
 	end
 

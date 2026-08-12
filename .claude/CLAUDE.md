@@ -63,7 +63,7 @@ Four phases: **Lexer → Parser → Type Checker → Interpreter**
 
 `Interpreter` is the main entry point. It owns a `Lexer` and `Parser`, and exposes `run(source_code)` which drives all phases. `Lexer` and `Parser` are plain transformation classes you can also call directly.
 
-### Compile-time (src/ruby/compiler/)
+### Compile-time (src/compiler/)
 
 Source code is tokenized, parsed into an AST, and statically type checked:
 
@@ -73,7 +73,7 @@ Source code is tokenized, parsed into an AST, and statically type checked:
 - `expressions.rb` - AST node definitions
 - `type_checker.rb` - Static type checker; runs on the AST before interpretation
 
-### Runtime (src/ruby/runtime/)
+### Runtime (src/runtime/)
 
 The AST is executed to produce output:
 
@@ -84,19 +84,19 @@ The AST is executed to produce output:
 	- `String`, `Array`, `Number`, `Dictionary`, `Server`, `Table`, `Database`, etc. - Built-in types
 - `errors.rb` - Runtime error definitions
 
-### Systems (src/ruby/systems/)
+### Systems (src/systems/)
 
 - `server_runner.rb` - HTTP server implementation using WEBrick (routing, URL params, query strings)
 - `dom_renderer.rb` - HTML rendering for `Dom` composition
 
-### Shared (src/ruby/shared/)
+### Shared (src/shared/)
 
 - `constants.rb` - Language constants, operators, precedence table, reserved words
 - `helpers.rb` - Utility functions for identifier classification (constant_identifier?, type_identifier?, member_identifier?)
 
 ### Entry Point
 
-- `src/ruby/ore.rb` - Requires all components; exposes convenience methods:
+- `src/ore.rb` - Requires all components; exposes convenience methods:
 	- `Ore.lex(source)` / `Ore.lex_file(filepath)` - Tokenize only
 	- `Ore.parse(source)` / `Ore.parse_file(filepath)` - Parse to AST
 	- `Ore.interp(source)` / `Ore.interp_file(filepath)` - Full execution
@@ -108,7 +108,7 @@ The AST is executed to produce output:
 
 ## Type Checker
 
-The type checker (`src/ruby/compiler/type_checker.rb`) runs between the parser and interpreter. It is invoked from `Interpreter#output` before the execution loop, so it also runs on files loaded via `@load`.
+The type checker (`src/compiler/type_checker.rb`) runs between the parser and interpreter. It is invoked from `Interpreter#output` before the execution loop, so it also runs on files loaded via `@load`.
 
 ### What it checks
 
@@ -133,14 +133,14 @@ Call site checking happens in `check_call` — it looks up the receiver name in 
 
 ### Runtime Type Contracts (`:=`)
 
-Separate from the static `Type_Checker` above, `:=` is a runtime-enforced type contract handled entirely in the interpreter (`interp_infix_declaration` in `interpreter.rb`), not the type checker. `:=` is also the general declaration operator — `=` is pure assignment and requires the identifier to already be declared (handled in `interp_infix_assignment`), raising `Ore::Cannot_Reassign_Undeclared_Identifier` otherwise:
+Separate from the static `Type_Checker` above, `:=` is a runtime-enforced type contract handled entirely in the interpreter (`interp_infix_declaration` in `interpreter.rb`), not the type checker. `:=` is also the general declaration operator — `=` is pure assignment and requires the identifier to already be declared (handled in `interp_infix_assignment`), raising `Ore::Cannot_Assign_Undeclared_Identifier` otherwise:
 
 ```ore
 x := 4        # declares x, infers Number, locks x to that type
 x = 8         # ok — same type
 x = 'hello'   # raises Ore::Type_Contract_Violation
 
-y = 4         # raises Ore::Cannot_Reassign_Undeclared_Identifier — y was never declared
+y = 4         # raises Ore::Cannot_Assign_Undeclared_Identifier — y was never declared
 
 counter := -1
 increment {;
@@ -155,9 +155,9 @@ counter           # still -1 — the outer `counter` was never touched
 - `:=` always declares on the current scope (`stack.last`), shadowing any identically-named identifier in an enclosing scope, rather than reusing/overwriting it. Plain `=` and compound ops (`+=`, etc.) still resolve through the enclosing scope via `scope_for_identifier`, which is how closures over outer variables keep working
 - Subsequent plain `=` assignments to that identifier are checked against the recorded type on every assignment (not just literal RHS, unlike the static checker)
 - Re-running `:=` on the same identifier re-infers and overwrites the locked type
-- `=` without a prior `:=` (or a `: Type` annotation, or another declaration form — see below) raises `Ore::Cannot_Reassign_Undeclared_Identifier`
+- `=` without a prior `:=` (or a `: Type` annotation, or another declaration form — see below) raises `Ore::Cannot_Assign_Undeclared_Identifier`
 - A `: Type` annotation (`x: Number = 4`) and a Class-styled identifier assigned a Scope value (`My_Type = Other {}`) are each themselves self-declaring, so `=` is allowed to introduce those identifiers too
-- A bare annotated identifier with no `=` at all (`x: Number`, or a tag annotation like `thing: <String, Number>`) self-declares to `nil` rather than raising `Ore::Undeclared_Identifier` when later referenced — same as the nil-init idiom (`ident,`), handled in `interp_identifier` via `self_declare_annotated_identifier`
+- A bare annotated identifier with no `=` at all (`x: Number`, or a struct annotation like `thing: <String, Number>`) self-declares to `nil` rather than raising `Ore::Undeclared_Identifier` when later referenced — same as the nil-init idiom (`ident,`), handled in `interp_identifier` via `self_declare_annotated_identifier`
 - Raises `Ore::Type_Contract_Violation` (`errors.rb`), not `Type_Mismatch`
 
 ### Important gotcha
@@ -175,7 +175,7 @@ Call sites that appear before the function definition are not checked — the si
 
 ## Scope System
 
-Ore uses a scope hierarchy, all defined in `src/ruby/runtime/scopes.rb`:
+Ore uses a scope hierarchy, all defined in `src/runtime/scopes.rb`:
 
 - **Global** - The global scope; pushed as the bottom of `Interpreter#stack` on first `run`; standard library declarations live here; execution state (routes, servers, loaded files, etc.) lives directly on `Interpreter`
 - **Type** - Class definitions (tracks `@types`, `@expressions`)
@@ -244,6 +244,23 @@ Person.increment()   # Call static method on type => 2
 - Instances are linked to their types via `instance.enclosing_scope = type`
 - Static functions and variables are declared on the Type scope
 
+## Member Creation Is Strict
+
+A member must be declared in a type's own body — including via `./member := value` inside any of its own methods — before it can be written to from outside. `.` (external dot access) never creates a member:
+
+```ore
+Thing { new {; ./member := 123 } }   # self-declaration via ./ inside a method -- legitimate,
+                                     # equivalent to declaring `member,` in the body directly
+t := Thing()
+t.member = 5                         # fine -- member already exists
+t.missing = 5                       # raises Ore::Cannot_Assign_Undeclared_Identifier
+```
+
+- `./`/`../` self-declaration (`:=`) is only allowed while the instance is still under construction — the class body's own declarations, or `new{;}` itself (and anything it calls). A later method self-declaring a brand-new member this way also raises `Ore::Cannot_Assign_Undeclared_Identifier`, so an instance's shape can't keep growing after it's built. Detected via `instance.has?('new')` — `#interp_type_call` deletes the `new` declaration the moment construction finishes, so that check is true for exactly the construction window
+- Not yet covered: the equivalent restriction for `../` creating a brand-new *static* member from outside the type's original body walk — no "still being defined" signal exists for `Type` the way `has?('new')` does for `Instance`
+- A constant-named member (`X.SOME_CONST = ...`) can never be reassigned via `.`, raising `Ore::Cannot_Reassign_Constant`
+- All three `.`-write forms — plain `=`, plain `:=`, and destructuring dot-targets (see Destructuring below) — share one implementation, `#assign_dot_member` in `interpreter.rb`. `:=` onto an *existing* member re-infers/overwrites its recorded type (same as re-running `:=` on a plain identifier); `=` checks the new value against any previously recorded type instead
+
 ## Class Composition Operators
 
 Ore uses composition operators instead of inheritance. Applied as `Class | Other { body }`:
@@ -265,7 +282,7 @@ Layout | Dom { render {; Html([Body("Hello")]) } }
 
 ## Type Comparison Operators
 
-Five operators compare the *composed-type sets* of Types and Instances (a type's own name plus every type it has composed via `|`/`&`/`~`/`^`), handled in the `COMPARISON_OPERATORS` branch of `interp_infix` in `interpreter.rb`. All five share the `=X=` shape (equals, symbol, equals) so they're easy to remember and hard to mistake for one another:
+Five operators compare the *composed-type sets* of Types and Instances (a type's own name plus every type it has composed via `|`/`&`/`~`/`^`), handled by `#interp_comparison_infix` (`interpreter.rb`, dispatched from `#interp_infix`). All five share the `=X=` shape (equals, symbol, equals) so they're easy to remember and hard to mistake for one another:
 
 - `===` - exact type-set equality
 - `=!=` - negation of `===`
@@ -292,46 +309,46 @@ Duck =/= Fish          #=> false (both compose Swimming, so they're not disjoint
 Flying =/= Swimming    #=> true  (share nothing)
 ```
 
-Tags (see below) factor into all five: `===`/`=!=` require both the composed-type-sets *and* the tags (`left.tags&.types == right.tags&.types`) to match; `=>=`/`=<=` additionally require the tag-poor side's tags to be entirely present in the tag-rich side's; `=/=` additionally requires the tags to share nothing either. An untagged side is treated as having empty tags, so `Abc === Abc` (neither side tagged) is unaffected and stays `true`. Two types still sharing a composed type (e.g. both being `Abc`) always blocks `=/=` regardless of their tags — disjointness means sharing *nothing*, composed types included.
+Struct members (see below) factor into all five: `===`/`=!=` require both the composed-type-sets *and* the structures (`left.structure&.types == right.structure&.types`) to match; `=>=`/`=<=` additionally require the member-poor side's members to be entirely present in the member-rich side's; `=/=` additionally requires the members to share nothing either. An unstructured side is treated as having no members, so `Abc === Abc` (neither side structured) is unaffected and stays `true`. Two types still sharing a composed type (e.g. both being `Abc`) always blocks `=/=` regardless of their members — disjointness means sharing *nothing*, composed types included.
 
-## Tags
+## Structs
 
-`<...>` attaches runtime-inspectable metadata ("tags") to a type declaration, a standalone value, or a reference to an existing type. Parsed by `parse_tags` in `parser.rb` into `Ore::Tags_Expr`; interpreted by `interp_tags`/`interp_type` in `interpreter.rb` into an `Ore::Tag_Info` instance (`src/ruby/external/ruby/tag_info.rb`, paired with `ore/tag_info.ore`).
+`<...>` attaches runtime-inspectable metadata (a "struct") to a type declaration, a standalone value, or a reference to an existing type. Parsed by `parse_struct` in `parser.rb` into `Ore::Struct_Expr`; interpreted by `interp_struct`/`interp_type` in `interpreter.rb` into an `Ore::Struct` instance (`src/external/ruby/struct.rb` — no paired `.ore` file; `ore/struct.ore` + `ore/member.ore` are a separate, higher-level `Member`/`Struct` layer built on top of it, loaded by default via `ore/preload.ore`).
 
 ```ore
-Abc<Number> {}            # declaration — Number becomes part of Abc's tag_info_declaration
-x := Abc<Number>           # reference — dup of the existing Abc type, tagged; doesn't mutate the original
-x: Abc<Number>             # same, as a type annotation
-thing: <String, Number>    # bare tags, no type name at all — a standalone Ore::Tag_Info value
-z := Abc<4815>             # a reference tagged with an actual value rather than a type
-z()                        # constructs Abc, with .tags bound before new{;} runs
-Abc<4815>()                # same, in one step
+Abc<Number> {}             # declaration — Number becomes part of Abc's structure_declaration
+x := Abc<Number>            # reference — dup of the existing Abc type, structured; doesn't mutate the original
+x: Abc<Number>              # same, as a type annotation
+thing: <String, Number>     # bare struct, no type name at all — a standalone Ore::Struct value
+z := Abc<4815>              # a reference structured with an actual value rather than a type
+z()                         # constructs Abc, with .structure bound before new{;} runs
+Abc<4815>()                 # same, in one step
 Def {}
-Def()                      # untagged types are completely unaffected
+Def()                       # unstructured types are completely unaffected
 ```
 
-- A tag slot is any expression (`Abc<1+2+3/123>`, `Abc<this, that>`), not just a type name — evaluated normally at interpret time, so an identifier like `Number` resolves to the actual `Ore::Type`
-- Named tags (`Type<some_string: String, num: Number> {}`) reuse `parse_identifier_expr`'s existing `: Type` annotation parsing for each slot — no separate grammar needed
-- Tags are only ever reachable via `.tags` (`.tags.types`, `.tags.some_string` for named slots) — never auto-unpacked into `./`
-- A bare identifier immediately followed by `,` inside `<...>` (`<String, Number>`) is special-cased in `parse_tags` to parse as a plain identifier rather than the nil-init idiom (`ident,` ⇒ `ident = ident or nil`), which would otherwise misfire on the exact same shape
-- Reference forms (`x := Abc<Number>`) `dup` the matched variant (see below) rather than mutating it in place — `Object#dup` is shallow, so `@declarations`/`@static_declarations` are explicitly re-forked too, otherwise tagging one reference would silently mutate every other reference sharing that variant
-- Constructing from a tagged reference binds `.tags` onto the instance *before* `type.expressions` (and therefore `new{;}`) run, so `new`'s own body can read `.tags` — but tag values are never forwarded as constructor arguments; whatever `(...)` actually passes still binds to `new`'s own declared params, entirely separately
-- A named tag's value, supplied positionally at the reference site (`Woof<'hello', 4815>`, never `Woof<key: 'hello'>`), gets re-associated with the *matched variant's own* `tag_info_declaration` names before landing on the instance, so `.tags.key` still resolves correctly
+- A member is any expression (`Abc<1+2+3/123>`, `Abc<this, that>`), not just a type name — evaluated normally at interpret time, so an identifier like `Number` resolves to the actual `Ore::Type`
+- Named members (`Type<some_string: String, num: Number> {}`) reuse `parse_identifier_expr`'s existing `: Type` annotation parsing for each member — no separate grammar needed
+- A struct is only ever reachable via `.structure` (`.structure.types`, `.structure.some_string` for named members) — never auto-unpacked into `./`
+- A bare identifier immediately followed by `,` inside `<...>` (`<String, Number>`) is special-cased in `parse_struct` to parse as a plain identifier rather than the nil-init idiom (`ident,` ⇒ `ident = ident or nil`), which would otherwise misfire on the exact same shape
+- Reference forms (`x := Abc<Number>`) `dup` the matched variant (see below) rather than mutating it in place — `Object#dup` is shallow, so `@declarations`/`@static_declarations` are explicitly re-forked too, otherwise structuring one reference would silently mutate every other reference sharing that variant
+- Constructing from a structured reference binds `.structure` onto the instance *before* `type.expressions` (and therefore `new{;}`) run, so `new`'s own body can read `.structure` — but member values are never forwarded as constructor arguments; whatever `(...)` actually passes still binds to `new`'s own declared params, entirely separately
+- A named member's value, supplied positionally at the reference site (`Woof<'hello', 4815>`, never `Woof<key: 'hello'>`), gets re-associated with the *matched variant's own* `structure_declaration` names before landing on the instance, so `.structure.key` still resolves correctly
 
-### Each declared shape is its own type
+### Each declared structure is its own type
 
-`Abc<Number> {}` and `Abc<String> {}` are independent `Ore::Type` objects, not one shared type with two shapes bolted on — declaring a shape creates a fresh type seeded from a copy of the *bare* type's own body (if one exists at declaration time), so one shape's `new`/methods can never clobber another's. This is handled by `#interp_tagged_type_declaration` (`interpreter.rb`), a sibling of `#interp_bare_type_declaration` (used for plain, untagged `Type { ... }`, which still reopens/extends one shared object as before).
+`Abc<Number> {}` and `Abc<String> {}` are independent `Ore::Type` objects, not one shared type with two structures bolted on — declaring a structure creates a fresh type seeded from a copy of the *bare* type's own body (if one exists at declaration time), so one structure's `new`/methods can never clobber another's. This is handled by `#interp_structured_type_declaration` (`interpreter.rb`), a sibling of `#interp_bare_type_declaration` (used for plain, unstructured `Type { ... }`, which still reopens/extends one shared object as before). Both share a common tail, `#finish_type_declaration` (Ore:: Ruby-class linking, `@types` bookkeeping, running the body) — reopening an existing variant (bare or structured) only re-runs its *new* expressions, not ones already run on an earlier declaration.
 
-Each variant is stored under a mangled key built from its shape's *types* only, never names — e.g. `String<Dictionary>` for `String<dict: Dictionary> {}` — since a reference can only ever supply values positionally and so could never reproduce a name in its own lookup key (`#tag_variant_key`).
+Each variant is kept in a per-scope list (`Scope#structured_type_variants`, keyed by base name — e.g. every declared structure of `String`) rather than a single mangled-string-keyed member, so `String<dict: Dictionary> {}` and `String<other: Dictionary> {}` are two distinct variants instead of colliding on a shared `"String<Dictionary>"` key. Matching is by real structure equality (`Ore::Struct#structure_declaration_equal?`, `struct.rb`) — both `names` and resolved `type_names`, positionally — mirroring the language's own `===` operator on Type/Instance (exact set equality, not a string compare).
 
-A reference resolves by inferring a type name for each supplied value and matching that against declared keys — but the match isn't exact-name-only: `#tag_candidate_type_names` returns every type a value composes (its own name first, then everything it composes), so e.g. a `Div` satisfies a slot declared `Dom` even though nothing in `ore/html.ore` is literally named `Dom`. `#find_tagged_type_variant` tries combinations of each slot's candidates, preferring exact matches first, and a reference with no matching declared variant raises `Ore::Undeclared_Tagged_Type` — there's no fallback to untyped/ad-hoc tagging.
+A reference resolves by inferring a type name for each supplied value and matching that against the declared variants for that base name — but the match isn't exact-name-only: `#member_candidate_type_names` returns every type a value composes (its own name first, then everything it composes), so e.g. a `Div` satisfies a member declared `Dom` even though nothing in `ore/html.ore` is literally named `Dom`. `Ore::Struct#satisfied_by_candidates?` checks a declared variant against those candidates (mirroring the language's own `=>=` superset operator), and `#find_structured_type_variant` prefers an exact match before falling back to a compositional one. A reference with no matching declared variant raises `Ore::Undeclared_Type_Structure` — there's no fallback to untyped/ad-hoc structuring.
 
 ```ore
-String<Dictionary> { to_s {; "I'm a dict-tagged string" } }
-String<Number>     { to_s {; "I'm a number-tagged string" } }
+String<Dictionary> { to_s {; "I'm a dict-structured string" } }
+String<Number>     { to_s {; "I'm a number-structured string" } }
 
-String<{x=1}>().to_s()   # "I'm a dict-tagged string"   -- {x=1} is a Dictionary
-String<5>().to_s()       # "I'm a number-tagged string" -- 5 is a Number
+String<{x=1}>().to_s()   # "I'm a dict-structured string"   -- {x=1} is a Dictionary
+String<5>().to_s()       # "I'm a number-structured string" -- 5 is a Number
 ```
 
 ### Confirmed example
@@ -344,7 +361,7 @@ String<dict: Dictionary> {
     to_s {;
         final := value
         final += "{"
-        for tags.dict
+        for structure.dict
             final += "`key`::`value`, "
         end
         final += "}"
@@ -358,13 +375,31 @@ b.to_s()   # "My dict: {x::0, y::1, z::2, }"
 
 ### Runtime wiring
 
-- `Ore::Tag_Info < Instance`, not `Scope` — the `enclosing_scope` method-lookup fallback used for `arr.push(...)`-style calls (see `#interp_identifier`) is gated on `is_a?(Ore::Instance)`, and `Tag_Info` needs that same fallback for `ore/tag_info.ore`'s own declarations (`==`, `include?`) to be reachable at all
-- Every `Ore::Tag_Info.new` call site also calls `link_instance_to_type(tag_info, 'Tag_Info')`, linking it to the type declared by `ore/tag_info.ore` (loaded via `preload.ore`)
-- `.tags` is exposed on `Type`/`Instance` via `declare_tags` (`interpreter.rb`) — only added when a scope actually has tags, and marked as a static declaration so it's readable straight off a bare `Type`, not just an instance
-- `Type` (and therefore `Instance`, which subclasses it) carries two separate accessors, both holding an `Ore::Tag_Info`:
-  - `.tag_info` — what a specific reference or instance was actually tagged with (`Abc<4815>`). Only ever set on an explicit `Abc<...>` reference, never on the bare declared type — its mere presence is what distinguishes "explicitly referenced" from "just the declared type" for `===`/`=!=`/etc. and for whether construction binds `.tags` at all
-  - `.tag_info_declaration` — the type's own declared shape (`Abc<dict: Dictionary = {}> {}`): named/positional slots, annotations, and defaults. A tagged reference looks here to re-associate positional call-site values with names and fall back to defaults
-  - Both live on `Type`, not `Scope`, because a tagged reference is a `dup` of the type (same Ruby class as the type itself), so a `Type`-vs-`Instance` check can't stand in for the "declared" vs "supplied" distinction — see the comments on `Type#tag_info`/`Type#tag_info_declaration` in `scopes.rb`
+- `Ore::Struct < Instance`, not `Scope` — the `enclosing_scope` method-lookup fallback used for `arr.push(...)`-style calls (see `#interp_identifier`) is gated on `is_a?(Ore::Instance)`, and `Struct` needs that same fallback for `ore/struct.ore`'s own declarations (`==`, `include?`) to be reachable at all. Note: `ore/struct.ore`/`ore/member.ore` are the separate, higher-level `Member`/`Struct` layer, loaded by default (`ore/preload.ore`) but still reachable with `Ore.interp(code, load_standard_library: false)` — distinct from this low-level `Ore::Struct` Ruby class, which every `<...>` struct literal goes through regardless of whether that layer is loaded
+- Every `Ore::Struct.new` call site also calls `link_instance_to_type(struct, 'Struct')`, linking it to whichever `Struct` type is currently declared — either the bare Ruby-backed fallback (no standard library loaded), or `ore/struct.ore`'s own `Struct { }` otherwise (see `#build_struct`)
+- `.structure` is exposed on `Type`/`Instance` via `declare_structure` (`interpreter.rb`) — only added when a scope actually has a structure, and marked as a static declaration so it's readable straight off a bare `Type`, not just an instance
+- `Type` (and therefore `Instance`, which subclasses it) carries two separate accessors, both holding an `Ore::Struct`:
+  - `.structure` — what a specific reference or instance was actually structured with (`Abc<4815>`). Only ever set on an explicit `Abc<...>` reference, never on the bare declared type — its mere presence is what distinguishes "explicitly referenced" from "just the declared type" for `===`/`=!=`/etc. and for whether construction binds `.structure` at all
+  - `.structure_declaration` — the type's own declared structure (`Abc<dict: Dictionary = {}> {}`): named/positional members, annotations, and defaults. A structured reference looks here to re-associate positional call-site values with names and fall back to defaults
+  - Both live on `Type`, not `Scope`, because a structured reference is a `dup` of the type (same Ruby class as the type itself), so a `Type`-vs-`Instance` check can't stand in for the "declared" vs "supplied" distinction — see the comments on `Type#structure_instance`/`Type#structure_declaration` in `scopes.rb`
+
+## Destructuring
+
+`(a, b) := <tuple-or-struct-valued expr>` extracts a Tuple's or Struct's values positionally into fresh locals or existing members:
+
+```ore
+(a, b) := (1, 2)              # Tuple source
+(a, b) := <1, 2>              # Struct source
+(x: Number, y) := (1, 2)      # per-target type check against the extracted value
+(thing.member, local) := <Number, Number>(1, 1)  # existing-member target
+```
+
+- A plain-identifier target always declares fresh on the current scope, same shadowing behavior as any other `:=` — even if that name is already declared elsewhere
+- Extracting fewer values than the source has is fine (extras discarded); asking for *more targets than the source has values* raises `Ore::Destructuring_Arity_Mismatch`
+- A target can also be an existing member (`thing.member`) instead of a fresh local — this reassigns rather than declares, going through the same `#assign_dot_member` path as plain `thing.member = value` (see Member Creation Is Strict above): the member must already exist, can't be a constant, and (if it has a previously recorded type) the extracted value must match it
+- Only `Ore::Tuple`/`Ore::Struct` sources are supported (`Ore::Invalid_Destructuring_Source` otherwise); a target that's neither a plain identifier nor an existing-member dot-expression raises `Ore::Invalid_Destructuring_Target`
+- Implementation: `#interp_destructuring_declaration` in `interpreter.rb`, dispatched from `#interp_infix_declaration` when `expr.left` is a `()`-grouped `Circumfix_Expr`
+- Not implemented: the bare (no-parens) form `a, b := ...` — needs lookahead past the whole comma-run to distinguish it from N independent nil-init declarations, deferred as not urgent
 
 ## Identifier Naming Conventions
 
@@ -381,6 +416,21 @@ Lowercase identifier, followed by a `{}` grouped block which contains `;` which 
 ```ore
 <identifier> { <args>; <body> }
 ```
+
+## Labeled Function Arguments
+
+Swift/ObjC-style: a param declared with two identifiers in a row (`label name`) can be called with `label: value` at the call site.
+
+```ore
+send_greeting { to person; person }
+send_greeting(to: 42)      # matches the label declared at that position
+send_greeting(42)          # labels are opt-in -- a bare positional call still works
+```
+
+- Matching is purely positional — a labeled argument's label must match whatever's declared at that same param index; labels are never used to reorder arguments
+- A supplied label that doesn't match the declared one at that position (including "labeled when none was declared") raises `Ore::Argument_Label_Mismatch`
+- Two params can share the same label (`new { at x, at y; ... }` then `Point(at: 3, at: 4)`) — matching Swift, labels aren't required to be unique
+- Implementation: `label: value` parses as an ordinary `:` `Infix_Expr` (same production named struct members use) — `#interp_func_body` unwraps it via `#argument_label_and_expr` before interpreting, rather than letting `#interpret` try to resolve the label as an identifier
 
 ## Class Conventions
 
@@ -474,7 +524,7 @@ double { n; n * 2 }
 
 ## Ranges
 
-Four range operators, all built on the same `...`/`..<`/`>..`/`>.<` family (`RANGE_OPERATORS` in `constants.rb`, handled in `interp_infix` in `interpreter.rb`):
+Four range operators, all built on the same `...`/`..<`/`>..`/`>.<` family (`RANGE_OPERATORS` in `constants.rb`, handled by `#interp_range_infix` in `interpreter.rb`, dispatched from `#interp_infix`):
 
 ```ore
 1...5  # inclusive:         1, 2, 3, 4, 5
@@ -487,7 +537,7 @@ Four range operators, all built on the same `...`/`..<`/`>..`/`>.<` family (`RAN
 
 ## Built-in Types and Intrinsic Methods
 
-Ore's built-in types (String, Array, Dictionary, Number) have ruby methods that delegate to Ruby's native implementations. These methods are declared using a `proxy_` prefix (see src/ruby/shared/ruby_proxies.rb)
+Ore's built-in types (String, Array, Dictionary, Number) have ruby methods that delegate to Ruby's native implementations. These methods are declared using a `proxy_` prefix (see src/shared/ruby_proxies.rb)
 
 ### Intrinsic Method Implementation Pattern
 
@@ -861,7 +911,7 @@ end
 
 **Implementation:**
 - Database operations use Ruby's Sequel gem
-- Table methods are proxy methods (see `src/ruby/external/ruby/table.rb`)
+- Table methods are proxy methods (see `src/external/ruby/table.rb`)
 - Table methods return `Ore::Dictionary` instances, not typed model instances (see `table.rb`'s own `# todo: Convert this to a Record instance`)
 - Static declarations (`..database`) link models to database
 

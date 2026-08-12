@@ -1,5 +1,5 @@
 require 'minitest/autorun'
-require_relative '../src/ruby/ore'
+require_relative '../src/ore'
 require 'net/http'
 require 'uri'
 require 'timeout'
@@ -14,6 +14,35 @@ class E2E_Server_Test < Minitest::Test
 			@interpreter.stop_server @server_runner
 			sleep 0.1
 		end
+	end
+
+	# `#start_server` used to spawn WEBrick in a Thread.new and return immediately, with nothing synchronizing the caller to when WEBrick actually starts listening. Thread.new returns before the new thread has run at all, so `webrick_server.status` was still :Stop right after start_server returned.
+	# Interpreter#run's own "did a server start?" check (`servers.any? { status == :Running }`) raced that and lost almost every time, so `bin/ore run`/`@start` would just silently exit instead of staying up. start_server now blocks on a StartCallback until WEBrick is genuinely :Running (or raises if it failed to start), so this must be true with no sleep at all.
+	def test_start_server_blocks_until_webrick_is_actually_running_regression
+		code = <<~ORE
+		    Server {
+		    	port,
+		    	new { port := #{@port};
+		    		./port = port
+		    	}
+		    }
+
+		    Web_App | Server {
+		    	get:// {; "ok" }
+		    }
+
+		    app := Web_App()
+		ORE
+
+		@interpreter    = Ore::Interpreter.new
+		server_instance = @interpreter.run code
+
+		@server_runner        = server_instance
+		@server_runner.port   = Integer(server_instance.get(:port) || Ore::Server::DEFAULT_PORT)
+		@server_runner.routes = @interpreter.collect_routes_from_instance server_instance
+		@interpreter.start_server @server_runner
+
+		assert_equal :Running, @server_runner.webrick_server.status
 	end
 
 	def test_server_starts_and_responds
@@ -41,10 +70,9 @@ class E2E_Server_Test < Minitest::Test
 		@interpreter    = Ore::Interpreter.new
 		server_instance = @interpreter.run code
 
-		@server_runner                 = Ore::Server.new
-		@server_runner.server_instance = server_instance
-		@server_runner.port            = Integer(server_instance.get(:port) || Ore::Server::DEFAULT_PORT)
-		@server_runner.routes          = @interpreter.collect_routes_from_instance server_instance
+		@server_runner        = server_instance
+		@server_runner.port   = Integer(server_instance.get(:port) || Ore::Server::DEFAULT_PORT)
+		@server_runner.routes = @interpreter.collect_routes_from_instance server_instance
 		@interpreter.start_server @server_runner
 
 		# Test GET /
@@ -84,10 +112,9 @@ class E2E_Server_Test < Minitest::Test
 		@interpreter    = Ore::Interpreter.new
 		server_instance = @interpreter.run code
 
-		@server_runner                 = Ore::Server.new
-		@server_runner.server_instance = server_instance
-		@server_runner.port            = Integer(server_instance.get(:port) || Ore::Server::DEFAULT_PORT)
-		@server_runner.routes          = @interpreter.collect_routes_from_instance server_instance
+		@server_runner        = server_instance
+		@server_runner.port   = Integer(server_instance.get(:port) || Ore::Server::DEFAULT_PORT)
+		@server_runner.routes = @interpreter.collect_routes_from_instance server_instance
 		@interpreter.start_server @server_runner
 
 		response = Net::HTTP.get_response URI("http://localhost:#{@port}/search?q=test&page=1")
@@ -117,10 +144,9 @@ class E2E_Server_Test < Minitest::Test
 		@interpreter    = Ore::Interpreter.new
 		server_instance = @interpreter.run code
 
-		@server_runner                 = Ore::Server.new
-		@server_runner.server_instance = server_instance
-		@server_runner.port            = Integer(server_instance.get(:port) || Ore::Server::DEFAULT_PORT)
-		@server_runner.routes          = @interpreter.collect_routes_from_instance server_instance
+		@server_runner        = server_instance
+		@server_runner.port   = Integer(server_instance.get(:port) || Ore::Server::DEFAULT_PORT)
+		@server_runner.routes = @interpreter.collect_routes_from_instance server_instance
 		@interpreter.start_server @server_runner
 
 		uri      = URI("http://localhost:#{@port}/submit")
@@ -166,15 +192,13 @@ class E2E_Server_Test < Minitest::Test
 		routes_a = interpreter.collect_routes_from_instance a_instance
 		routes_b = interpreter.collect_routes_from_instance b_instance
 
-		@server_runner_a                 = Ore::Server.new
-		@server_runner_a.server_instance = a_instance
-		@server_runner_a.port            = Integer(a_instance.get(:port) || Ore::Server::DEFAULT_PORT)
-		@server_runner_a.routes          = routes_a
+		@server_runner_a        = a_instance
+		@server_runner_a.port   = Integer(a_instance.get(:port) || Ore::Server::DEFAULT_PORT)
+		@server_runner_a.routes = routes_a
 
-		@server_runner_b                 = Ore::Server.new
-		@server_runner_b.server_instance = b_instance
-		@server_runner_b.port            = Integer(b_instance.get(:port) || Ore::Server::DEFAULT_PORT)
-		@server_runner_b.routes          = routes_b
+		@server_runner_b        = b_instance
+		@server_runner_b.port   = Integer(b_instance.get(:port) || Ore::Server::DEFAULT_PORT)
+		@server_runner_b.routes = routes_b
 
 		interpreter.start_server @server_runner_a
 		interpreter.start_server @server_runner_b

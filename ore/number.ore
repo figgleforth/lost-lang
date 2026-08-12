@@ -22,3 +22,7 @@ Number {
 	to_i {; @ruby }
 	to_f {; @ruby }
 }
+
+# todo; Int and Flt/Float
+Int | Number {}
+Flt := Float | Number {}

@@ -1,5 +1,8 @@
 Table {
 	table_name,
+	database: Database,
+	columns: Struct,
+
 	infer_table_name_from_class! {; @ruby }
 
 	../database,
@@ -10,8 +13,4 @@ Table {
 	../create { dict; @ruby }
 	../update { id, dict; @ruby }
 	../delete { id; @ruby }
-}
-
-DEFAULT_COLUMNS := <id: Number, created_at: Number>
-Record<DEFAULT_COLUMNS> | Table {
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-require_relative '../src/ruby/ore'
+require_relative '../src/ore'
 
 INSTRUCTIONS = <<~INST
     Usage:
@@ -26,9 +26,9 @@ INSTRUCTIONS = <<~INST
         -h | --help           Show help instructions
 
     EXAMPLES:
-        ore examples/hello.ore
+        ore ore/examples/hello.ore
         ore lex "x = 5 + 3"
-        ore parsef examples/hello.ore
+        ore parsef ore/examples/hello.ore
         ore interp "4815"
 INST
 
@@ -37,7 +37,17 @@ if ARGV.empty?
 	exit 1
 end
 
+def interp_and_print_output source_code, file: nil, load_standard_library: true
+	interpreter                       = Ore::Interpreter.new
+	interpreter.load_standard_library = load_standard_library
+	interpreter.register_source file, source_code if file
+	result = interpreter.run source_code
+	[interpreter, result]
+end
+
 begin
+	print_output = ARGV.last == '-p'
+
 	case ARGV[0]
 	when '-v', '--version'
 		puts "Ore #{Ore::VERSION}"
@@ -50,26 +60,36 @@ begin
 	when 'check'
 		Ore.type_check ARGV[1]
 	when 'lex'
-		pp Ore.lex ARGV[1]
+		result = Ore.lex ARGV[1]
+		pp result if print_output
 	when 'parse'
-		pp Ore.parse ARGV[1]
+		result = Ore.parse ARGV[1]
+		pp result if print_output
 	when 'interp'
-		pp Ore.interp ARGV[1]
+		interpreter, result = interp_and_print_output ARGV[1]
+		pp interpreter.stringify_for_display(result) if ARGV[2] && ARGV[2] == "-p"
 	when 'lexf'
-		pp Ore.lex_file ARGV[1]
+		result = Ore.lex_file ARGV[1]
+		pp result if print_output
 	when 'parsef'
-		pp Ore.parse_file ARGV[1]
+		result = Ore.parse_file ARGV[1]
+		pp result if print_output
 	when 'interpf'
-		pp Ore.interp_file ARGV[1]
+		interpreter, result = interp_and_print_output File.read(ARGV[1]), file: ARGV[1]
+		pp interpreter.stringify_for_display(result) if print_output
 	when 'interp-nostd'
-		pp Ore.interp ARGV[1], load_standard_library: false
+		interpreter, result = interp_and_print_output ARGV[1], load_standard_library: false
+		pp interpreter.stringify_for_display(result) if print_output
 	when 'interpf-nostd'
-		pp Ore.interp_file ARGV[1], load_standard_library: false
+		interpreter, result = interp_and_print_output File.read(ARGV[1]), file: ARGV[1], load_standard_library: false
+		pp interpreter.stringify_for_display(result) if print_output
 	when 'run'
-		pp Ore.interp_file ARGV[1]
+		interpreter, result = interp_and_print_output File.read(ARGV[1]), file: ARGV[1]
+		pp interpreter.stringify_for_display(result) if print_output
 	else
 		if ARGV[0]
-			pp Ore.interp_file ARGV[0]
+			interpreter, result = interp_and_print_output File.read(ARGV[0]), file: ARGV[0]
+			pp interpreter.stringify_for_display(result) if print_output
 		else
 			puts "Error: No file specified.\n#{INSTRUCTIONS}"
 			exit 1

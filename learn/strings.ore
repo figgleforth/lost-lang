@@ -1,0 +1,44 @@
+``` Introduction
+
+Strings use single or double quotes. Backed by `Ore::String`, wrapping a real Ruby string in `.value`. `length` is a plain property, no parens -- everything else below is a method call.
+```
+name := 'Jack Shephard'
+@puts "name.length: `name.length`"   # name.length: 13
+@puts "'J'.ord: `'J'.ord`"           # 'J'.ord: 74 -- ordinal of the first character
+
+
+``` upcase and downcase
+
+```
+@puts "upcased: `name.upcase()`"     # upcased: JACK SHEPHARD
+@puts "downcased: `name.downcase()`"   # downcased: jack shephard
+
+
+``` split and trim
+
+```
+@puts "split on space: `name.split(' ')`"          # split on space: [Jack, Shephard]
+@puts "trimmed: `'  castaway  '.trim()`"            # trimmed: castaway
+
+
+``` chars and reverse
+
+```
+@puts "chars: `'raft'.chars()`"      # chars: [r, a, f, t]
+@puts "reversed: `'raft'.reverse()`"   # reversed: tfar
+
+
+``` include?, start_with?, end_with?
+
+```
+@puts "includes 'Shephard'? `name.include?('Shephard')`"     # includes 'Shephard'? true
+@puts "starts with 'Jack'? `name.start_with?('Jack')`"        # starts with 'Jack'? true
+@puts "ends with 'phard'? `name.end_with?('phard')`"          # ends with 'phard'? true
+
+
+``` gsub and to_i
+
+`gsub` replaces every match of a substring, `to_i` parses a leading integer out of a string.
+```
+@puts "gsub'd: `name.gsub('Shephard', 'Shepard')`"   # gsub'd: Jack Shepard
+@puts "'108'.to_i(): `'108'.to_i()`"                  # '108'.to_i(): 108

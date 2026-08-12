@@ -1,26 +1,43 @@
 # Builtin types I'm experimenting with, very much incomplete. Each of these should have an equivalent Ore::Type in ./src/runtime/scopes.rb
 
+Nil {
+	to_s {; 'nil' }
+}
+
+Any {
+	to_s {; 'Any' }
+}
+
+Printable {
+	to_s {;
+		"Override to_s{;} on your class to control how @puts displays your object."
+	}
+}
+
 # @load 'ore/table.ore' # ore/ is the stdlib found in ./ore/
 # @load './this.ore'    # relative to wherever you ran bin/ore from (cwd)
 # @load 'that.ore'      # relative to wherever you ran bin/ore from (cwd)
 
-@load 'ore/file_system.ore'
-@load 'ore/number.ore'
-@load 'ore/array.ore'
-@load 'ore/dictionary.ore'
-@load 'ore/string.ore'
-@load 'ore/tag_info.ore'
+@load 'ore/file_system'
+@load 'ore/number'
+@load 'ore/array'
+@load 'ore/dictionary'
+@load 'ore/string'
+@load 'ore/struct'
 
 Iterable { # todo: This is unused, but here to remind me to think about how to make composing with Iterable behave like Protocols in Swift.
 	next {;}
 }
 
-Nil {}
-
 Range {}
 
 Tuple {
 	values,
+
+	to_s {;
+		pieces := values.map({; "`it`" })
+		"(`pieces.join(', ')`)"
+	}
 }
 
 Bool {
@@ -29,5 +46,14 @@ Bool {
 	# todo: Think about what else might make a boolean true
 	new { value := true;
 		./truthiness = value != false and value != nil and value != 0 and value != 0.0
+	}
+
+	# note; Not `"`truthiness`"` because interpolating truthiness (a raw Ruby true/false) wouldre-wrap it via maybe_instance back into this exact Bool singleton and call .to_s again,infinitely. Branching avoids ever stringifying truthiness itself.
+	to_s {;
+		if truthiness
+			"true"
+		else
+			"false"
+		end
 	}
 }

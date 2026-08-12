@@ -3,7 +3,7 @@
 [![justforfunnoreally.dev badge](https://img.shields.io/badge/justforfunnoreally-dev-2B7FFF)](https://justforfunnoreally.dev)
 ![Status of project Ruby tests](https://github.com/figgleforth/ore-lang/actions/workflows/tests.yml/badge.svg)
 
-Learn about the language below, or *[click here to get started using it](getting_started.md)*.
+Learn about the language below, or [in the learn section](learn/readme.md), or *[click here to get started using it](getting_started.md)*.
 
 ---
 
@@ -782,12 +782,12 @@ Duck =/= Fish          # false (both compose Swimming — not disjoint)
 Flying =/= Swimming    # true  (share nothing)
 ```
 
-All five comparison operators also take [Tags](#tags) into account. An untagged type is treated as having no tags, so plain comparisons like the ones above are unaffected:
+All five comparison operators also take [Structs](#structs) into account. An unstructured type is treated as having no members, so plain comparisons like the ones above are unaffected:
 
 ```ore
 Abc<Number> {}
-Abc<Number> === Abc<String>   # false — same composed type, different tags
-Abc === Abc                   # true  — neither side tagged
+Abc<Number> === Abc<String>   # false — same composed type, different structure
+Abc === Abc                   # true  — neither side structured
 ```
 
 ### Logical
@@ -867,18 +867,20 @@ Currency { amount, name, code, }
 
 $42  # Currency(amount: 42, name: 'US Dollar', code: 'USD')
 
-# A type's own overload beats a same-named global one
-@operator -> @infix 300 { left, right; 999 }
+# A type's own overload beats a same-named global one. A fresh symbol (~>, not ->) since
+# declaring another global -> here would just overwrite the pipeline -> declared above it,
+# in the same global scope.
+@operator ~> @infix 300 { left, right; 999 }
 
 Wrapped {
     val,
     new { v; ./val = v }
-    @operator -> @infix 300 { left, right; left.val }
+    @operator ~> @infix 300 { left, right; left.val }
 }
 
 a := Wrapped(42)
-a -> 1          # 42 — Wrapped's own -> wins
-5 -> double     # 10 — global -> still applies to everything else
+a ~> 1          # 42 — Wrapped's own ~> wins
+5 ~> double     # 999 — global ~> still applies to everything else
 ```
 
 ## Runtime Type Contracts
@@ -896,18 +898,18 @@ x := 4
 x := 'hello'  # fine — re-declaring with := re-infers and re-locks the type
 x             # 'hello'
 
-y = 4         # raises Ore::Cannot_Reassign_Undeclared_Identifier — y was never declared
+y = 4         # raises Ore::Cannot_Assign_Undeclared_Identifier — y was never declared
 ```
 
 ## Function Signatures
 
-1. `Type{Param, Param;}` is a signature — a value describing a function's shape (its param types and return type), with no implementation
-2. A real function always declares its own return type inside its body, with `-> Type` at the end of its param list — `name: Type { }` on the outside is reserved for signatures only, never a real implementation
+1. `{Param, Param -> Type;}` is a signature — a value describing a function's shape (its param types and return type), with no implementation — same `-> Type` placement a real function uses, just with no body
+2. A real function always declares its own return type inside its body, with `-> Type` at the end of its param list before `;` — a self-declaring signature uses the same shape under its name (`double: {Number -> Number;}`)
 3. Assigning a function to a signature-typed identifier checks its actual shape, not just a name — mismatches raise `Ore::Type_Contract_Violation`, the same runtime type contract `:=` uses
 4. Any function with a declared return type is checked on every call — what it actually returns has to match, signature or not
 
 ```ore
-Currency_Formatter := String{Number;}    # takes a Number, returns a String
+Currency_Formatter := {Number -> String;}    # takes a Number, returns a String
 
 format_usd { cents: Number -> String;
     "$" + (cents / 100.0).to_s()
@@ -933,19 +935,19 @@ lying { a -> Number; 'not a number' }
 lying(5)   # raises Ore::Type_Contract_Violation — declared Number, actually returned String
 ```
 
-## Tags
+## Structs
 
-1. `<...>` attaches runtime-inspectable metadata to a type declaration, a value, or a reference to an existing type
-2. Each declared shape is its own type — `Abc<Number> {}` and `Abc<String> {}` don't share `new`/methods
-3. A reference matches a declared shape by type (like overload resolution), including types it composes and not just its own name — no match raises `Ore::Undeclared_Tagged_Type`
-4. Reachable through `.tags` (`.tags.types`, or `.tags.some_name` for named tags) — bound before `new{;}` runs, never forwarded as constructor args
+1. `<...>` attaches runtime-inspectable metadata (a struct) to a type declaration, a value, or a reference to an existing type
+2. Each declared structure is its own type — `Abc<Number> {}` and `Abc<String> {}` don't share `new`/methods
+3. A reference matches a declared structure by type (like overload resolution), including types it composes and not just its own name — no match raises `Ore::Undeclared_Type_Structure`
+4. Reachable through `.structure` (`.structure.types`, or `.structure.some_name` for named members) — bound before `new{;}` runs, never forwarded as constructor args
 
 ```ore
 String<dict: Dictionary> {
-    to_s {; "dict: `tags.dict`" }
+    to_s {; "dict: `structure.dict`" }
 }
 String<num: Number> {
-    to_s {; "number: `tags.num`" }
+    to_s {; "number: `structure.num`" }
 }
 
 String<{x=1}>().to_s()   # "dict: {x: 1}"
@@ -964,7 +966,7 @@ Type {
 here_too,               # here_too := nil
 ```
 
-A bare annotated identifier with nothing assigned behaves the same way — no need to write `= nil` just to make an already-self-declaring annotation (`x: Number`, or a tag annotation) actually declare something:
+A bare annotated identifier with nothing assigned behaves the same way — no need to write `= nil` just to make an already-self-declaring annotation (`x: Number`, or a struct annotation) actually declare something:
 
 ```ore
 thing: <String, Number>   # same as thing: <String, Number> = nil

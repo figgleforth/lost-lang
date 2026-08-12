@@ -1,5 +1,5 @@
 require 'minitest/autorun'
-require_relative '../src/ruby/ore'
+require_relative '../src/ore'
 require_relative 'base_test'
 require 'net/http'
 require 'uri'
@@ -87,12 +87,9 @@ class Server_Test < Base_Test
 		interpreter     = Ore::Interpreter.new
 		server_instance = interpreter.run code
 
-		user_server                 = Ore::Server.new
-		user_server.server_instance = server_instance
-		user_server.port            = Integer(server_instance.get(:port) || Ore::Server::DEFAULT_PORT)
+		server_instance.port = Integer(server_instance.get(:port) || Ore::Server::DEFAULT_PORT)
 
-		assert_equal 8888, user_server.port
-		assert_equal server_instance, user_server.server_instance
+		assert_equal 8888, server_instance.port
 	end
 
 	def test_route_collection

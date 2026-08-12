@@ -1,5 +1,5 @@
 require 'minitest/autorun'
-require_relative '../src/ruby/ore'
+require_relative '../src/ore'
 require_relative 'base_test'
 
 class ProxiesTest < Base_Test
@@ -106,6 +106,57 @@ class ProxiesTest < Base_Test
 
 		assert Ore.interp("[1, 2, 3].all?({ x; x > 0 })")
 		refute Ore.interp("[1, 2, 3].all?({ x; x > 2 })")
+	end
+
+	def test_include_respects_custom_equality_overload
+		src = <<~CODE
+		    Point {
+		    	x,
+		    	y,
+
+		    	new { x, y;
+		    		./x = x
+		    		./y = y
+		    	}
+
+		    	@operator == @infix 500 { left, right;
+		    		left.x == right.x and left.y == right.y
+		    	}
+		    }
+
+		    a := [Point(1, 2), Point(3, 4)]
+		    (a.include?(Point(1, 2)), a.include?(Point(9, 9)))
+		CODE
+		out = Ore.interp src
+		assert_equal true, out.values[0]
+		assert_equal false, out.values[1]
+	end
+
+	def test_array_equality_respects_custom_equality_overload
+		src = <<~CODE
+		    Point {
+		    	x,
+		    	y,
+
+		    	new { x, y;
+		    		./x = x
+		    		./y = y
+		    	}
+
+		    	@operator == @infix 500 { left, right;
+		    		left.x == right.x and left.y == right.y
+		    	}
+		    }
+
+		    a := [Point(1, 2), Point(3, 4)]
+		    b := [Point(1, 2), Point(3, 4)]
+		    c := [Point(1, 2), Point(9, 9)]
+		    (a == b, a == c, a == [Point(1, 2)])
+		CODE
+		out = Ore.interp src
+		assert_equal true, out.values[0]
+		assert_equal false, out.values[1]
+		assert_equal false, out.values[2]
 	end
 
 	def test_dictionary_proxies

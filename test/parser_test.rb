@@ -1,5 +1,5 @@
 require 'minitest/autorun'
-require_relative '../src/ruby/ore'
+require_relative '../src/ore'
 require_relative 'base_test'
 
 class Parser_Test < Base_Test
@@ -510,8 +510,8 @@ class Parser_Test < Base_Test
 		assert_kind_of Ore::Identifier_Expr, out.first.condition
 		assert_equal 'unless', out.first.type.value
 		assert_equal 'the_condition', out.first.condition.value
-		assert_kind_of Ore::Identifier_Expr, out.first.when_false.first
-		assert_equal 'do_this', out.first.when_false.first.value
+		assert_kind_of Ore::Identifier_Expr, out.first.when_true.first
+		assert_equal 'do_this', out.first.when_true.first.value
 	end
 
 	def test_until_conditional
@@ -520,8 +520,8 @@ class Parser_Test < Base_Test
 		assert_kind_of Ore::Identifier_Expr, out.first.condition
 		assert_equal 'until', out.first.type.value
 		assert_equal 'the_condition', out.first.condition.value
-		assert_kind_of Ore::Identifier_Expr, out.first.when_false.first
-		assert_equal 'repeat_this', out.first.when_false.first.value
+		assert_kind_of Ore::Identifier_Expr, out.first.when_true.first
+		assert_equal 'repeat_this', out.first.when_true.first.value
 	end
 
 	def test_silly_elwhile
@@ -630,8 +630,8 @@ class Parser_Test < Base_Test
 	def test_return_with_conditional_at_end_of_line
 		out = Ore.parse 'return x unless y'
 		assert_kind_of Ore::Conditional_Expr, out.first
-		assert_kind_of Ore::Prefix_Expr, out.first.when_false.first
-		assert_kind_of Ore::Identifier_Expr, out.first.when_false.first.expression
+		assert_kind_of Ore::Prefix_Expr, out.first.when_true.first
+		assert_kind_of Ore::Identifier_Expr, out.first.when_true.first.expression
 		assert_kind_of Ore::Identifier_Expr, out.first.condition
 	end
 
@@ -688,10 +688,10 @@ class Parser_Test < Base_Test
 	end
 
 	def test_function_signature
-		out = Ore.parse 'Identifier {;}'
+		out = Ore.parse '{-> Identifier;}'
 		assert_kind_of Ore::Func_Signature_Expr, out.first
 
-		out = Ore.parse 'String{Number;}'
+		out = Ore.parse '{Number -> String;}'
 		assert_kind_of Ore::Func_Signature_Expr, out.first
 
 		out = Ore.parse 'string {number;}'
