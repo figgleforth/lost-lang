@@ -342,7 +342,7 @@ class Structs_Test < Base_Test
 		out = Ore.interp <<~CODE
 		    Options := <table_name: String, columns: Number>
 
-		    Thing<opts: Options> {
+		    Thing<opts: Options = Options> {
 		    	new {;}
 		    }
 
@@ -352,6 +352,26 @@ class Structs_Test < Base_Test
 		CODE
 		refute_nil out.values[0]
 		refute_nil out.values[1]
+	end
+
+	# Regression: a reference member named via the bare `:=` idiom (used to disambiguate an
+	# otherwise-ambiguous match, e.g. `String<other := {x=1}>()`) bound the member's own *resolved
+	# type* onto `.structure` instead of the real supplied value -- `interp_type`'s reference-resolution
+	# read `supplied.type_objects` (identity-only, used for the "did they just restate the type"
+	# check) where it should have read `supplied.values` for the actual result.
+	def test_named_reference_member_preserves_the_real_supplied_value_regression
+		out = Ore.interp <<~CODE
+		    Data_Conn { name, new { name; ./name = name } }
+		    Table<columns: Struct, database: Data_Conn> {}
+
+		    cols := <name: String, age: Number>
+		    db := Data_Conn('primary')
+
+		    t := Table<columns := cols, database := db>
+		    (t.structure.columns.names, t.structure.database.name)
+		CODE
+		assert_equal %w(name age), out.values[0].values
+		assert_equal 'primary', out.values[1]
 	end
 
 	def test_redeclaring_same_structure_extends_the_same_variant

@@ -1645,21 +1645,21 @@ module Ore
 				referenced.declarations        = existing.declarations.dup
 				referenced.static_declarations = (existing.static_declarations || Set.new).dup
 				if expr.struct
-					# Call-site member values are always positional (`Woof<'hello', 4815>`, never `Woof<key: 'hello'>`) for now! Here we re-associate them with the names — and pick up any defaults — from the matched variant's own struct declaration (`Woof<String, key: Dictionary> {}`) so `.structure.key` still works on the resulting instance.
-					# Eventually I want to support named arguments like <key='hello'>.
+					# Call-site member values are usually positional (`Woof<'hello', 4815>`), but a member can be named at the reference site too (`Woof<key := 'hello'>`) to disambiguate an otherwise-ambiguous match. Either way, re-associate them with the names — and pick up any defaults — from the matched variant's own struct declaration (`Woof<String, key: Dictionary> {}`) so `.structure.key` still works on the resulting instance.
 					declaration            = existing.structure_declaration
 					declaration_names      = declaration.is_a?(Ore::Struct) ? declaration.names : []
 					declaration_types      = declaration.is_a?(Ore::Struct) ? declaration.type_objects : [] # declared type objects, used below only to detect an unfilled default via identity
 					declaration_type_names = declaration.is_a?(Ore::Struct) ? declaration.type_names : []
 					declaration_values     = declaration.is_a?(Ore::Struct) ? declaration.values : []
 
-					# A default only fills in for a member that just re-asserts the declaration's own declared type for that member (`Abc<Dictionary>()`, re-stating `dict`'s own type rather than giving it a value) — never when a real value was actually supplied there (`Abc<{x=1}>()` must keep {x=1}, not fall back to the default).
-					resolved_values = supplied.type_objects.each_with_index.map do |value, i|
-						name = declaration_names[i]
-						if name && !declaration_values[i].nil? && value.equal?(declaration_types[i])
+					# A default only fills in for a member that just re-asserts the declaration's own declared type for that member (`Abc<Dictionary>()`, re-stating `dict`'s own type rather than giving it a value) — never when a real value was actually supplied there (`Abc<{x=1}>()` must keep {x=1}, not fall back to the default). That check has to run against `supplied.type_objects` (identity against the declared type), since that's what "just restated the type" even means -- but the *result*, when it's a real value, has to be `supplied.values`, not `type_objects`. A bare `name := value` reference member (see #interp_struct) resolves its own `type_objects` entry down to the value's *inferred type*, not the value itself, so using `type_objects` here for both the check and the result silently substituted the wrong thing for exactly that case.
+					resolved_values = supplied.values.each_with_index.map do |real_value, i|
+						name     = declaration_names[i]
+						type_obj = supplied.type_objects[i]
+						if name && !declaration_values[i].nil? && type_obj.equal?(declaration_types[i])
 							declaration_values[i]
 						else
-							value
+							real_value
 						end
 					end
 
