@@ -42,8 +42,10 @@
 + Replace `@start` with `@start_server`
 + String literals interpret to a raw Ruby `::String`, not a wrapped `Ore::String` — so per-literal metadata (e.g. `quotation_style`, added for Member/Struct display) only survives when a value is used directly at the same call site; it's gone the moment the string passes through a variable first. Want to make string literals interpret to a real `Ore::String` instance generally. Bigger than it sounds: touches every place that currently assumes a raw Ruby string (native string methods, `.is_a?(::String)` checks, Ruby proxy methods). (The raw-string-on-the-left `==` asymmetry this used to also list is fixed now — `Ore::String#to_str` closes it, see Done.)
 + `src/compiler/parser.rb`: a comma is discarded instead of implying a tuple in `#complete_expression` (possibly related to tuple unpacking).
++ I want to be able to forward declare a constant without a value, then lock its value the first time it's assigned.
 
 [LANGUAGE DESIGN]
++ Enums are `:IDENTIFIER {}` whose members are other `Enums{}` or `CONSTANTS`
 + No try/catch, or any error handling: unhandled runtime errors crash the program outright. Ore errors are Ruby exceptions under the hood already, so the interpreter just needs to catch and hand off to a user-defined handler. Matters most for web routes, file I/O, DB calls.
 + `src/runtime/interpreter.rb`: builtins aren't user-extensible yet; a rough shape of the requirements exists in some comment but nothing's implemented. Requirements for this to work might include: 1) creating a new Type in Ore. 2) creating proxy class in scopes.rb or preferrably a custom directory. 3) Functions which use the @ruby expression in its body should be named something like Ore::Type "proxy_#{func_name}"
 + What should the default value for uninitilized declarations be? `x: Number` should probably start as 0 instead of nil. The value should depend on the type as well, like a String should be "" by default. Etc.
