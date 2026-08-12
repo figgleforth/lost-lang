@@ -2324,6 +2324,49 @@ class Interpreter_Test < Base_Test
 		assert_match 'String', err.message
 	end
 
+	# `x: Number = 'oops'` (a literal RHS) is caught statically before the interpreter ever runs (see type_checker_test.rb) -- these cover the gap that leaves open: a *non-literal* RHS (an identifier, a function, ...) whose actual value mismatches the annotation on the very first, self-declaring assignment. The static checker silently skips non-literal RHS entirely, so this has to be caught dynamically in #interp_infix_assignment, the same place reassignment already is.
+	def test_first_assignment_type_contract_with_non_literal_rhs
+		# Plain nominal annotation.
+		err = assert_raises Ore::Type_Contract_Violation do
+			Ore.interp 'bad := "oops"
+				x: Number = bad'
+		end
+		assert_match 'Number', err.message
+		assert_match 'String', err.message
+
+		# Signature-typed annotation, assigning a real function whose actual shape doesn't match.
+		err = assert_raises Ore::Type_Contract_Violation do
+			Ore.interp 'wrong { a, b; a + b }
+				x: {Number -> String;} = wrong'
+		end
+		assert_match '{Number -> String;}', err.message
+
+		# Inline signature form (no separate alias), same check.
+		assert_raises Ore::Type_Contract_Violation do
+			Ore.interp 'wrong { a, b; a + b }
+				x: {Number -> String;} = wrong'
+		end
+
+		# Same check applies to a typed member declared inside a Type/Instance body, not just top level.
+		assert_raises Ore::Type_Contract_Violation do
+			Ore.interp 'bad := "oops"
+				Thing {
+					x: Number = bad
+				}
+				Thing()'
+		end
+
+		# And inside a constructor, self-declaring from a param.
+		assert_raises Ore::Type_Contract_Violation do
+			Ore.interp 'Thing {
+					new { v;
+						x: Number = v
+					}
+				}
+				Thing("oops")'
+		end
+	end
+
 	def test_new_comma_nil_init
 		assert_raises(Ore::Undeclared_Identifier) do
 			Ore.interp <<~CODE
