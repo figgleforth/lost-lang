@@ -1961,13 +1961,33 @@ module Ore
 				expr.is_a? Ore::Param_Expr
 			end
 
-			# note; Evaluate arguments in caller's scope (before pushing function scopes). A labeled argument (`to: someone`) parses as a plain `:` Infix_Expr (same production named struct members use) so unwrap it here rather than letting #interpret try to resolve `to` as an identifier and raise Undeclared_Identifier.
-			# A caller that already evaluated the operands (operator-overload dispatch in #interp_infix) passes them via arg_values so their side effects don't run a second time; labels only exist in real call syntax, so none apply there.
+			# note; Evaluate arguments in caller's scope (before pushing function scopes). A labeled argument (`to: someone`) parses as a plain `:` Infix_Expr, and a named argument (`to := someone`) as a plain `:=` Infix_Expr (same production named struct members use) -- #classify_argument unwraps either rather than letting #interpret try to resolve `to` as an identifier and raise Undeclared_Identifier.
+			# A caller that already evaluated the operands (operator-overload dispatch in #interp_infix) passes them via arg_values so their side effects don't run a second time; labels/named args only exist in real call syntax, so neither applies there.
 			arg_labels = []
-			arg_values ||= expr.arguments.map do |arg|
-				label, value_expr = argument_label_and_expr arg
-				arg_labels << label
-				interpret value_expr
+			named_args = {}
+			arg_values ||= begin
+				seen_named = false
+				positional = []
+
+				expr.arguments.each do |arg|
+					kind, name_or_label, value_expr = classify_argument arg
+
+					# Named arguments must come last -- once you switch to naming arguments, every argument after that has to be named too. A positional argument (bare or labeled) can never follow one.
+					if seen_named && kind != :named
+						raise Ore::Positional_Argument_After_Named.new(expr, self)
+					end
+
+					if kind == :named
+						seen_named = true
+						raise Ore::Duplicate_Named_Argument.new(expr, name_or_label, self) if named_args.key? name_or_label
+						named_args[name_or_label] = interpret value_expr
+					else
+						arg_labels << (kind == :labeled ? name_or_label : nil)
+						positional << interpret(value_expr)
+					end
+				end
+
+				positional
 			end
 
 			# note: `func` is the single, shared Func object registered when the function was declared. Pushing it directly as the call frame (as this used to do) meant every invocation declared its params onto that same shared object, so recursive/repeated calls stomped on each other's param values. Each call gets its own fresh scope instead.
@@ -1986,8 +2006,25 @@ module Ore
 			push_scope func.enclosing_scope
 			push_scope call_scope
 
+			# Validated up front, before binding, so a typo'd name reports as "not a declared parameter" rather than getting masked by whatever other param that typo incidentally starved of a value (a confusing Missing_Argument with no mention of the real mistake).
+			unless named_args.empty?
+				declared_names = params.map { |param| param.name.value }
+				unknown_name   = named_args.keys.find { |name| !declared_names.include? name }
+				raise Ore::Unknown_Named_Argument.new(expr, unknown_name, self) if unknown_name
+			end
+
 			params.each_with_index do |param, i|
-				value = if i < arg_values.length
+				name_key       = param.name.value
+				has_positional = i < arg_values.length
+				has_named      = named_args.key? name_key
+
+				if has_positional && has_named
+					raise Ore::Argument_Given_By_Name_And_Position.new(expr, name_key, self)
+				end
+
+				value = if has_named
+					named_args.delete name_key
+				elsif has_positional
 					arg_values[i]
 				elsif param.default
 					interpret param.default
@@ -1995,12 +2032,9 @@ module Ore
 					raise Ore::Missing_Argument.new(expr, self)
 				end
 
-				# Labels are positional, not a lookup key -- a labeled argument at position `i` must
-				# match that position's declared label (Swift/ObjC-style), never used to reorder
-				# arguments. A bare, unlabeled argument is always accepted regardless of whether the
-				# param declares a label -- labels are opt-in at the call site, not mandatory.
+				# Labels are positional, not a lookup key -- a labeled argument at position `i` must match that position's declared label (Swift/ObjC-style), never used to reorder arguments. A bare, unlabeled argument is always accepted regardless of whether the param declares a label -- labels are opt-in at the call site, not mandatory. Named arguments bypass label-checking entirely -- they're matched by declared name, not position, so there's no positional label to compare against.
 				supplied_label = arg_labels[i]
-				if supplied_label && supplied_label != param.label&.value
+				if !has_named && supplied_label && supplied_label != param.label&.value
 					raise Ore::Argument_Label_Mismatch.new(expr, param.label&.value, supplied_label, self)
 				end
 
@@ -2045,12 +2079,20 @@ module Ore
 			return_value
 		end
 
-		# A call argument written as `label: value` parses as a plain `:` Infix_Expr (same production named struct members use). returns [label, value_expr] for that shape, or [nil, arg] for a plain positional argument. Never interprets `arg`/the label side itself; that's the caller's job once it knows which expression actually holds the real value.
-		def argument_label_and_expr arg
-			if arg.is_a?(Ore::Infix_Expr) && arg.operator&.value == ':' && arg.left.is_a?(Ore::Identifier_Expr)
-				[arg.left.value, arg.right]
+		# Classifies a call argument's syntactic form:
+		#   - `name := value` (named)   -- parses as a plain `:=` Infix_Expr, same production a struct
+		#     member's bare default uses. Matched by the callee's declared param *name*, not position.
+		#   - `label: value` (labeled)  -- parses as a plain `:` Infix_Expr, same production named
+		#     struct members use. Matched against whatever label is declared at that *position*.
+		#   - anything else (positional)
+		# Returns [kind, name_or_label, value_expr] -- name_or_label is nil for :positional. Never interprets `arg`/the name-or-label side itself; that's the caller's job once it knows which expression actually holds the real value.
+		def classify_argument arg
+			if arg.is_a?(Ore::Infix_Expr) && arg.operator&.value == ':=' && arg.left.is_a?(Ore::Identifier_Expr)
+				[:named, arg.left.value, arg.right]
+			elsif arg.is_a?(Ore::Infix_Expr) && arg.operator&.value == ':' && arg.left.is_a?(Ore::Identifier_Expr)
+				[:labeled, arg.left.value, arg.right]
 			else
-				[nil, arg]
+				[:positional, nil, arg]
 			end
 		end
 

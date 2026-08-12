@@ -269,6 +269,55 @@ module Ore
 		end
 	end
 
+	# A named argument (`name := value`) appeared, and then a bare positional or labeled argument followed it. Named arguments must come last in a call -- once you switch to naming arguments, every argument after that has to be named too.
+	class Positional_Argument_After_Named < Error
+		def detail_message
+			'Positional arguments must come before named arguments (`name := value`) in a call'
+		end
+	end
+
+	# The same name was used as a named argument (`name := value`) more than once in the same call.
+	class Duplicate_Named_Argument < Error
+		attr_accessor :name
+
+		def initialize expression, name, runtime = nil
+			@name = name
+			super expression, runtime
+		end
+
+		def detail_message
+			"#{Ascii.bold name} was given more than once as a named argument"
+		end
+	end
+
+	# A param was supplied both positionally (or by label) and by name in the same call, e.g. `add(1, a := 2)` where `a` is the first declared param.
+	class Argument_Given_By_Name_And_Position < Error
+		attr_accessor :name
+
+		def initialize expression, name, runtime = nil
+			@name = name
+			super expression, runtime
+		end
+
+		def detail_message
+			"#{Ascii.bold name} was given both positionally and by name"
+		end
+	end
+
+	# A named argument's name (`name := value`) doesn't match any of the callee's declared params.
+	class Unknown_Named_Argument < Error
+		attr_accessor :name
+
+		def initialize expression, name, runtime = nil
+			@name = name
+			super expression, runtime
+		end
+
+		def detail_message
+			"#{Ascii.bold name} is not a declared parameter"
+		end
+	end
+
 	class Invalid_Destructuring_Source < Error
 		def detail_message
 			'Only a Tuple or Struct can be destructured with `(...) := ...`'

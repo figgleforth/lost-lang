@@ -640,6 +640,87 @@ class Interpreter_Test < Base_Test
 		assert_equal 12, out
 	end
 
+	def test_named_call_arguments_bind_by_declared_name_regardless_of_order
+		src = 'sub { a, b; a - b }'
+		assert_equal -1, Ore.interp("#{src}\nsub(a := 1, b := 2)")
+		assert_equal -1, Ore.interp("#{src}\nsub(b := 2, a := 1)") # reordered -- same result
+	end
+
+	def test_named_call_arguments_can_follow_positional_arguments
+		src = 'sub { a, b; a - b }'
+		assert_equal -1, Ore.interp("#{src}\nsub(1, b := 2)")
+	end
+
+	def test_positional_argument_after_named_raises
+		assert_raises Ore::Positional_Argument_After_Named do
+			Ore.interp 'add { a, b; a + b }
+				add(a := 1, 2)'
+		end
+	end
+
+	def test_duplicate_named_argument_raises
+		assert_raises Ore::Duplicate_Named_Argument do
+			Ore.interp 'add { a, b; a + b }
+				add(a := 1, a := 2)'
+		end
+	end
+
+	def test_argument_given_by_name_and_position_raises
+		assert_raises Ore::Argument_Given_By_Name_And_Position do
+			Ore.interp 'add { a, b; a + b }
+				add(1, a := 2)'
+		end
+	end
+
+	# An unknown name is the actual mistake, so it has to be reported even when some other (unrelated) param is also left without a value as a side effect of that same typo -- not masked by a confusing Missing_Argument that never mentions the real problem.
+	def test_unknown_named_argument_raises_even_when_another_param_is_also_left_missing
+		assert_raises Ore::Unknown_Named_Argument do
+			Ore.interp 'add { a, b; a + b }
+				add(a := 1, c := 2)' # `c` isn't a param; `b` is consequently never filled
+		end
+	end
+
+	def test_named_call_arguments_fall_back_to_defaults_when_omitted
+		out = Ore.interp <<~CODE
+		    greet { name := "World"; "Hello, `name`" }
+		    (greet(), greet(name := "Ore"))
+		CODE
+		assert_equal ['Hello, World', 'Hello, Ore'], out.values
+	end
+
+	def test_named_call_arguments_do_not_leak_into_caller_scope
+		assert_raises Ore::Undeclared_Identifier do
+			Ore.interp 'add { a, b; a + b }
+				add(a := 1, b := 2)
+				a' # `a` was never declared in the caller -- only inside add's own call scope
+		end
+	end
+
+	def test_named_call_arguments_work_through_constructors
+		out = Ore.interp <<~CODE
+		    Point {
+		    	x,
+		    	y,
+		    	new { x, y;
+		    		./x = x
+		    		./y = y
+		    	}
+		    }
+		    p := Point(y := 4, x := 3)
+		    (p.x, p.y)
+		CODE
+		assert_equal [3, 4], out.values
+	end
+
+	# Labels (`:`, checked positionally against the declared label) and named arguments (`:=`, bound by declared name) are separate mechanisms with separate syntax -- a call can use a label on an early positional argument, then switch to named arguments for the rest.
+	def test_named_call_arguments_are_distinct_from_labels
+		out = Ore.interp <<~CODE
+		    send { to person, subject := 'hi'; "`person`: `subject`" }
+		    send(to: 'Alice', subject := 'bye')
+		CODE
+		assert_equal 'Alice: bye', out
+	end
+
 	def test_compound_operator
 		out = Ore.interp 'add { amount := 1, to := 0;
 			to += amount

@@ -430,7 +430,25 @@ send_greeting(42)          # labels are opt-in -- a bare positional call still w
 - Matching is purely positional — a labeled argument's label must match whatever's declared at that same param index; labels are never used to reorder arguments
 - A supplied label that doesn't match the declared one at that position (including "labeled when none was declared") raises `Ore::Argument_Label_Mismatch`
 - Two params can share the same label (`new { at x, at y; ... }` then `Point(at: 3, at: 4)`) — matching Swift, labels aren't required to be unique
-- Implementation: `label: value` parses as an ordinary `:` `Infix_Expr` (same production named struct members use) — `#interp_func_body` unwraps it via `#argument_label_and_expr` before interpreting, rather than letting `#interpret` try to resolve the label as an identifier
+- Implementation: `label: value` parses as an ordinary `:` `Infix_Expr` (same production named struct members use) — `#interp_func_body` unwraps it via `#classify_argument` before interpreting, rather than letting `#interpret` try to resolve the label as an identifier
+
+## Named Function Arguments
+
+`name := value` at a call site binds by the callee's declared param *name*, order-independent — a separate mechanism from labels (which check a *position*'s declared label, never reorder). Works for any call, including construction (`new{;}` params).
+
+```ore
+sub { a, b; a - b }
+sub(a := 1, b := 2)  #=> -1
+sub(b := 2, a := 1)  #=> -1, same result -- order doesn't matter
+sub(1, b := 2)       #=> -1, positional then named is fine
+```
+
+- **Ordering rule**: positional arguments (bare or labeled) must come before all named arguments in a call — once you switch to naming, every argument after that has to be named too. Reverting to positional after a named argument raises `Ore::Positional_Argument_After_Named`
+- The same name used twice in one call raises `Ore::Duplicate_Named_Argument`
+- A param supplied both positionally *and* by name (e.g. `add(1, a := 2)` where `a` is the first param) raises `Ore::Argument_Given_By_Name_And_Position`
+- A named argument whose name doesn't match any declared param raises `Ore::Unknown_Named_Argument` — checked up front, before param binding, so a typo'd name is reported directly rather than surfacing as a confusing `Ore::Missing_Argument` on some unrelated param the typo incidentally starved of a value
+- A named argument bypasses label-checking entirely for that param — it's matched by declared name, not position, so there's no positional label to compare against
+- Implementation: `name := value` parses as an ordinary `:=` `Infix_Expr` (same production a struct member's bare default uses) — `#classify_argument` distinguishes it from a labeled (`:`) or plain positional argument; `#interp_func_body` builds a `named_args` hash alongside the existing positional `arg_values` array, consulting it first when binding each declared param
 
 ## Class Conventions
 
