@@ -831,7 +831,7 @@ module Ore
 				end
 			end
 
-			# For plain identifiers (no scope operator) inside an Instance/Type body, new declarations should go to that Instance/Type, not to an enclosing scope that happens to have the same identifier. This fixes a bug that prevented HTML Layout's `title` from capturing Title's `title` declaration in examples/basic_html_page.ore.
+			# For plain identifiers (no scope operator) inside an Instance/Type body, new declarations should go to that Instance/Type, not to an enclosing scope that happens to have the same identifier. This fixes a bug that prevented HTML Layout's `title` from capturing Title's `title` declaration in ore/examples/basic_html_page.ore.
 			if expr.left.is_a?(Ore::Identifier_Expr) && !expr.left.scope_operator
 				current_scope = stack.last
 

@@ -168,7 +168,7 @@ module Ore
 			it    = ::String.new
 			quote = eat
 
-			# todo: Refactor this, maybe? I was trying to use interpolation pipes in multiline text (see ./examples/basic_page.ore) and realized that I wasn't escaping those, which led to the interpreter trying to actually interpolate the string.
+			# todo: Refactor this, maybe? I was trying to use interpolation pipes in multiline text (see ./ore/examples/basic_page.ore) and realized that I wasn't escaping those, which led to the interpreter trying to actually interpolate the string.
 			while chars? && curr != quote
 				if curr == '\\'
 					eat

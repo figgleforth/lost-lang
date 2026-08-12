@@ -23,7 +23,7 @@ String<dict: Dictionary> {
 
 ```
 @load 'ore/html.ore'
-@load 'examples/structured_types.ore'
+@load 'ore/examples/structured_types.ore'
 
 dom := Div([H1('Hello')])
 
