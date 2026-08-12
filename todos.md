@@ -1,4 +1,5 @@
 [LEGEND: + todo at top / - done at bottom]
++ Ability to cast and compare types at runtime. For example, a class with struct `<id: Int>` should qualify anywhere the type annotation says `: <id: Int>` (a struct with one int named `id`). Maybe even `: <Int>` should succeed whenever any Int is declared on the class. 
 + Add runtime types for all instnatiatable constructs in the language
 + Wire up `Any` type. I suppose it should == and === any other type or instance? I need to read up more on the concept of `Any`.
 + I had this idea of not crashing on division by zero, but instead returning a type that represents infinity. `Inf := Infinity | Number` and `-Inf`. I should research this.
