@@ -1,4 +1,5 @@
 [LEGEND: + todo at top / - done at bottom]
++ Add runtime types for all instnatiatable constructs in the language
 + Wire up `Any` type. I suppose it should == and === any other type or instance? I need to read up more on the concept of `Any`.
 + I had this idea of not crashing on division by zero, but instead returning a type that represents infinity. `Inf := Infinity | Number` and `-Inf`. I should research this.
 + Switch statement / pattern matching: required for @help / help{expr;} function.

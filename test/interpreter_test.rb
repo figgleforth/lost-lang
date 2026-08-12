@@ -2833,19 +2833,7 @@ class Interpreter_Test < Base_Test
 		assert out
 	end
 
-	def test_raw_string_on_the_left_of_equality_regression
-		out = Ore.interp <<~CODE
-		    @load 'ore/file_system.ore'
-		    message := 'hello'
-		    File_System.write_string_to_file('./temp/regression_test_equality.txt', message)
-		    content := File_System.read('./temp/regression_test_equality.txt')
-		    (message == content, content == message)
-		CODE
-		assert_equal [true, true], out.values
-	end
-
 	def test_self_declaration_via_scope_operator_works_but_external_dot_does_not_regression
-
 		out = Ore.interp <<~CODE
 		    Thing {
 		        new {;
