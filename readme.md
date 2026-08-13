@@ -579,6 +579,21 @@ my_mod.Some_Type()
 @puts "Value: `expression`"
 ```
 
+## @declare Directive
+
+1. Declares an identifier on the current scope from a runtime String name, rather than a literal identifier written in the source (what `:=` needs)
+2. `@declare name` declares `nil`; `@declare name, value` and `@declare name, value, type` add a value and, optionally, a type
+3. Passed a Struct instead of a name, spreads every *named* member onto the current scope in one go — each member's own name, value, and declared type carry over directly
+
+```ore
+@declare 'flare_count'          # flare_count == nil
+@declare 'flare_count', 3       # flare_count == 3
+@declare 'ration', 2, Number    # same as `ration: Number = 2`
+
+supplies := <water: Number = 40, wood: Number = 12>
+@declare supplies               # water == 40, wood == 12
+```
+
 ## Web Server
 
 1. Compose with `Server` type

@@ -1,0 +1,69 @@
+``` Introduction
+
+A directive is `@word`, optionally followed by arguments. They're the interpreter's own escape hatch -- things that aren't really expressions (printing, asserting, declaring on the fly, moving the scope stack around) but still read like part of the language. This file covers `@puts`, `@assert`, `@declare`, `@cd`, and `@sleep`. A few other directives already have their own walkthrough, since they only make sense alongside the feature they belong to, like `@load` (`load_directive.ore`), `@start`/`@shut_down` (`web_server.ore`), `@connect` (`database.ore`), and `@ +=`/`@ -=`/`@param` unpacking (`sibling_scopes.ore`).
+```
+@puts 'a directive is just @word plus one or more arguments'
+
+
+``` @puts
+
+Prints a value. Anything Scope-shaped (an Array, a custom Instance, etc.) goes through its own declared `to_s` first, if it has one -- see `strings.ore`/`arrays.ore` for what each built-in type prints as.
+```
+@puts 'Land ho!'   # Land ho!
+@puts 4 + 8         # 12
+
+
+``` @assert
+
+`@assert condition` raises `Ore::Assert_Triggered` if `condition` is falsy. A second, comma-separated argument becomes the failure message.
+```
+survivors := 12
+@assert survivors > 0, 'need at least one survivor'   # passes silently
+# @assert survivors > 100, 'camp is over capacity'  -- raises Ore::Assert_Triggered: camp is over capacity
+
+
+``` @declare
+
+`@declare` puts a new identifier directly on the current scope, without going through `:=`. Handy when the name itself is only known at runtime -- `:=` needs a literal identifier written in the source, `@declare` takes a String.
+```
+
+# flare_count                         # raises Ore::Undeclared_Identifier since it isn't declared yt
+@declare 'flare_count'            # name only -- declares nil
+@puts "flare_count: `flare_count`"    # flare_count: nil
+
+@declare 'flare_count', 3          # name, value
+@puts "flare_count: `flare_count`"    # flare_count: 3
+
+@declare 'ration', 2, Number       # name, value, type -- same as `ration: Number = 2`
+
+
+``` @declare with a Struct
+
+Passed a Struct instead of a name, `@declare` spreads every *named* member onto the current scope in one go -- each member's own name, value, and declared type carry over directly. Unnamed members are skipped, since there's nothing to declare them as.
+```
+supplies := <water: Number = 40, wood := 12>
+@declare supplies
+@puts "water: `water`, wood: `wood`"   # water: 40, wood: 12
+
+
+``` @cd
+
+`@cd scope` pushes a scope onto the interpreter's stack, so its members become reachable without a prefix -- similar in spirit to `@ += instance` (see `sibling_scopes.ore`), but `@cd` replaces the current scope outright instead of adding a fallback, and any bare declaration made while "inside" lands on the pushed scope itself. `@cd ..` pops back.
+```
+Camp {
+	survivors := 12
+}
+
+camp := Camp()
+@cd camp
+survivors += 3   # no camp. prefix needed -- camp IS the current scope now
+@cd ..
+@puts "camp.survivors: `camp.survivors`"   # camp.survivors: 15
+
+
+``` @sleep
+
+Pauses execution for the given number of seconds. Mostly useful for demos/throttling, not for business logic, I hope.
+```
+@sleep 0.1
+@puts 'done waiting'   # done waiting
