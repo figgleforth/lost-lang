@@ -2993,6 +2993,21 @@ class Interpreter_Test < Base_Test
 		end
 	end
 
+	def test_declare_command_on_structs
+		assert_raises Ore::Undeclared_Identifier do
+			Ore.interp <<~CODE
+			    # @declare <id: Number, name: String = "Locke">
+				(it, name)
+			CODE
+		end
+
+		out = Ore.interp <<~CODE
+		    @declare <id: Number, name: String = "Locke">
+			(id, name)
+		CODE
+		assert_equal [nil, "Locke"], out.values
+	end
+
 	def test_declare_name_only_self_declares_to_nil
 		out = Ore.interp <<~CODE
 		    @declare "foo"

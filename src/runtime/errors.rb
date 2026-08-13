@@ -5,6 +5,12 @@ module Ore
 		attr_accessor :expression, :runtime
 
 		def initialize expression = nil, runtime = nil
+			# `runtime` is the live Interpreter (WEBrick servers, Proc-holding hashes, etc.), which Marshal can't dump -- so any tool that tries to Marshal.dump one of our errors (Minitest does, to report failures raised off the main thread) fails and falls back to reconstructing via `klass.new(original.message)`. That lands here with a single String and no runtime: it's already the final, formatted message, not an AST node to run back through the formatter -- use it as-is instead of silently producing a blank report.
+			if expression.is_a?(::String) && runtime.nil?
+				super expression
+				return
+			end
+
 			@expression = expression
 			@runtime    = runtime
 			super format_error

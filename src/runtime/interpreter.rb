@@ -1809,7 +1809,7 @@ module Ore
 			[]
 		end
 
-		# Searches the full scope stack (innermost to outermost) for `key`, the same way a bare identifier resolves via #scope_for_identifier -- checking only `stack.last` would miss a type declared in an outer/global scope while evaluating from inside a nested context (e.g. a type's own declaration body during composition).
+		# Searches the full scope stack (innermost to outermost) for `key`, the same way a bare identifier resolves via #scope_for_identifier -- checking only `stack.last` would miss a type declared in an outer/global scope while evaluating from inside a nested context (e.g. a type's own declaration body during composition). This returns an Ore type.
 		def find_in_stack key
 			stack.reverse_each do |scope|
 				return scope[key] if scope.has? key
@@ -2509,17 +2509,14 @@ module Ore
 
 		def interp_directive expr
 			case expr.name.value
-			when 'declare'
-				# todo; `@declare "ident", value, Type`
-				if expr.expression.is_a? Ore::Struct
-					# then declare all the members
-					expr.expression.members.each do |member|
+			when 'declare' # ident: String, value, type
+				interpreted_expr = interpret expr.expression
+				if interpreted_expr.is_a? Ore::Struct
+					interpreted_expr.members.values.each do |member|
 						next unless member.name
-						# @param member [Ore::Member]
-						# :name, :type, :value
 						stack.last.declare member.name, member.value, member.type
 					end
-					return interpret expr.expression
+					return interpreted_expr
 				end
 
 				data = (expr.arguments || []).map { |arg| interpret arg }
@@ -2709,15 +2706,12 @@ module Ore
 			finish_intrinsic_instance Ore::String.new(value, source_expr.quotation_style), 'String'
 		end
 
+		# The low-level Ore::Struct object is always built first and exactly the same way regardless of `struct_type` -- it's what #type_objects/etc. read from, and every existing member-matching call site depends on it being real.
 		def build_struct names, type_names, types, values
 			struct_type = find_in_stack 'Struct'
+			struct      = Ore::Struct.new names, type_names, types, values
 
-			# The low-level Ore::Struct object is always built first and exactly the same way
-			# regardless of `struct_type` -- it's what #type_objects/etc. read from, and every existing
-			# member-matching call site depends on it being real.
-			struct = Ore::Struct.new names, type_names, types, values
-
-			unless struct_type.is_a? Ore::Type
+			unless struct_type.is_a?(Ore::Type)
 				link_instance_to_type struct, 'Struct'
 				return struct
 			end
@@ -2725,10 +2719,10 @@ module Ore
 			struct.name            = struct_type.name
 			struct.types           = struct_type.types
 			struct.enclosing_scope = struct_type
-
 			run_type_body_on_instance struct_type, struct
 
-			{ 'names' => names, 'type_names' => type_names, 'types' => types, 'values' => values }.each do |key, list|
+			zipped = %w(names type_names types values).zip [names, type_names, types, values]
+			zipped.each do |key, list|
 				array = Ore::Array.new list
 				link_instance_to_type array, 'Array'
 				struct.declarations[key] = array
@@ -2745,6 +2739,7 @@ module Ore
 
 				members_array = Ore::Array.new members
 				link_instance_to_type members_array, 'Array'
+				struct.members                 = members_array
 				struct.declarations['members'] = members_array
 			end
 

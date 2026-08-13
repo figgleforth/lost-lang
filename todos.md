@@ -1,29 +1,31 @@
 [LEGEND: + todo at top / - done at bottom]
-+ `readme.md` doesn't document labeled *or* named function arguments at all — both exist only in CLAUDE.md/`learn/labeled_arguments.ore`/`learn/named_arguments.ore`.
++ Does errors.rb really need a reference to Interpreter? (the `@runtime` attr)
++ Rename `@cd` and `@ +/-` to something more descriptive. `@push_write <obj>`, `@pop_write <obj>`, `@push_read <obj>`, and `@pop_read <obj>`. Also rename sibling scope, and add a scope for writing.
++ Ensure `@cd ..` doesn't work if no scope was pushed with `@cd <scope>`. Probably need some kind of stack that remembers the pushes.
++ Percent literals `%str(boo hoo COOL)` for ['boo', 'hoo', 'COOL'] `%sym(BOO hoo cool)` for [:BOO, :hoo, :cool], etc.
++ Add `@declare` directive that accepts `Ore::Struct` and creates declarations on current scope
++ Rename Ore::Directive to Ore::Command? I don't like how long "directive" is.
++ Direction: use Structs (Member-backed, `ore/struct.ore` + `ore/member.ore`) as the common schema mechanism across Database/Table, Server, and Dom, toward an Ore-idiomatic way of doing webdev instead of ad-hoc per-feature conventions. `structure_declaration` already lets any type declare a structure via existing `<...>` syntax (`Post<title: String, body: String> | Table {...}`), no new grammar needed to start. Concrete angles: a Table's structure doubling as both its `create_table` schema and its Record member types (replacing the current Dictionary-of-strings schema and the "query results should return Records, not raw Dictionaries" gap below); typed request/response bodies for Server routes; declared prop structs for Dom components instead of bare instance members. Blocked on: a Database-side bridge translating a Struct member's Type object to a Sequel column type string; and the `@declare <struct>` directive above, for stamping a struct's members onto `./` ergonomically.
++ `readme.md` doesn't document labeled *or* named function arguments at all — both exist only in `CLAUDE.md`/`learn/labeled_arguments.ore`/`learn/named_arguments.ore`.
 + Ability to cast and compare types at runtime. For example, a class with struct `<id: Int>` should qualify anywhere the type annotation says `: <id: Int>` (a struct with one int named `id`). Maybe even `: <Int>` should succeed whenever any Int is declared on the class. 
-+ Add runtime types for all instnatiatable constructs in the language
++ Add runtime types for all instantiable constructs in the language
 + Wire up `Any` type. I suppose it should == and === any other type or instance? I need to read up more on the concept of `Any`.
 + I had this idea of not crashing on division by zero, but instead returning a type that represents infinity. `Inf := Infinity | Number` and `-Inf`. I should research this.
 + Switch statement / pattern matching: required for @help / help{expr;} function.
 + Rename preload.ore to global_scope.ore. That's what the global scope will be loaded from, gives me better control. Would be cool to construct different scopes that users can pick to be their global scope, or make their own.
 + Constants can be declared with a type and without a value. The first assignment locks in the value. `VERSION: Number` and assign it once later.
 + `Int` and `Flt`/`Float`, see `ore/number.ore`
-+ Rewrite the Dom_Renderer in Ore, and remove the magic rendering whenever a Dom is returned. Make the user render themselves, but implement it for them. Everyone prefers control over magic probably.
++ Rewrite the `Dom_Renderer` in Ore, and remove the magic rendering whenever a Dom is returned. Make the user render themselves, but implement it for them. Everyone prefers control over magic probably.
 + Table associations (`belongs_to`/`has_many`)
 + Add jsonb-like column support to databases.
 + No JSON encode/decode exposed to Ore: `require 'json'` only used internally, for example when parsing POST bodies (`interpreter.rb`).
 + No outbound HTTP client: Ore can serve requests but can't make them.
 + No `ENV`/config access: only I/O primitive is `File_System`.
-+ No in-Ore testing/assert facility: Minitest only tests the interpreter itself.
-+ Percent literals `%str(boo hoo COOL)` for ['boo', 'hoo', 'COOL'] `%sym(BOO hoo cool)` for [:BOO, :hoo, :cool], etc.
++ No in-Ore testing facility: Minitest only tests the interpreter itself. Ore has an `@assert` command taking condition and message.
 + Stride overlap for `for x by n,overlap`: `getting_started.md` documents `for x reject by 2,1` / `for x each by 3,1` style overlapping chunks, but the parser doesn't support the second stride argument yet (`src/compiler/parser.rb`: "Currently `stride` doesn't support option to overlap elements"). This was meant to be implemented, not just aspirational docs: needs the parser to accept `by <stride>,<overlap>` and the interpreter's chunking (`each_slice` today) to respect the overlap instead of using non-overlapping slices.
 + `help {expr;}` or `@help` that accepts any expression and returns information about the Type, primitive, function, etc. Literally any expression should be able to be described given its AST. You even have access to the live values so the information can be dynamic to reflect what the user is actually asking about.
-+ Improve error messaging. `src/runtime/error_formatter.rb` doesn't display source code properly for some expressions, I think.
-+ Ensure `@cd ..` doesn't work if no scope was pushed with `@cd <scope>`. Probably need some kind of stack that remembers the pushes.
-+ Rename `@cd` and `@ +/-` to something more descriptive. `@push_write <obj>`, `@pop_write <obj>`, `@push_read <obj>`, and `@pop_read <obj>`. Also rename sibling scope, and add a scope for writing.
-+ Add `@declare` directive that accepts `Ore::Struct` and creates declarations on current scope
-+ Direction: use Structs (Member-backed, `ore/struct.ore` + `ore/member.ore`) as the common schema mechanism across Database/Table, Server, and Dom, toward an Ore-idiomatic way of doing webdev instead of ad-hoc per-feature conventions. `structure_declaration` already lets any type declare a structure via existing `<...>` syntax (`Post<title: String, body: String> | Table {...}`), no new grammar needed to start. Concrete angles: a Table's structure doubling as both its `create_table` schema and its Record member types (replacing the current Dictionary-of-strings schema and the "query results should return Records, not raw Dictionaries" gap below); typed request/response bodies for Server routes; declared prop structs for Dom components instead of bare instance members. Blocked on: a Database-side bridge translating a Struct member's Type object to a Sequel column type string; and the `@declare <struct>` directive above, for stamping a struct's members onto `./` ergonomically.
-+ Some kind of to_s{;} and inspect{;} equivalents for printing objects
++ Improve error messaging. `src/runtime/error_formatter.rb` doesn't display source code properly for some expressions. They have to override `#detail_message`.
++ Some kind of `to_s;` and `inspect;` equivalents for printing objects
 + A way to get capitalization at runtime `:Identifier, :identifier, :IDENTIFIER` from any given identifier.
 + Ability to coerce types when declaring http routes. `put://survivors/:name { name: String; }`
 + Currently `func{a;}` must be called with parens `func(a)` otherwise `func` evaluates to a pointer to this func. I want to borrow from Jai: `x := func.*` should give you the pointer, `func` and `func()` should be a calls as usual, and then somehow I need to parse arguments without parens.
@@ -48,6 +50,7 @@
 + I want to be able to forward declare a constant without a value, then lock its value the first time it's assigned.
 
 [LANGUAGE DESIGN]
++ Design idea, still thinking it over: retire `new{;}` — a Type's own `{params; body}` becomes its constructor directly, same shape as `Func`. Sketched in `temp/sandbox.ore`/`temp/new_string.ore`. Confirmed so far: whole body re-executes on every construction, no exceptions by shape; `../`-targeted declarations (static vars/methods, e.g. `Sqlite`'s `../local`/`../memory`) are idempotent — declared once, skipped on every construction after, same as a C static local's init; never-instantiated types keep running the body once at declare-time, unchanged from today. Open: plain (unprefixed) method declarations like `to_s`/`upcase` — do they get the same skip-if-already-declared treatment (shared with the Type, no per-instance duplication), or does construction genuinely rebuild a fresh Func per instance every time? Leaning toward making the skip general rather than `../`-only.
 + Enums are `:IDENTIFIER {}` whose members are other `Enums{}` or `CONSTANTS`
 + No try/catch, or any error handling: unhandled runtime errors crash the program outright. Ore errors are Ruby exceptions under the hood already, so the interpreter just needs to catch and hand off to a user-defined handler. Matters most for web routes, file I/O, DB calls.
 + `src/runtime/interpreter.rb`: builtins aren't user-extensible yet; a rough shape of the requirements exists in some comment but nothing's implemented. Requirements for this to work might include: 1) creating a new Type in Ore. 2) creating proxy class in scopes.rb or preferrably a custom directory. 3) Functions which use the @ruby expression in its body should be named something like Ore::Type "proxy_#{func_name}"

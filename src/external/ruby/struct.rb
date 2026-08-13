@@ -5,7 +5,7 @@ module Ore
 	#
 	# <TypeA, b: TypeB, c := "xyz">
 	class Struct < Instance
-		attr_accessor :names, :values, :type_names
+		attr_accessor :names, :values, :type_names, :members
 
 		def initialize names = [], type_names = [], types = [], values = []
 			super 'Struct'
