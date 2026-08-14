@@ -1,5 +1,7 @@
 [LEGEND: + todo at top / - done at bottom]
 
++ Multiple return values: `{-> Abc, Def; }` or named `{-> a: Abc, b: Def; }` or named with defaults `{-> a: Int = 1; }`. Doesn't change anything for caller, but lets you define default output and a variable to use in the body. I suppose if you return a tuple of them like `f {-> a := 1, b := 2; }`, you can expand or whatever I called it. `a, b := f()`. And notice you don't need to have a body when there are defaults. I guess even without a default, things can be nil'd or something.
++ Formalize what it means for any type to be zeroed/nil'd. For example, `x: Int` equals `nil` after this declaration but should equal 0. Maybe some kind of `default_value{;}` that any class/type can declare 
 + Add `%hash()` that converts expressions to string, then hashes the string.
 + Add `%dict()` that converts expressions to string, then creates a dictionary with those keys and nil values
 + Add `Statement.new{Statement;}` so you can create statements programmatically as well as with the backtick literal.

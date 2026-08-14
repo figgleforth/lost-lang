@@ -401,6 +401,87 @@ b.to_s()   # "My dict: {x::0, y::1, z::2, }"
 - Implementation: `#interp_destructuring_declaration` in `interpreter.rb`, dispatched from `#interp_infix_declaration` when `expr.left` is a `()`-grouped `Circumfix_Expr`
 - Not implemented: the bare (no-parens) form `a, b := ...` — needs lookahead past the whole comma-run to distinguish it from N independent nil-init declarations, deferred as not urgent
 
+## Percent Literals
+
+`%kind(...)` turns a space-separated list of bare items into a real `Array` of String or Symbol literals, without quoting each one individually. Parsed by `#parse_percent_literal_expr` (`parser.rb`) into `Ore::Percent_Literal_Expr`; interpreted by `#interp_percent_literal` (`interpreter.rb`).
+
+```ore
+%string(boo Hoo COOL)      # [boo, Hoo, COOL] — preserves each item's own casing
+%symbol(BOO hoo Cool)      # [:BOO, :hoo, :Cool]
+
+%str(Boo hOO COOL)         # [boo, hoo, cool] — forces lowercase
+%Str(boo HOO cOOl)         # [Boo, Hoo, Cool] — forces Capitalcase
+%STR(boo Hoo cool)         # [BOO, HOO, COOL] — forces UPPERCASE
+# %sym/%Sym/%SYM do the same three, for symbols
+
+cool := 2342
+%string(481516 `cool`)     # [481516, 2342] — a backtick item (see Statement Expressions below) is interpolated immediately, then folded through the same casing treatment as everything else
+```
+
+- Eight kinds total: `string`/`str`/`Str`/`STR` (String), `symbol`/`sym`/`Sym`/`SYM` (Symbol) — see `PERCENT_LITERALS` in `constants.rb`
+- Items can be identifiers, numbers, operators, or `` `expr` `` (Statement) literals; anything else (a string literal, `[1, 2]`, ...) raises `Ore::Invalid_Percent_Literal_Expression`
+- **Parsing**: items are parsed one bare token at a time (`curr? :operator`/`:number`/identifier-kind dispatch inside `#parse_percent_literal_expr`), never via the general `#parse_expression` — a symbolic operator item like `+`/`-` is also a valid PREFIX operator, and `#parse_expression` would happily reparse it as a prefix/infix expression that swallows the *next* item as its operand (`%str(+ - ^)` used to collapse into one nested `Prefix_Expr` instead of three separate items); a run like `^^^ + - * /` would similarly get glommed into one compound infix expression by ordinary expression parsing, since nothing else marks item boundaries besides whitespace
+- The one remaining `else -> #parse_expression` branch exists purely so an *invalid* item still consumes at least one token — without it, the parser looped forever re-checking the same un-consumed token instead of raising `Invalid_Percent_Literal_Expression`
+
+## Statement Expressions
+
+`` `expr` `` wraps any expression without running it — an `Ore::Statement`, callable later with `()`. Parsed by `#parse_statement_expr` (`parser.rb`) into `Ore::Statement_Expr`; interpreted by `#interp_statement` (`interpreter.rb`) into an `Ore::Statement` instance (`src/external/ruby/statement.rb` + `ore/statement.ore`).
+
+```ore
+`1+2`()                    # 3 — written and called in the same place, evaluates immediately
+
+x := `1+2`
+x()                        # 3 — stored, called later
+x: Statement = `1+2`       # same thing, explicit type annotation
+
+counter := 0
+increment := `counter += 1`
+increment()
+increment()
+increment()
+counter                    # 3 — each call actually re-runs the wrapped expression; not memoized by default
+```
+
+**Scope: captured by default, opt into the caller's.** A Statement remembers the single scope it was on top of the stack when *built* (`captured_scope`, mirroring how `Ore::Func#enclosing_scope` already gives ordinary functions real closures) — calling it later, from anywhere, resolves free identifiers as if it were still running where it was written, not wherever `()` happens to be called from.
+
+```ore
+Slacker {
+	count := 0
+	statement: Statement
+
+	new { statement; ./statement = statement }
+	live_count {-> Number; statement() }
+}
+
+count := 2
+captured := `count += 4`
+Slacker(captured).live_count()   # 6 — resolves the *outer* count, mutating it 2 -> 6
+
+count = 2
+dynamic := `count += 4`
+dynamic.use_caller_scope = true
+Slacker(dynamic).live_count()    # 4 — resolves Slacker's *own* count member instead (0 -> 4); outer count untouched
+```
+
+- `.use_caller_scope = true` switches a Statement from captured (predictable, closure-like) to dynamic (resolves fresh at every call site) — see `learn/advanced_statements.ore`
+- `.memoize = true` caches the first `()` result and returns it on every call after that, instead of re-running — `Memoized_Statement`/`Memoizer` no longer exist as separate types, this replaced them
+- `Statement(other)` adopts `other`'s wrapped expression, `captured_scope`, and settings rather than re-capturing "wherever this `Statement(...)` call happens to be written" — `Statement(\`x+1\`)` behaves exactly like writing `` `x+1` `` directly (`Ore::Statement#proxy_from`, called from `ore/statement.ore`'s `new{;}`)
+
+**Two construction paths, and why it matters.** Every Ruby-backed Ore type (`Ore::String`, `Ore::Array`, `Ore::Statement`, ...) can be built two different ways, and Statement's `captured_scope` makes the distinction concrete:
+
+1. A backtick literal (`` `expr` ``) — `#interp_statement` builds the Ruby object directly and is the *only* place that can set `captured_scope`, since it's interpreter-side code with a live `stack` to read from; Ruby's `#initialize` has no reference to the running `Interpreter` at all.
+2. An explicit `Statement(...)` call — goes through the normal Type-construction path (`#interp_type_call` -> `#build_instance_of_type`), which calls `Ore::Statement.new` with no meaningful constructor argument. Real argument binding happens afterward, separately, once `new{;}`'s own body (`ore/statement.ore`) runs. Ruby's `#initialize` only ever needs to set harmless defaults it can't get wrong.
+
+`use_caller_scope`/`memoize`/`_memoized`/`_memoized_value` are declared as ordinary Ore members in `ore/statement.ore` (not Ruby `attr_accessor`s) so plain dot-assignment (`s.memoize = true`) works with no extra plumbing; `#invoke_statement` reads/writes them from Ruby via `Scope#[]`/`#[]=`. `captured_scope` couldn't take that route — it holds a live Ruby `Scope` object, not an Ore-representable value — so it stays a Ruby `attr_accessor` instead.
+
+A bare backtick literal builds the Ruby object directly and skips the normal Type-construction path entirely, so `#interp_statement` has to *also* run the type's own Ore-level body on the instance (`#run_type_body_on_instance`) — otherwise `use_caller_scope`/`memoize`/etc. would only ever exist on instances built the `Statement(...)` way, and `s.memoize = true` on a bare `` `expr` `` would raise `Cannot_Assign_Undeclared_Identifier`.
+
+**Where scope-aware invocation is (and isn't) enforced.** `#invoke_statement` is the single place `use_caller_scope`/`memoize` are enforced, called from `#interp_call`'s `Ore::Statement` branch (an already-*constructed* instance being called via `()`). It doesn't apply to:
+- A bare `` `expr`() `` written and called in the same place (`#interp_call`'s earlier `Ore::Statement_Expr` check) — always immediate, in whatever scope it's written in
+- A `` `expr` `` item inside a percent literal (`#interp_percent_literal`) or array literal (`#interp_circumfix`) — neither ever builds a real `Ore::Statement`, so there's no instance to hold these settings on
+
+Pushing the captured scope back on top (rather than swapping the whole stack) is deliberate: identifier lookup searches innermost-first, so one scope pushed via `#push_then_pop` wins the search over the caller's own frames underneath, without needing to hide/replace them — the same trick `#interp_func_body` already uses for ordinary `Func` closures.
+
 ## Identifier Naming Conventions
 
 The language enforces naming conventions through the helper functions:
