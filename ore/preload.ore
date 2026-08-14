@@ -17,6 +17,7 @@ Printable {
 # @load 'ore/table.ore' # ore/ is the stdlib found in ./ore/
 # @load './this.ore'    # relative to wherever you ran bin/ore from (cwd)
 # @load 'that.ore'      # relative to wherever you ran bin/ore from (cwd)
+# @load 'and_this'      # no .ore extension required
 
 @load 'ore/file_system'
 @load 'ore/number'
@@ -24,6 +25,7 @@ Printable {
 @load 'ore/dictionary'
 @load 'ore/string'
 @load 'ore/struct'
+@load 'ore/statement'
 
 Iterable { # todo: This is unused, but here to remind me to think about how to make composing with Iterable behave like Protocols in Swift.
 	next {;}

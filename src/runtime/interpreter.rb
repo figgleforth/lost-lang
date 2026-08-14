@@ -1175,6 +1175,7 @@ module Ore
 		end
 
 		# Bare `X.new` (no parens) is equivalent to `X()`: full construction including `new{;}`, so a constructor with required params raises Missing_Argument. `X.new(...)` with parens never lands here; #interp_call intercepts it and routes to #interp_type_call directly.
+		# @param expr [Ore::Infix_Expr]
 		def interp_dot_new expr
 			receiver = interpret expr.left
 			unless receiver.is_a? Ore::Type
@@ -1508,6 +1509,38 @@ module Ore
 			interp_func_body postfix_overloaded_func, call
 		end
 
+		# @param expr [Ore::Percent_Literal_Expr < Ore::Circumfix_Expr]
+		def interp_percent_literal expr
+			literal_expr_class = case expr.kind
+			when 'string', 'str', 'Str', 'STR' then Ore::String_Expr
+			when 'symbol', 'sym', 'Sym', 'SYM' then Ore::Symbol_Expr
+			end
+
+			# %string/%symbol preserve the identifier's own casing; the rest force one.
+			casing = case expr.kind
+			when 'string', 'symbol' then :itself
+			when 'str', 'sym' then :downcase
+			when 'Str', 'Sym' then :capitalize
+			when 'STR', 'SYM' then :upcase
+			end
+
+			array_expr             = Ore::Circumfix_Expr.new
+			array_expr.grouping    = '[]'
+			array_expr.expressions = expr.expressions.map do |it|
+				# A backtick item is evaluated immediately, like string interpolation, then folded through the same to_s + casing treatment as every other item. No Ore::Statement gets built here (unlike #invoke_statement's callers), so use_caller_scope/memoize never come into play -- it's always immediate, in whatever scope this literal is written in.
+				if it.is_a? Ore::Statement_Expr
+					value = interpret(it.expression).to_s.send casing
+					literal_expr_class.new value
+				else
+					lexeme       = it.lexeme.dup
+					lexeme.value = it.value.to_s.send casing
+					literal_expr_class.new lexeme
+				end
+			end
+
+			interp_circumfix array_expr
+		end
+
 		def interp_circumfix expr
 			case expr.grouping
 			when '[]'
@@ -1516,8 +1549,9 @@ module Ore
 
 				values = []
 				expr.expressions.each do |e|
-					result = interpret e
-					values << result
+					# Same as #interp_percent_literal above: `` `expr` `` inside an array literal evaluates immediately, no Ore::Statement built.
+					e = e.expression if e.is_a? Ore::Statement_Expr
+					values << interpret(e)
 				end
 				link_instance_to_type array, 'Array'
 
@@ -1573,11 +1607,7 @@ module Ore
 
 		# @param expr [Ore::Call_Expr]
 		def interp_call expr
-			# `X.new(...)` parses as Call_Expr(receiver: Infix_Expr(X, '.', new), arguments: [...]).
-			# Intercept it here, before evaluating the receiver, so we don't route through
-			# interp_dot_new (which eagerly builds a whole Instance for bare `X.new`) and then
-			# build a second Instance via interp_type_call below. Bare `X.new` with no call
-			# still goes through interp_dot_new untouched, since it never reaches interp_call.
+			# `X.new(...)` parses as Call_Expr(receiver: Infix_Expr(X, '.', new), arguments: [...]). Intercept it here, before evaluating the receiver, so we don't route through interp_dot_new (which eagerly builds a whole Instance for bare `X.new`) and then build a second Instance via interp_type_call below. Bare `X.new` with no call still goes through interp_dot_new untouched, since it never reaches interp_call.
 			if expr.receiver.is_a?(Ore::Infix_Expr) && expr.receiver.operator&.value == '.' && expr.receiver.right.is('new')
 				type = interpret expr.receiver.left
 
@@ -1586,6 +1616,13 @@ module Ore
 				end
 
 				return interp_type_call type, expr
+			end
+
+			# A bare `` `expr`() `` written and called in the same place -- always immediate, in
+			# whatever scope it's written in. No Ore::Statement is ever built here, so #invoke_statement
+			# (used below, once one *has* been built and stored) doesn't apply.
+			if expr.receiver.is_a? Ore::Statement_Expr
+				return interpret expr.receiver.expression
 			end
 
 			receiver = interpret expr.receiver
@@ -1605,6 +1642,10 @@ module Ore
 			when Ore::Struct
 				interp_struct_call receiver, expr
 
+			when Ore::Statement
+				# Reached once a Statement has been stored in a variable (or field, etc.) and is being called from somewhere else -- Ore::Statement < Instance, so this has to come before the generic Instance branch below or it'd be mistaken for "construct a new Statement".
+				invoke_statement receiver
+
 			when Ore::Instance, Ore::Type
 				interp_type_call receiver, expr
 
@@ -1622,8 +1663,8 @@ module Ore
 
 			# No body was parsed (`x: Abc<Number>`, `y := Abc<Number>`, `Abc<Number>()`, `Abc<4815>()`) so this references an existing type rather than declaring one. Dup it so structuring this reference doesn't mutate the shared declaration every other reference sees.
 			if expr.expressions.nil?
-				if expr.struct
-					supplied = interp_struct expr.struct, allow_spread: false
+				if expr.structure
+					supplied = interp_struct expr.structure, allow_spread: false
 
 					# note; `expr.name` is normally a real type name ("String"), but if it's instead a local alias bound to an earlier structured reference (`X := String<Flying>`), re-structure against *that value's own* family name rather than treating "X" itself as a type name. So `X<duck>` should behave exactly like `String<duck>`, since `.name` on any Type object (dup'd or not) always reflects its true declared family.
 					aliased     = find_in_stack expr.name
@@ -1644,7 +1685,7 @@ module Ore
 				referenced                     = existing.dup
 				referenced.declarations        = existing.declarations.dup
 				referenced.static_declarations = (existing.static_declarations || Set.new).dup
-				if expr.struct
+				if expr.structure
 					# Call-site member values are usually positional (`Woof<'hello', 4815>`), but a member can be named at the reference site too (`Woof<key := 'hello'>`) to disambiguate an otherwise-ambiguous match. Either way, re-associate them with the names — and pick up any defaults — from the matched variant's own struct declaration (`Woof<String, key: Dictionary> {}`) so `.structure.key` still works on the resulting instance.
 					declaration            = existing.structure_declaration
 					declaration_names      = declaration.is_a?(Ore::Struct) ? declaration.names : []
@@ -1669,7 +1710,7 @@ module Ore
 				return referenced
 			end
 
-			if expr.struct
+			if expr.structure
 				interp_structured_type_declaration expr
 			else
 				interp_bare_type_declaration expr
@@ -1729,7 +1770,7 @@ module Ore
 
 		# A structured declaration (`String<dict: Dictionary> { ... }`) is its own type, separate from the bare `String` and every other struct under the same name -- this stops one variant's `new`/methods from clobbering another's (a real bug this fixed).
 		def interp_structured_type_declaration expr
-			struct = interpret expr.struct
+			struct = interpret expr.structure
 
 			existing = structured_variants_for(expr.name, current_scope_only: true).find do |variant|
 				variant.structure_declaration.structure_declaration_equal? struct
@@ -1881,7 +1922,7 @@ module Ore
 		end
 
 		# Builds the raw instance for #interp_type_call: backed by its Ore:: Ruby class when one exists, linked to its type, struct bound, and the type's body run on it. `new{;}` is invoked afterward by #interp_type_call itself.
-		def build_instance_of_type type
+		def build_instance_of_type type, expr
 			ruby_class = find_ruby_class_for_type type
 			instance   = ruby_class ? ruby_class.new : Ore::Instance.new(type.name)
 
@@ -1902,7 +1943,7 @@ module Ore
 		end
 
 		def interp_type_call type, expr
-			instance = build_instance_of_type type
+			instance = build_instance_of_type type, expr
 
 			func_new = instance[:new]
 			if func_new
@@ -2229,6 +2270,43 @@ module Ore
 
 			popped_enclosing = pop_scope
 			Ore.assert popped_enclosing == handler.enclosing_scope
+
+			result
+		end
+
+		def interp_statement expr
+			instance = Ore::Statement.new expr.expression
+			# Capture the scope this literal was built in -- see Ore::Statement's class comment.
+			instance.captured_scope = stack.last
+			link_instance_to_type instance, 'Statement'
+
+			# Unlike `Statement(...)` (which goes through #build_instance_of_type and runs the type's own body), a bare literal builds the Ruby object directly -- do that here too, or use_caller_scope/memoize/etc never get declared on the instance.
+			type = instance.enclosing_scope
+			if type
+				instance.expressions = type.expressions
+				run_type_body_on_instance type, instance
+			end
+
+			instance
+		end
+
+		# Enforces use_caller_scope/memoize for an already-built Ore::Statement (#interp_call's `Ore::Statement` branch). Immediate `` `expr`() `` and backtick items in percent/array literals never build a real Statement, so they skip this entirely.
+		def invoke_statement statement
+			return statement['_memoized_value'] if statement['memoize'] && statement['_memoized']
+
+			result = if statement['use_caller_scope'] || statement.captured_scope.nil?
+				interpret statement.expression
+			else
+				# Same trick as Func closures: push the captured scope back on top so lookup finds it before the caller's own frames. #push_then_pop returns #pop_scope's result, not the block's, so the value has to be captured from inside the block instead.
+				captured_result = nil
+				push_then_pop(statement.captured_scope) { captured_result = interpret(statement.expression) }
+				captured_result
+			end
+
+			if statement['memoize']
+				statement['_memoized']       = true
+				statement['_memoized_value'] = result
+			end
 
 			result
 		end
@@ -2794,6 +2872,9 @@ module Ore
 			when Ore::Postfix_Expr
 				interp_postfix expr
 
+			when Ore::Percent_Literal_Expr
+				interp_percent_literal expr
+
 			when Ore::Circumfix_Expr
 				interp_circumfix expr
 
@@ -2814,6 +2895,9 @@ module Ore
 
 			when Ore::Directive_Expr
 				interp_directive expr
+
+			when Ore::Statement_Expr
+				interp_statement expr
 
 			when Ore::Fence_Expr
 				interp_fence expr
@@ -2837,6 +2921,9 @@ module Ore
 
 			when Ore::Struct_Expr
 				interp_struct expr
+
+			when nil
+				maybe_instance nil
 
 			else
 				raise Ore::Interpret_Expr_Not_Implemented.new(expr, self)

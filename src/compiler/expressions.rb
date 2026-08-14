@@ -12,7 +12,7 @@ module Ore
 			when Ore::Lexeme
 				@value  = lexeme.value
 				@lexeme = lexeme
-			when ::String
+			when ::String, ::Symbol
 				@value  = lexeme
 				@lexeme = Ore::Lexeme.new Helpers.type_identifier?(lexeme), lexeme
 			end
@@ -130,7 +130,7 @@ module Ore
 	end
 
 	class Type_Expr < Expression
-		attr_accessor :name, :expressions, :struct
+		attr_accessor :name, :expressions, :structure
 		# A composition chain (`Abc|Def`, `A & B`, ...) with no `{ }` body -- a reference to an
 		# anonymous type built by applying the chain (`.expressions`, all Composition_Expr), not a
 		# declaration. See #Parser#parse_type_decl/#Interpreter#interp_type.
@@ -144,6 +144,10 @@ module Ore
 	end
 
 	class Symbol_Expr < Expression
+		def initialize lexeme
+			super lexeme
+			@value = @value.to_s.to_sym
+		end
 	end
 
 	class String_Expr < Expression
@@ -152,7 +156,7 @@ module Ore
 
 		def initialize lexeme
 			super lexeme
-			@interpolated    = value.include? INTERPOLATE_CHAR
+			@interpolated    = value.to_s.include? INTERPOLATE_CHAR
 			@quotation_style = lexeme.respond_to?(:quotation_style) ? lexeme.quotation_style : nil
 		end
 	end
@@ -172,6 +176,20 @@ module Ore
 
 	class Circumfix_Expr < Expression
 		attr_accessor :grouping, :expressions
+	end
+
+	class Percent_Literal_Expr < Circumfix_Expr
+		# The kind of the literal. (str, string, sym, symbol)
+		attr_accessor :kind # :grouping, :expressions
+		# %string(boo Hoo) -> ['boo', 'Hoo'] # preserves yours
+		# %str(Boo HOO)    -> ['boo', 'hoo'] # forces lowercase
+		# %Str(boo HOO)    -> ['Boo', 'Hoo'] # forces Capitalcase
+		# %STR(boo Hoo)    -> ['BOO', 'HOO'] # forces UPPERCASE
+		#
+		# %symbol(BOO hoo) -> [:BOO, :hoo]   # preserves yours
+		# %sym(Boo HOO)    -> [:boo, :hoo]   # forces lowercase
+		# %Sym(boo HOO)    -> [:Boo, :Hoo]   # forces Capitalcase
+		# %SYM(boo hHo)    -> [:BOO, :HOO]   # forces UPPERCASE
 	end
 
 	class Nil_Init_Expr < Infix_Expr
@@ -214,6 +232,16 @@ module Ore
 	end
 
 	class Fence_Expr < Expression
+		attr_accessor :header
+		# ```header
+		# ```
+		# Examples are md, css, html, ore, etc
+	end
+
+	class Statement_Expr < Expression
+		attr_accessor :expression
+		# x := `<expr>`
+		# x() to evaluate it
 	end
 
 	class Comment_Expr < Expression

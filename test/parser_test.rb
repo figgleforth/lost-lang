@@ -901,4 +901,15 @@ class Parser_Test < Base_Test
 		assert_equal 'a', infix.left.value
 		assert_equal 'b', infix.right.value
 	end
+
+	def test_statement_expressions
+		out = Ore.parse "`1+2`"
+		assert_kind_of Ore::Statement_Expr, out.first
+		assert_kind_of Ore::Infix_Expr, out.first.expression
+	end
+
+	def test_fancier_statement_example
+		out = Ore.parse "x := `@load 'ore/string'`"
+		assert_kind_of Ore::Statement_Expr, out.last.right
+	end
 end

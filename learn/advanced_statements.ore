@@ -1,0 +1,97 @@
+``` A structured type can require a Statement
+
+`<name: Statement>` (see learn/statement_expressions.ore and learn/structured_types.ore) makes a structured type's shape say "this slot holds a deferred, callable expression," not a plain value.
+```
+Row<id: Statement> {}
+
+r := Row<`1+2`>()
+@puts "r.structure.id(): `r.structure.id()`"   # r.structure.id(): 3
+
+
+``` Not idempotent — every call re-runs the wrapped expression
+
+This is the real-world angle for a structured `Statement` member: a column default computed at insert-time instead of baked in once when the schema is declared, e.g. `created_at: Statement` around a clock call (Ore has no clock yet, so a counter stands in below). But it cuts both ways — two structured references sharing *the same* Statement value both advance the same underlying call, not independent ones.
+```
+seq      := 0
+next_seq := `seq += 1`
+
+row_a := Row<next_seq>()
+row_b := Row<next_seq>()
+
+@puts "row_a.structure.id(): `row_a.structure.id()`"         # row_a.structure.id(): 1
+@puts "row_b.structure.id(): `row_b.structure.id()`"         # row_b.structure.id(): 2
+@puts "row_a.structure.id() again: `row_a.structure.id()`"   # row_a.structure.id() again: 3 — rereading row_a still advances it
+
+
+``` Captured by default
+
+A Statement remembers the scope it was *built* in, not wherever it later happens to get called from — the same predictable behavior a normal closure gives you. Calling it later, from anywhere, still resolves `some_local_var` against the scope where the backtick literal itself was written.
+```
+some_local_var := 0
+expensive       := `some_local_var += 1`
+
+@puts "expensive(): `expensive()`"   # expensive(): 1
+
+
+``` Caching a Statement's result with .memoize
+
+Set `.memoize = true` and the first `()` call's result is cached and returned by every call after that, instead of re-running the expression.
+```
+expensive.memoize = true
+
+@puts "expensive(): `expensive()`"   # expensive(): 2 — one real run past the previous section
+@puts "expensive(): `expensive()`"   # expensive(): 2 — cached, didn't run again
+@puts "some_local_var: `some_local_var`"   # some_local_var: 2
+
+
+``` Opting into the caller's scope
+
+`.use_caller_scope = true` switches a Statement from "predictable" (captured at build time) to "scope-agnostic" (resolved fresh at every call site, wherever that turns out to be) -- useful when the whole point is letting *whoever* ends up holding the Statement supply its own meaning for a name, rather than always seeing your one, fixed variable.
+
+The scope-agnostic behavior only becomes visible when there's real ambiguity to resolve -- a name declared in more than one reachable scope. `Slacker` gives its `statement` member somewhere to actually run: `count` exists both as Slacker's own instance member *and* as an unrelated outer local, so which one wins depends entirely on the setting below.
+```
+Slacker {
+	count := 0
+	statement: Statement
+
+	new { statement;
+		./statement = statement
+	}
+
+	live_count {-> Number;
+		statement()
+	}
+}
+
+demo_predictable := {;
+	count       := 2
+	captured    := `count += 4`
+	predictable := Slacker(captured)
+
+	@puts "predictable.live_count(): `predictable.live_count()`"   # predictable.live_count(): 6
+	@puts "count: `count`"                                         # count: 6 -- the outer count, mutated
+}
+
+demo_caller_scope := {;
+	count          := 2
+	dynamic        := `count += 4`
+	dynamic.use_caller_scope = true
+	scope_agnostic := Slacker(dynamic)
+
+	@puts "scope_agnostic.live_count(): `scope_agnostic.live_count()`"   # scope_agnostic.live_count(): 4
+	@puts "count: `count`"                                               # count: 2 -- untouched; Slacker's own count was mutated instead
+}
+
+demo_predictable()
+demo_caller_scope()
+
+
+``` Statement(other) adopts, rather than re-captures
+
+Wrapping an existing Statement with `Statement(...)` behaves exactly like reusing it directly -- same wrapped expression, same captured scope, same settings -- not like building a brand new one captured at wherever this `Statement(...)` call happens to be written.
+```
+x := 1
+s := `x + 1`
+wrapped := Statement(s)
+
+@puts "wrapped(): `wrapped()`"   # wrapped(): 2

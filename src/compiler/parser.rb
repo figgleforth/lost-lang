@@ -111,7 +111,7 @@ module Ore
 			slice.each_with_index.all? do |lexeme, index|
 				expected = sequence[index]
 
-				if expected.is_a?(Ore::Array)
+				if expected.is_a?(Ore::Array) || expected.is_a?(::Array)
 					expected.any? do |alt|
 						lexeme.is(alt)
 					end
@@ -432,9 +432,9 @@ module Ore
 			is_type      = Helpers.type_identifier? it.name
 			is_const     = Helpers.constant_identifier? it.name
 
-			Ore.assert is_type || is_const, "Type names can only be Capitalized or UPPERCASE"
+			Ore.assert is_type || is_const, "Type names can only be Capitalized or UPPERCASE" # todo; proper error
 
-			it.struct = parse_struct # returns nil if none was found
+			it.structure = parse_struct # returns nil if none was found
 
 			# When no body and no composition chain follow e.g.
 			#
@@ -485,10 +485,12 @@ module Ore
 		end
 
 		def parse_fence_expr
+			start    = curr_lexeme
 			lexeme   = eat
 			it       = Ore::Fence_Expr.new lexeme
 			it.value = Ore::String_Expr.new lexeme
 			it.type  = lexeme.type # :fence by default
+			copy_location it, start
 			it
 		end
 
@@ -496,8 +498,8 @@ module Ore
 			# TODO: :html_vs_type_expr
 			start      = curr_lexeme
 			it         = Ore::Html_Fence_Expr.new eat
-			it.body    = Ore::String_Expr.new start
-			it.value   = it.body
+			it.value   = Ore::String_Expr.new start
+			it.body    = it.value
 			it.element = it.lexeme
 			copy_location it, start
 		end
@@ -521,9 +523,9 @@ module Ore
 
 			# A composed operand can itself be a structured type reference (`| Other<'users'>`), not just a bare type reference. Wrap it into a Type_Expr (mirroring #parse_type_decl's own reference form) so #interp_composition resolves it through the normal structured-type matching. Without this the trailing `<...>` is left unconsumed and #parse_type_decl's `until curr? '{'` loop spins forever re-checking the same token.
 			if curr?('<') && ident.is_a?(Ore::Identifier_Expr)
-				type_ref        = Ore::Type_Expr.new
-				type_ref.name   = ident.value
-				type_ref.struct = parse_struct
+				type_ref           = Ore::Type_Expr.new
+				type_ref.name      = ident.value
+				type_ref.structure = parse_struct
 				copy_location type_ref, ident
 				ident = type_ref
 			end
@@ -531,6 +533,14 @@ module Ore
 			expr.identifier = ident
 			expr
 			copy_location expr, start
+		end
+
+		def parse_statement_expr
+			Ore::Statement_Expr.new.tap do |it|
+				eat '`'
+				it.expression = parse_expression
+				eat '`'
+			end
 		end
 
 		def parse_identifier_expr
@@ -575,8 +585,7 @@ module Ore
 		def parse_symbol_expr
 			start = curr_lexeme
 			eat ':'
-			it       = Ore::Symbol_Expr.new eat
-			it.value = it.value.to_sym
+			it = Ore::Symbol_Expr.new eat
 			copy_location it, start
 		end
 
@@ -626,6 +635,53 @@ module Ore
 
 			route
 			copy_location route, start
+		end
+
+		def parse_percent_literal_expr
+			start = curr_lexeme
+
+			eat # %
+			kind = eat # PERCENT_LITERALS
+
+			eat '('
+			reduce_newlines
+
+			# Items are parsed one bare token at a time rather than via #parse_expression -- a symbolic operator item like `+`/`-` is also a valid PREFIX operator, and `parse_expression` would happily reparse it as a prefix/infix expression that swallows the *next* item as its operand instead of treating it as its own standalone item (`%str(+ - ^)` collapsing into one nested Prefix_Expr instead of three separate items being the symptom).
+			items = []
+			until curr? ')'
+				items << if curr? '`'
+					parse_statement_expr
+				elsif curr? :operator
+					parse_operator_expr
+				elsif curr? :number
+					parse_number_expr
+				elsif curr?(ANY_IDENTIFIER)
+					parse_identifier_expr
+				else
+					# Anything else (a string literal, `[1, 2]`, ...) still has to consume at least one token here -- otherwise the cursor never advances and `until curr? ')'` spins forever. #parse_expression is just a general-purpose way to consume *something* so the caller's own validity check below can raise a clean Invalid_Percent_Literal_Expression instead.
+					parse_expression
+				end
+
+				break if curr? ')'
+				eat if curr? ','
+				reduce_newlines
+			end
+
+			eat ')'
+
+			percent_lit             = Ore::Percent_Literal_Expr.new # This extends Circumfix_Expr
+			percent_lit.kind        = kind.value
+			percent_lit.grouping    = '[]' # so that it interprets as an array later
+			percent_lit.expressions = items
+
+			valid_items = percent_lit.expressions.all? do |it|
+				# Each of these can easily be converted to a string, so for now they're the only ones allowed.
+				it.is_a?(Ore::Identifier_Expr) || it.is_a?(Ore::Number_Expr) || it.is_a?(Ore::Operator_Expr) || it.is_a?(Ore::Statement_Expr)
+			end
+
+			raise Ore::Invalid_Percent_Literal_Expression.new(percent_lit, self) unless valid_items
+
+			copy_location percent_lit, start
 		end
 
 		def parse_operator_expr
@@ -696,8 +752,8 @@ module Ore
 			elsif peek_contains?(Ore::FUNCTION_DELIMITER, '}') && (curr?('{') || curr?(:identifier, '{') || curr?(:identifier, ':', '{') || curr?(SCOPE_OPERATORS, :identifier, '{') || curr?(SCOPE_OPERATORS, :identifier, ':', '{'))
 				parse_func precedence
 
-				# note; A leading `<` can never be a legitimate infix `<` so we can safely parse a struct.
 			elsif curr?('<') && !@custom_prefix.include?('<')
+				# note; A leading `<` can never be a legitimate infix `<` so we can safely parse a struct.
 				parse_struct
 
 			elsif curr?(:Identifier, '{') || curr?(:Identifier, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, '{') || curr?(TYPE_IDENTIFIER, '<')
@@ -721,6 +777,12 @@ module Ore
 
 			elsif curr?(':', :identifier) || curr?(':', :Identifier) || curr?(':', :IDENTIFIER)
 				parse_symbol_expr
+
+			elsif curr? '%', PERCENT_LITERALS, '('
+				parse_percent_literal_expr
+
+			elsif curr? '`'
+				parse_statement_expr
 
 			elsif curr? :operator
 				parse_operator_expr

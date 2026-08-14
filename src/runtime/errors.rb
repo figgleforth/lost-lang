@@ -40,7 +40,7 @@ module Ore
 
 		def detail_message
 			name                     = expression.name
-			structure                = expression.struct.to_s
+			structure                = expression.structure.to_s
 			expected_structured_type = "#{name}#{structure} {}"
 			existing_type            = "#{name} {}"
 			"#{Ascii.bold name} structured with #{Ascii.bold structure} not found:\n\n\t#{Ascii.bold expected_structured_type}"
@@ -216,6 +216,9 @@ module Ore
 	end
 
 	class Reserved_Function_Delimiter < Error
+		def detail_message
+			"#{expression.line_col}"
+		end
 	end
 
 	class Type_Contract_Violation < Error
@@ -340,6 +343,19 @@ module Ore
 	class Invalid_Destructuring_Target < Error
 		def detail_message
 			'Each destructuring target must be a plain identifier, e.g. `(a, b) := ...`'
+		end
+	end
+
+	class Invalid_Percent_Literal_Expression < Error
+		def detail_message
+			# :kind :grouping :expressions
+			kind     = expression.kind
+			exprs    = expression.expressions
+			given    = exprs.map(&:class).join(', ')
+			expected = exprs.map do |it|
+				'Ore::Identifier_Expr or Ore::Number_Expr or Ore::Operator_Expr'
+			end.join(', ')
+			"%#{kind}(#{given}) expects %#{kind}(#{expected})"
 		end
 	end
 

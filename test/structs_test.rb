@@ -19,23 +19,23 @@ class Structs_Test < Base_Test
 		out = Ore.parse 'Array<String> {}'
 		assert_kind_of Ore::Type_Expr, out.first
 		assert_equal 'Array', out.first.name
-		assert_kind_of Ore::Struct_Expr, out.first.struct
-		assert_equal %w(String), out.first.struct.types.map(&:value)
+		assert_kind_of Ore::Struct_Expr, out.first.structure
+		assert_equal %w(String), out.first.structure.types.map(&:value)
 	end
 
 	def test_parses_type_declaration_with_multiple_members
 		out = Ore.parse 'Dictionary<String, Number> {}'
-		assert_equal %w(String Number), out.first.struct.types.map(&:value)
+		assert_equal %w(String Number), out.first.structure.types.map(&:value)
 	end
 
 	def test_type_declaration_without_struct_has_nil_struct
 		out = Ore.parse 'String {}'
-		assert_nil out.first.struct
+		assert_nil out.first.structure
 	end
 
 	def test_struct_members_can_be_arbitrary_expressions
 		out = Ore.parse 'Abc<1+2+3/123>'
-		assert_kind_of Ore::Infix_Expr, out.first.struct.types.first
+		assert_kind_of Ore::Infix_Expr, out.first.structure.types.first
 
 		result = Ore.interp "Abc {}
 		Abc<Number> {}
@@ -174,7 +174,7 @@ class Structs_Test < Base_Test
 
 	def test_named_member_schema_parses_and_resolves_declared_type
 		out = Ore.parse 'Type<some_string: String, num: Number> {}'
-		assert_equal ['some_string', 'num'], out.first.struct.names
+		assert_equal ['some_string', 'num'], out.first.structure.names
 
 		type = Ore.interp 'Type<some_string: String, num: Number> {}'
 		assert_equal 'String', type.structure_declaration.declarations['some_string'].name

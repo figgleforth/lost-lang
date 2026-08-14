@@ -3104,4 +3104,147 @@ class Interpreter_Test < Base_Test
 			CODE
 		end
 	end
+
+	def test_percent_string_literals
+		# %string preserves each identifier's own casing.
+		out = Ore.interp "%string(boo Hoo COOL).values"
+		assert_equal %w(boo Hoo COOL), out
+		assert out.all? { |it| it.is_a? ::String }
+
+		# %str forces lowercase.
+		assert_equal %w(boo hoo cool), Ore.interp("%str(Boo hOO COOL).values")
+
+		# %Str forces Capitalcase.
+		assert_equal %w(Boo Hoo Cool), Ore.interp("%Str(boo HOO cOOl).values")
+
+		# %STR forces UPPERCASE.
+		assert_equal %w(BOO HOO COOL), Ore.interp("%STR(boo Hoo cool).values")
+
+		# Casing has no effect on numbers or symbols
+		assert_equal %w(123 ^^^ + - * /), Ore.interp("%string(123 ^^^ + - * /).values")
+		assert_equal %w(123 ^^^ + - * /), Ore.interp("%str(123 ^^^ + - * /).values")
+		assert_equal %w(123 ^^^ + - * /), Ore.interp("%Str(123 ^^^ + - * /).values")
+		assert_equal %w(123 ^^^ + - * /), Ore.interp("%STR(123 ^^^ + - * /).values")
+	end
+
+	def test_percent_symbol_literals
+		# %symbol preserves each identifier's own casing.
+		out = Ore.interp "%symbol(BOO hoo Cool).values"
+		assert_equal %i(BOO hoo Cool), out
+		assert out.all? { |it| it.is_a? ::Symbol }
+
+		# %sym forces lowercase.
+		assert_equal %i(boo hoo cool), Ore.interp("%sym(Boo HOO cOOl).values")
+
+		# %Sym forces Capitalcase.
+		assert_equal %i(Boo Hoo Cool), Ore.interp("%Sym(boo HOO cOOl).values")
+
+		# %SYM forces UPPERCASE.
+		assert_equal %i(BOO HOO COOL), Ore.interp("%SYM(boo Hoo cool).values")
+
+		assert_equal %i(123 ^^^ + - * /), Ore.interp("%symbol(123 ^^^ + - * /).values")
+		assert_equal %i(123 ^^^ + - * /), Ore.interp("%sym(123 ^^^ + - * /).values")
+		assert_equal %i(123 ^^^ + - * /), Ore.interp("%Sym(123 ^^^ + - * /).values")
+		assert_equal %i(123 ^^^ + - * /), Ore.interp("%SYM(123 ^^^ + - * /).values")
+	end
+
+	def test_percent_literal_is_a_real_array
+		out = Ore.interp "%str(a b c)"
+		assert_kind_of Ore::Array, out
+		assert_equal 3, out.values.count
+	end
+
+	def test_percent_literal_interpolation
+		out = Ore.interp <<~CODE
+		    cool := 2342
+		    %str(481516 `cool`)
+		CODE
+		assert_equal ['481516', '2342'], out.values
+		# assert out.values.all? { _1.is_a? Ore::String } # todo; this is currently false
+	end
+
+	def test_statement_expressions
+		out = Ore.interp "`1+2`"
+		assert_kind_of Ore::Statement, out
+		assert_kind_of Ore::Infix_Expr, out.expression
+		assert_equal "Statement{Ore::Infix_Expr}", out.proxy_to_s
+
+		out = Ore.interp "`1+2`()"
+		assert_equal 3, out
+	end
+
+	def test_statement_expression_stored_in_a_variable
+		# The whole point of Statement -- build it once, call it later, wherever it ends up.
+		out = Ore.interp <<~CODE
+		    x := `1+2`
+		    x()
+		CODE
+		assert_equal 3, out
+
+		# Same thing, but via a `: Statement` type annotation instead of `:=`.
+		out = Ore.interp <<~CODE
+		    x: Statement = `1+2`
+		    x()
+		CODE
+		assert_equal 3, out
+	end
+
+	def test_statement_expression_re_evaluates_on_every_call
+		# Not memoized -- each `()` call re-interprets the wrapped expression fresh.
+		out = Ore.interp <<~CODE
+		    counter := 0
+		    increment := `counter += 1`
+		    increment()
+		    increment()
+		    increment()
+		    counter
+		CODE
+		assert_equal 3, out
+	end
+
+	def test_statement_expression_can_be_displayed
+		# Ore::Statement is a real Instance -- @puts must not crash on one, called or not.
+		output          = StringIO.new
+		original_stdout = $stdout
+		$stdout         = output
+
+		begin
+			Ore.interp "@puts `1+2`"
+			refute_empty output.string
+		ensure
+			$stdout = original_stdout
+		end
+	end
+
+	def test_fancier_statement_example
+		out = Ore.interp "x := `@load 'ore/string'`"
+		assert_kind_of Ore::Statement, out
+	end
+
+	def test_nested_statements_with_mixed_memoization
+		# outer wraps two inner Statements, one memoized and one not, and is itself memoized too -- calling outer() a second time shouldn't re-run any of them.
+		out = Ore.interp <<~CODE
+		    calls_memoized   := 0
+		    calls_unmemoized := 0
+
+		    memoized_inner := `calls_memoized += 1`
+		    memoized_inner.memoize = true
+
+		    plain_inner := `calls_unmemoized += 1`
+
+		    outer := `memoized_inner() + memoized_inner() + plain_inner() + plain_inner()`
+		    outer.memoize = true
+
+		    first  := outer()
+		    second := outer()
+
+		    (first, second, calls_memoized, calls_unmemoized)
+		CODE
+
+		first, second, calls_memoized, calls_unmemoized = out.values
+		assert_equal 5, first # 1 + 1 + 1 + 2 -- memoized_inner's second call is cached, plain_inner's isn't
+		assert_equal 5, second # outer is memoized too -- same cached result, nothing re-ran
+		assert_equal 1, calls_memoized
+		assert_equal 2, calls_unmemoized
+	end
 end

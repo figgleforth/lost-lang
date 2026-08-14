@@ -135,9 +135,9 @@ module Ore
 
 		def qualified_type_name expr
 			return nil unless expr.is_a? Ore::Type_Expr
-			return expr.name unless expr.struct
+			return expr.name unless expr.structure
 
-			member_names = expr.struct.types.map { |t| t.value if t.is_a? Ore::Identifier_Expr }
+			member_names = expr.structure.types.map { |t| t.value if t.is_a? Ore::Identifier_Expr }
 			return nil if member_names.any?(&:nil?)
 
 			"#{expr.name}<#{member_names.join(',')}>"

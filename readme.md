@@ -515,6 +515,61 @@ s.to_i()            # Convert to integer
 s.empty?()          # false
 ```
 
+## Percent Literals
+
+1. `%string(...)`/`%symbol(...)` turn space-separated bare items into a real Array of String/Symbol literals, preserving each item's own casing
+2. `%str`/`%Str`/`%STR` force lower/Capital/UPPER casing on the strings; `%sym`/`%Sym`/`%SYM` do the same for symbols
+3. Items can be identifiers, numbers, or operators, not just letters
+4. A `` `expr` `` item (see Statement Expressions below) is evaluated immediately, like string interpolation, and folded through the same casing treatment as everything else
+
+```ore
+%string(boo Hoo COOL)      # [boo, Hoo, COOL]
+%symbol(BOO hoo Cool)      # [:BOO, :hoo, :Cool]
+
+%str(Boo hOO COOL)         # [boo, hoo, cool]
+%Str(boo HOO cOOl)         # [Boo, Hoo, Cool]
+%STR(boo Hoo cool)         # [BOO, HOO, COOL]
+
+%sym(Boo HOO cOOl)         # [:boo, :hoo, :cool]
+%Sym(boo HOO cOOl)         # [:Boo, :Hoo, :Cool]
+%SYM(boo Hoo cool)         # [:BOO, :HOO, :COOL]
+
+%string(boo 4815 + - *)    # [boo, 4815, +, -, *]
+
+cool := 2342
+%string(481516 `cool`)     # [481516, 2342] -- `cool` is interpolated, not stored as-is
+```
+
+## Statement Expressions
+
+1. `` `expr` `` wraps any expression without running it -- an `Ore::Statement`, callable later with `()`
+2. Written straight at a call site, `` `expr`() `` just evaluates immediately
+3. Stored in a variable, it can be called any number of times -- each call re-evaluates the wrapped expression fresh, by default remembering the scope it was *built* in (a normal closure, no matter where `()` ends up being called from)
+4. `.memoize = true` caches the first call's result instead of re-running every time
+5. `.use_caller_scope = true` does the opposite of remembering -- resolves fresh against wherever `()` is actually called from
+
+```ore
+`1+2`()                    # 3 -- evaluated right away
+
+x := `1+2`
+x()                        # 3
+x: Statement = `1+2`       # same thing, with an explicit type annotation
+
+counter := 0
+increment := `counter += 1`
+increment()
+increment()
+increment()
+counter                    # 3 -- each call actually re-ran the body
+
+cached := `counter += 1`
+cached.memoize = true
+cached()                   # 4
+cached()                   # 4 -- didn't run again
+```
+
+See `learn/statement_expressions.ore`/`learn/advanced_statements.ore` for the full picture, including `.use_caller_scope`.
+
 ## Numbers
 
 ```ore

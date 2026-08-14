@@ -4,6 +4,7 @@ module Ore
 	NIL_INIT_POSTFIX            = ','
 	FUNCTION_DELIMITER          = ';'
 	IMPORT_FILE_DIRECTIVE       = 'load'
+	PERCENT_LITERALS            = %w(string symbol str Str STR sym Sym SYM)
 	FOR_VERBS                   = %w(each map select reject count)
 	HTML_ATTRS                  = %w(id class href)
 	HTTP_VERBS                  = %w(get put patch post delete head options connect trace)
@@ -40,7 +41,7 @@ module Ore
 	STARTING_PRECEDENCE         = 0
 	DEFAULT_OPERATOR_PRECEDENCE = 500 # given to all custom operators at runtime unless
 	DELIMITERS                  = %W(, ; { } ( ) [ ] \n \r).freeze
-	ILLEGAL_OPERATOR_CHARS      = %w(' " { } ( ) [ ] ).freeze
+	ILLEGAL_OPERATOR_CHARS      = %w(` ' " { } ( ) [ ] ).freeze
 	NEWLINES                    = %W(\r\n \n).freeze
 	WHITESPACES                 = %W(\t \s).freeze
 	NUMERIC_REGEX               = /\A\d+\z/

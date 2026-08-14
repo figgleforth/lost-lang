@@ -67,7 +67,7 @@ begin
 		pp result if print_output
 	when 'interp'
 		interpreter, result = interp_and_print_output ARGV[1]
-		pp interpreter.stringify_for_display(result) if ARGV[2] && ARGV[2] == "-p"
+		pp interpreter.stringify_for_display(result) if print_output
 	when 'lexf'
 		result = Ore.lex_file ARGV[1]
 		pp result if print_output

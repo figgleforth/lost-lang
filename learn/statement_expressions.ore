@@ -1,0 +1,53 @@
+``` Introduction
+
+A backtick-wrapped expression -- `` `expr` `` -- doesn't run right away. It builds an `Ore::Statement` that wraps the expression as-is, callable later with `()`.
+```
+x := `1+2`
+@puts "x: `x`"     # x: Statement{Ore::Infix_Expr}
+@puts "x(): `x()`" # x(): 3
+
+
+``` Written directly at the call site, it's immediate
+
+`` `expr`() `` right next to each other skips the "build it, store it" step -- the expression just runs on the spot.
+```
+result := `1+2`()
+@puts "result: `result`"   # result: 3
+
+
+``` Not memoized -- every call re-runs the expression
+
+Stored in a variable, a Statement can be called any number of times. Each call re-interprets the wrapped expression fresh -- nothing about the result is cached.
+```
+counter   := 0
+increment := `counter += 1`
+
+increment()
+increment()
+increment()
+@puts "counter: `counter`"   # counter: 3
+
+
+``` A type annotation works too
+
+`: Statement` is just the ordinary `: Type` annotation form -- same self-declaring rules as any other typed assignment.
+```
+y: Statement = `1+2`
+@puts "y(): `y()`"   # y(): 3
+
+
+``` Extra call arguments are ignored
+
+A Statement takes no params of its own -- whatever's wrapped inside the backticks is all that runs, regardless of what's passed to `()`.
+```
+z := `5 * 5`
+@puts "z(999, 'ignored'): `z(999, 'ignored')`"   # z(999, 'ignored'): 25
+
+
+``` A practical use: deferring a directive
+
+Directives like `@load` are ordinary expressions too, so wrapping one in backticks defers it the same way -- build the Statement now, run the load later.
+```
+loader := `@load 'ore/string'`
+loader()
+@puts "'ore'.upcase(): `'ore'.upcase()`"   # 'ore'.upcase(): ORE
