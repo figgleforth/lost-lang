@@ -11,11 +11,7 @@ Member {
 
 	to_s {;
 		displayed_value := if value and type.?name == 'String'
-			if value.?quotation_style == 'single'
-				"'`value`'"
-			else
-				'"`value`"'
-			end
+			value.pretty_print()
 		else
 			value
 		end

@@ -19,7 +19,13 @@ Dictionary {
 		ks     := keys()
 		vs     := values()
 		pieces := ks.map({ key, at;
-			"`key`: `vs.get(at)`"
+			v := vs.get(at)
+			displayed := if v === String
+				v.pretty_print()
+			else
+				"`v`"
+			end
+			"`key`: `displayed`"
 		})
 		"{`pieces.join(', ')`}"
 	}

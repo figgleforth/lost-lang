@@ -685,9 +685,8 @@ class Regression_Test < Base_Test
 		result      = interpreter.run '[].push([1,2,3])'
 		assert_equal '[[1, 2, 3]]', interpreter.stringify_for_display(result)
 
-		# String had no to_s{;} at all until this fix -- an array of strings would have raised
-		# Undeclared_Identifier trying to call .to_s() on each element.
-		assert_equal '[a, b, c]', Ore.interp("['a','b','c'].to_s()")
+		# String had no to_s{;} at all until this fix -- an array of strings would have raised Undeclared_Identifier trying to call .to_s() on each element. Always double-quoted (not matching each literal's own quote char -- Array elements aren't wrapped with quotation_style at construction, see #interp_circumfix's `[]` case), so no longer indistinguishable from Symbols/identifiers in display.
+		assert_equal '["a", "b", "c"]', Ore.interp("['a',\"b\",'c'].to_s()")
 	end
 
 	def test_array_of_symbols_to_s_regression
@@ -886,5 +885,25 @@ class Regression_Test < Base_Test
 		    (sa == sb, sa == sc)
 		CODE
 		assert_equal [true, false], out.values
+	end
+
+	def test_compound_assignment_on_dot_member_target_regression
+		# `instance.member += value` used to silently no-op: #interp_compound_infix resolved its assignment target via #scope_for_identifier, which only understands plain Identifier_Exprs -- a dot-target fell through to `stack.last` and declared a bogus `nil`-named identifier there instead of touching the actual member. Found via examples/aoc/2015/03/part2.ore computing the wrong answer (Vec2 members mutated with `+=` inside nested if/elif never actually moved).
+		out = Ore.interp <<~CODE
+		    Vec2 {
+		        x,
+		        y,
+		        new { x, y;
+		            ./x = x
+		            ./y = y
+		        }
+		    }
+		    v := Vec2(0, 0)
+		    v.y += 1
+		    v.y += 1
+		    v.x -= 1
+		    (v.x, v.y)
+		CODE
+		assert_equal [-1, 2], out.values
 	end
 end

@@ -87,12 +87,15 @@ module Ore
 		# A type's own struct declaration (e.g. `Abc<dict: Dictionary = {}> {}`)'s named/positional members, annotations, and defaults -- kept separate from `.structure`, which is only ever set on an explicit `Abc<...>` reference, never the bare type (see #interp_type_call).
 		# Both live on Type, not Scope, since a structured reference is a dup of the type (same class), so Type/Instance can't stand in for this distinction.
 		attr_accessor :structure_declaration
+		# True only while this type's own body is being walked for the first time (#finish_type_declaration) -- the window during which `../member := value` may self-declare a brand-new static member, mirroring Instance's `has?('new')` check for the same rule on instance members.
+		attr_accessor :declaration_in_progress
 
 		def initialize name = nil
 			super name
 			@types                = Set[name]
 			@declarations['name'] = name
 			@static_declarations.add 'name' # So that Type.name works
+			@declaration_in_progress = false
 		end
 	end
 

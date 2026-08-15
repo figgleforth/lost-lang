@@ -64,7 +64,7 @@ module Ore
 
 		for
 		if elif elsif else
-		while elwhile
+		while elwhile elswhile
 		unless until
 		true false nil
 		and or return

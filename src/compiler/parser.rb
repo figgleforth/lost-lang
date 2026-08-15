@@ -213,13 +213,13 @@ module Ore
 
 			# @clean
 
-			until curr? %w(end else elif elwhile)
+			until curr? %w(end else elif elsif elwhile elswhile)
 				expr = parse_expression
 				it.when_true << expr if expr
 				reduce_newlines
 			end
 
-			if curr? %w(elif elwhile)
+			if curr? %w(elif elsif elwhile elswhile)
 				it.when_false = parse_conditional_expr
 
 			elsif curr? %w(else) and eat
@@ -752,8 +752,13 @@ module Ore
 			elsif peek_contains?(Ore::FUNCTION_DELIMITER, '}') && (curr?('{') || curr?(:identifier, '{') || curr?(:identifier, ':', '{') || curr?(SCOPE_OPERATORS, :identifier, '{') || curr?(SCOPE_OPERATORS, :identifier, ':', '{'))
 				parse_func precedence
 
-			elsif curr?('<') && !@custom_prefix.include?('<')
+			elsif curr?('<') && curr_lexeme.type == :operator && !@custom_prefix.include?('<')
 				# note; A leading `<` can never be a legitimate infix `<` so we can safely parse a struct.
+				# The `curr_lexeme.type == :operator` guard matters: `curr?('<')` matches by lexeme VALUE
+				# alone, so a string literal whose own content happens to be exactly "<" (e.g. `'<'`) used
+				# to be misparsed as the start of a struct literal too, swallowing everything after it --
+				# same bug class already fixed for prefix operators colliding with string content (see the
+				# String_Expr exclusion a bit further down in this method).
 				parse_struct
 
 			elsif curr?(:Identifier, '{') || curr?(:Identifier, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, '{') || curr?(TYPE_IDENTIFIER, '<')

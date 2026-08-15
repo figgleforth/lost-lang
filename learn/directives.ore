@@ -1,6 +1,6 @@
 ``` Introduction
 
-A directive is `@word`, optionally followed by arguments. They're the interpreter's own escape hatch -- things that aren't really expressions (printing, asserting, declaring on the fly, moving the scope stack around) but still read like part of the language. This file covers `@puts`, `@assert`, `@declare`, `@cd`, and `@sleep`. A few other directives already have their own walkthrough, since they only make sense alongside the feature they belong to, like `@load` (`load_directive.ore`), `@start`/`@shut_down` (`web_server.ore`), `@connect` (`database.ore`), and `@ +=`/`@ -=`/`@param` unpacking (`sibling_scopes.ore`).
+A directive is `@word`, optionally followed by arguments. They're the interpreter's own escape hatch -- things that aren't really expressions (printing, asserting, declaring on the fly, moving the scope stack around) but still read like part of the language. This file covers `@puts`, `@assert`, `@declare`, `@cd`, and `@sleep`. A few other directives already have their own walkthrough, since they only make sense alongside the feature they belong to, like `@load` (`load_directive.ore`), `@start_server`/`@stop_server` (`web_server.ore`), `@connect` (`database.ore`), and `@ +=`/`@ -=`/`@param` unpacking (`sibling_scopes.ore`).
 ```
 @puts 'a directive is just @word plus one or more arguments'
 

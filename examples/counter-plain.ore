@@ -31,4 +31,5 @@ App | Server {
 }
 
 # Start the server
-@start App()
+# @start_server App()
+@puts "Uncomment '@start_server App()' above to run this example"

@@ -26,9 +26,9 @@ INSTRUCTIONS = <<~INST
         -h | --help           Show help instructions
 
     EXAMPLES:
-        ore ore/examples/hello.ore
+        ore examples/hello.ore
         ore lex "x = 5 + 3"
-        ore parsef ore/examples/hello.ore
+        ore parsef examples/hello.ore
         ore interp "4815"
 INST
 

@@ -2168,7 +2168,8 @@ class Interpreter_Test < Base_Test
 		begin
 			result = Ore.interp "@puts 'Walt!'"
 			assert_equal 'Walt!', result
-			assert_equal "Walt!\n", output.string
+			# @puts now reflects the argument's own quote char when it's a literal.
+			assert_equal "'Walt!'\n", output.string
 		ensure
 			$stdout = original_stdout
 		end

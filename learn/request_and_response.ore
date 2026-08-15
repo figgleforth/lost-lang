@@ -69,7 +69,7 @@ Camp | Server {
 }
 
 camp := Camp()
-@start camp
+@start_server camp
 @puts 'Camp server is live on port 8081'
-@shut_down camp
+@stop_server camp
 @puts 'Camp server is shut down'

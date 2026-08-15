@@ -161,4 +161,5 @@ App | Server | Tasks_Controller {
 
 app := App()
 
-@start app
+# @start_server app
+@puts "Uncomment '@start_server app' above to run this example"

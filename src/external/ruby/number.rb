@@ -3,6 +3,17 @@ module Ore
 		extend Ruby_Proxies
 		attr_accessor :numerator, :denominator, :type
 
+		# Mirrors String/Array/Dictionary's own initialize: sync both the Ruby attr (read by the arithmetic methods below via plain Ruby dispatch) and @declarations (read by Ore-level dot access, e.g. `123.numerator`) -- a bare attr_accessor write alone only reaches the former.
+		def initialize numerator = 0, denominator = 1, type = nil
+			super 'Number'
+			@numerator                    = numerator
+			@denominator                  = denominator
+			@type                         = type
+			@declarations['numerator']    = numerator
+			@declarations['denominator']  = denominator
+			@declarations['type']         = type
+		end
+
 		def + other
 			numerator + other.numerator
 		end

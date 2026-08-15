@@ -62,11 +62,11 @@ Camp | Server {
 }
 
 
-``` @start
+``` @start_server
 
-`@start` boots the server on a background thread and returns immediately, so the rest of the file keeps running right after it -- it's the interpreter itself that then waits on that thread once the whole file finishes, which is why a real Ore program just ends with `@start app` and leaves it running until interrupted. This walkthrough calls `@shut_down` right after so the file terminates on its own instead of waiting for a Ctrl+C.
+`@start_server` boots the server on a background thread and returns immediately, so the rest of the file keeps running right after it -- it's the interpreter itself that then waits on that thread once the whole file finishes, which is why a real Ore program just ends with `@start_server app` and leaves it running until interrupted. This walkthrough calls `@stop_server` right after so the file terminates on its own instead of waiting for a Ctrl+C.
 ```
 camp := Camp()
-@start camp
-@puts 'Camp server is live on port 8080'   # printed right after @start -- proof it didn't block
-@shut_down camp
+@start_server camp
+@puts 'Camp server is live on port 8080'   # printed right after @start_server -- proof it didn't block
+@stop_server camp

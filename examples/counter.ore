@@ -71,7 +71,8 @@ App | Server {
 	}
 }
 
-# @start launches the server in a background thread.
+# @start_server launches the server in a background thread.
 # The Counter's state persists because onclick handlers hold references
 # to their enclosing scope (the Counter instance).
-@start App()
+# @start_server App()
+@puts "Uncomment '@start_server App()' above to run this example"

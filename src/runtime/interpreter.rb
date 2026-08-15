@@ -190,10 +190,7 @@ module Ore
 			case expr
 			when Integer, Float
 				# Ore::Number_Expr is already handled in #interpret but this is short-circuiting that for cases like 1.something where we have to make sure the 1 is no longer a numeric literal, but instead a runtime object version of the number 1.
-				number             = Ore::Number.new expr
-				number.type        = Ore.type_of_number_expr expr
-				number.numerator   = expr
-				number.denominator = 1
+				number = Ore::Number.new expr, 1, Ore.type_of_number_expr(expr)
 
 				finish_intrinsic_instance number, 'Number'
 			when ::String
@@ -293,11 +290,10 @@ module Ore
 
 		def composed_types_for value
 			case value
-			when Ore::Number, Ore::String, Ore::Array, Ore::Dictionary, Ore::Bool
-				composed_types_by_name type_name_to_string(value)
 			when Ore::Type
 				value.types
 			else
+				# Covers intrinsics (Number/String/Array/Dictionary/Bool) and anything else -- neither needs special handling, both resolve by name.
 				composed_types_by_name type_name_to_string(value)
 			end
 		end
@@ -308,12 +304,18 @@ module Ore
 			global.has?(name) ? global[name].types : Set[name]
 		end
 
+		# Does `a` (composed types + struct members) carry at least everything `b` does? Shared by `=>=`/`=<=`/`===`/`=!=` -- see #interp_comparison_infix.
+		def superset_of_types_and_structure? a_types, a_structure, b_types, b_structure
+			types_superset   = b_types.all? { |type| a_types.include? type }
+			members_superset = (b_structure || []).all? { |member| (a_structure || []).include? member }
+			types_superset && members_superset
+		end
+
 		# If `name` is already an Ore::Func_Signature, return it as-is (an inline signature has no name to look up). Otherwise, if it's bound to one anywhere on the stack, return that. Otherwise nil — meaning `name` is an ordinary nominal type name (e.g. 'Number').
 		def resolve_func_signature name
 			return name if name.is_a? Ore::Func_Signature
 			return nil unless name
-			found = stack.reverse_each.find { |scope| scope.has? name }
-			value = found&.get(name)
+			value = find_in_stack name
 			value.is_a?(Ore::Func_Signature) ? value : nil
 		end
 
@@ -640,6 +642,29 @@ module Ore
 			renderer.to_html_string
 		end
 
+		# Raises the right error for a `./`/`../` scope operator that resolved to no scope at all -- shared by #interp_identifier, #interp_infix_assignment, #interp_infix_declaration. Any other operator value (`~/`, or none) raises Invalid_Scope_Syntax.
+		def raise_missing_scope_operator_target! expr, scope_operator_value
+			case scope_operator_value
+			when './'
+				raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr, self)
+			when '../'
+				raise Ore::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr, self)
+			else
+				raise Ore::Invalid_Scope_Syntax.new(expr, self)
+			end
+		end
+
+		# A function found via #interp_identifier needs to be duplicated and rebound to the resolving
+		# scope before use, so composed types (e.g. `Thing | Record`) call functions against the right
+		# receiver instead of whatever scope they happened to be declared on. Non-Func values pass
+		# through unchanged.
+		def rebind_func_to_scope value, scope
+			return value unless value.is_a? Ore::Func
+			func                 = value.dup
+			func.enclosing_scope = scope
+			func
+		end
+
 		def interp_identifier expr
 			if expr.directive
 				# todo: Why is this not handled by Parser#complete_expression?
@@ -677,11 +702,7 @@ module Ore
 				if scope.has?(expr.value) && !scope.respond_to?(proxy_method)
 					result = scope.get expr.value
 					# If the result is a function, duplicate it and set its enclosing_scope to the current scope. This ensures composed types (like `Thing | Record`) have functions that reference the correct type
-					if result.is_a? Ore::Func
-						func                 = result.dup
-						func.enclosing_scope = scope
-						return func
-					end
+					return rebind_func_to_scope(result, scope) if result.is_a? Ore::Func
 					result
 				elsif scope.respond_to? proxy_method
 					# Prefer the instance's own owning Type first -- for a structured variant
@@ -701,9 +722,7 @@ module Ore
 
 					if declared_value.is_a? Ore::Func
 						# Use the actual function from the Type, not an empty wrapper
-						func                 = declared_value.dup
-						func.enclosing_scope = scope
-						return func
+						return rebind_func_to_scope(declared_value, scope)
 					else
 						# It's a variable/property
 						return scope.send(proxy_method)
@@ -715,14 +734,7 @@ module Ore
 					else
 						# todo: This seems like a hack. This currently prevents instances from shadowing it's type's declarations.
 						# Method/property exists on the Type, not the instance
-						value = scope.enclosing_scope.get expr.value
-						if value.is_a? Ore::Func
-							func                 = value.dup
-							func.enclosing_scope = scope
-							return func
-						else
-							return value
-						end
+						return rebind_func_to_scope(scope.enclosing_scope.get(expr.value), scope)
 					end
 				elsif expr.type || expr.type_struct
 					self_declare_annotated_identifier expr
@@ -731,10 +743,8 @@ module Ore
 				end
 			else
 				# When scope is nil, errors must be raised
-				if expr.scope_operator&.value == '../'
-					raise Ore::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr, self)
-				elsif expr.scope_operator&.value == './'
-					raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr, self)
+				if %w(./ ../).include? expr.scope_operator&.value
+					raise_missing_scope_operator_target! expr, expr.scope_operator.value
 				elsif expr.type || expr.type_struct
 					self_declare_annotated_identifier expr
 				else
@@ -799,7 +809,7 @@ module Ore
 				returned = expr.expression ? interpret(expr.expression) : nil
 				Ore::Return.new returned
 			else
-				overload_func = stack.reverse_each.find { |s| s.has? expr.operator.value }&.get(expr.operator.value)
+				overload_func = find_in_stack expr.operator.value
 				if overload_func.is_a? Ore::Func
 					call           = Ore::Call_Expr.new
 					call.arguments = [expr.expression]
@@ -821,17 +831,10 @@ module Ore
 
 			# If using a scope operator but the scope doesn't exist, raise an error
 			if expr.left.is_a?(Ore::Identifier_Expr) && expr.left.scope_operator && assignment_scope.nil?
-				case expr.left.scope_operator.value
-				when './'
-					raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr, self)
-				when '../'
-					raise Ore::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr, self)
-				else
-					raise Ore::Invalid_Scope_Syntax.new(expr, self)
-				end
+				raise_missing_scope_operator_target! expr, expr.left.scope_operator.value
 			end
 
-			# For plain identifiers (no scope operator) inside an Instance/Type body, new declarations should go to that Instance/Type, not to an enclosing scope that happens to have the same identifier. This fixes a bug that prevented HTML Layout's `title` from capturing Title's `title` declaration in ore/examples/basic_html_page.ore.
+			# For plain identifiers (no scope operator) inside an Instance/Type body, new declarations should go to that Instance/Type, not to an enclosing scope that happens to have the same identifier. This fixes a bug that prevented HTML Layout's `title` from capturing Title's `title` declaration in examples/basic_html_page.ore.
 			if expr.left.is_a?(Ore::Identifier_Expr) && !expr.left.scope_operator
 				current_scope = stack.last
 
@@ -973,22 +976,24 @@ module Ore
 			# If using a scope operator but the scope doesn't exist, raise an error
 			# (mirrors interp_infix_assignment).
 			if has_scope_operator && assignment_scope.nil?
-				case expr.left.scope_operator.value
-				when './'
-					raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr, self)
-				when '../'
-					raise Ore::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr, self)
-				else
-					raise Ore::Invalid_Scope_Syntax.new(expr, self)
-				end
+				raise_missing_scope_operator_target! expr, expr.left.scope_operator.value
 			end
 
 			assignment_scope ||= stack.last
 
-			# note; `./`, `../` self-declaring a member that doesn't exist yet is valid but only while the instance is still under construction. Like within the class body's own declarations, or inside of new{;}
-			if has_scope_operator && assignment_scope.is_a?(Ore::Instance) &&
-			   !assignment_scope.has?(expr.left.value) && !assignment_scope.has?('new')
-				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr, self)
+			# note; `./`, `../` self-declaring a member that doesn't exist yet is valid but only while the
+			# type/instance is still under construction: for an Instance that's the class body's own
+			# declarations or new{;} itself (has?('new')); for a bare Type (a `../` static) it's the
+			# type's own body walk (#finish_type_declaration, tracked via declaration_in_progress) --
+			# calling a static method later and self-declaring a brand-new static from inside it isn't allowed.
+			if has_scope_operator && assignment_scope.is_a?(Ore::Type) && !assignment_scope.has?(expr.left.value)
+				still_under_construction = if assignment_scope.is_a?(Ore::Instance)
+					assignment_scope.has? 'new' # note; new{;} is stripped from an instance
+				else
+					assignment_scope.declaration_in_progress
+				end
+
+				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr, self) unless still_under_construction
 			end
 
 			right_value = if expr.right.is_a?(Ore::Directive_Expr) && expr.right.name.value == Ore::IMPORT_FILE_DIRECTIVE
@@ -1145,12 +1150,18 @@ module Ore
 		end
 
 		# `@puts` used to hand its value straight to Ruby's own `puts`, which calls Ruby's `#to_s` for any Scope (Array, Dictionary, custom types, all of them).
-		def stringify_for_display value
+		# `show_quotes:` calls String's `pretty_print{;}` instead of `to_s{;}` for a String value --
+		# only @puts opts into this (see #interp_directive's 'puts' case). Never the default: to_s is
+		# used pervasively as a plain string-building primitive via backtick interpolation
+		# (Array/Dictionary/Tuple's own to_s do exactly this internally), so preferring quotes here
+		# generally would recursively re-quote every nested interpolation of a String value.
+		def stringify_for_display value, show_quotes: false
 			value = maybe_instance value
 			return value unless value.is_a? Ore::Scope
 
+			method_name       = show_quotes && value.is_a?(Ore::String) ? 'pretty_print' : 'to_s'
 			to_s_ident        = Ore::Identifier_Expr.new
-			to_s_ident.lexeme = Ore::Lexeme.new(:identifier, 'to_s')
+			to_s_ident.lexeme = Ore::Lexeme.new(:identifier, method_name)
 			func              = begin
 				interp_member_access value, to_s_ident
 			rescue Ore::Undeclared_Identifier
@@ -1291,9 +1302,7 @@ module Ore
 				return operand.enclosing_scope.get operator
 			end
 
-			stack.reverse_each.find do |scope|
-				!scope.is_a?(Ore::Type) && scope.has?(operator)
-			end&.get(operator)
+			find_in_stack operator, excluding: Ore::Type
 		end
 
 		# Second-level dispatcher for infix operators, mirroring #interpret's own shape: each branch hands off to one interp_*_infix handler. The first group dispatches before operand evaluation — the assignment family treats the left side as a target rather than a value, `@` (the unpack marker) isn't a value at all, and logical operators must stay lazy to short-circuit. Every remaining operator evaluates each operand exactly once, here, and passes the values down so no handler re-interprets an operand (side effects run once).
@@ -1388,32 +1397,18 @@ module Ore
 				left_types  = composed_types_for left
 				right_types = composed_types_for right
 
+				# note; `=>=`/`=<=` are the only operators here that carry genuinely new information (see CLAUDE.md) -- `=<=` is just `=>=` with operands swapped, and `===` is mutual `=>=` in both directions; `=!=` is `!(===)`. Deriving them instead of duplicating the field-superset check keeps all four in sync by construction.
 				case expr.operator.value
-				when '==='
-					left_types == right_types && left_structure == right_structure
-
-				when '=!='
-					left_types != right_types || left_structure != right_structure
-
 				when '=>='
-					left_is_superset          = right_types.all? do |type|
-						left_types.include? type
-					end
-					left_members_are_superset = (right_structure || []).all? do |member|
-						(left_structure || []).include? member
-					end
-
-					left_is_superset && left_members_are_superset
+					superset_of_types_and_structure? left_types, left_structure, right_types, right_structure
 				when '=<='
-					right_is_superset = left_types.all? do |type|
-						right_types.include? type
-					end
-
-					right_members_are_superset = (left_structure || []).all? do |member|
-						(right_structure || []).include? member
-					end
-
-					right_is_superset && right_members_are_superset
+					superset_of_types_and_structure? right_types, right_structure, left_types, left_structure
+				when '==='
+					superset_of_types_and_structure?(left_types, left_structure, right_types, right_structure) &&
+						superset_of_types_and_structure?(right_types, right_structure, left_types, left_structure)
+				when '=!='
+					!(superset_of_types_and_structure?(left_types, left_structure, right_types, right_structure) &&
+						superset_of_types_and_structure?(right_types, right_structure, left_types, left_structure))
 				when '=/='
 					shared_types   = left_types.any? do |type|
 						right_types.include? type
@@ -1460,9 +1455,16 @@ module Ore
 			base_op = expr.operator.value[..-2] # Trim the = from +=, -=, etc.
 			result  = maybe_instance(left).send base_op, maybe_instance(right)
 
-			# Assign back to left side
-			assignment_scope = scope_for_identifier expr.left
-			assignment_scope.declare expr.left.value, result
+			# Assign back to left side -- a dot-target (`instance.member += ...`) goes through the same
+			# #assign_dot_member path plain `.`-assignment uses; #scope_for_identifier only understands
+			# plain Identifier_Exprs, so a dot-target used to silently fall through to `stack.last` and
+			# declare a bogus `nil`-named identifier there instead of touching the actual member.
+			if expr.left.is_a?(Ore::Infix_Expr) && expr.left.operator&.value == '.'
+				assign_dot_member expr, expr.left, result
+			else
+				assignment_scope = scope_for_identifier expr.left
+				assignment_scope.declare expr.left.value, result
+			end
 		end
 
 		def interp_range_infix expr, start, finish
@@ -1496,9 +1498,7 @@ module Ore
 			# note: See constants.rb POSTFIX for exhaustive list of language-defined postfixes. Currently there are no built-in postfix operators.
 			# 1) look up the opreator (expr.operator.value) as it should be a normal func in the scope.
 			# 2) call it with expr.expression as its argument. It should only take one argument.
-			postfix_overloaded_func = stack.reverse_each.find do |s|
-				s.has? expr.operator.value
-			end&.get(expr.operator.value)
+			postfix_overloaded_func = find_in_stack expr.operator.value
 
 			if !postfix_overloaded_func
 				raise "Could not find #{expr.operator.value} declared anywhere man!"
@@ -1561,18 +1561,11 @@ module Ore
 
 				array
 			when '()'
-				if expr.expressions.empty?
-					tuple = Ore::Tuple.new []
-					link_instance_to_type tuple, 'Tuple'
-					tuple.declarations['values'] = tuple.values
-					tuple
-				elsif expr.expressions.count == 1
+				if expr.expressions.count == 1
 					# note: Single expressions should be treated as though they were not inside parentheses so that algebraic expressions can be grouped using parentheses. If I wrap single expressions in a Tuple then I have to also unwrap them later for arithmetic operations.
 					interpret expr.expressions.first
 				else
-					values = expr.expressions.reduce([]) do |arr, expr|
-						arr << interpret(expr)
-					end
+					values = expr.expressions.map { |e| interpret(e) }
 					tuple  = Ore::Tuple.new values
 					link_instance_to_type tuple, 'Tuple'
 					tuple.declarations['values'] = tuple.values
@@ -1586,6 +1579,10 @@ module Ore
 						case it.operator.value
 						when ':', '='
 							if it.left.is_a?(Ore::Identifier_Expr) || it.left.is_a?(Ore::Symbol_Expr) || it.left.is_a?(Ore::String_Expr)
+								# note; Deliberately NOT wrap_string_literal_value here, unlike Array/Tuple literals -- Dictionary#hash is
+								# handed straight to Ruby-level consumers as a raw Hash (Sequel queries in table.rb chief among them), so
+								# wrapping a value into Ore::String here broke every DB call passing string attributes. #to_s below just
+								# always double-quotes String values instead of matching the original literal's quote char.
 								dict.proxy_set it.left.value.to_sym, interpret(it.right)
 							else
 								# The left operand should be allowed to be any hashable object. It's too early in the project to consider hashing but this'll be a good reminder.
@@ -1747,10 +1744,15 @@ module Ore
 			type.types << type.name
 			type.types = type.types.uniq
 
-			push_then_pop type do
-				body_expressions.each do |sub_expr|
-					interpret sub_expr
+			type.declaration_in_progress = true
+			begin
+				push_then_pop type do
+					body_expressions.each do |sub_expr|
+						interpret sub_expr
+					end
 				end
+			ensure
+				type.declaration_in_progress = false
 			end
 
 			type
@@ -1851,8 +1853,12 @@ module Ore
 		end
 
 		# Searches the full scope stack (innermost to outermost) for `key`, the same way a bare identifier resolves via #scope_for_identifier -- checking only `stack.last` would miss a type declared in an outer/global scope while evaluating from inside a nested context (e.g. a type's own declaration body during composition). This returns an Ore type.
-		def find_in_stack key
+		# `excluding:` skips scopes of that class -- used by #find_operator_overload to keep looking past
+		# a currently-executing Type/Instance body, since merely being on the stack doesn't mean the
+		# *current* operands belong to it (Instance < Type, so excluding: Ore::Type skips both).
+		def find_in_stack key, excluding: nil
 			stack.reverse_each do |scope|
+				next if excluding && scope.is_a?(excluding)
 				return scope[key] if scope.has? key
 			end
 			nil
@@ -2093,8 +2099,6 @@ module Ore
 
 			result = nil
 			body.compact.each do |e|
-				next if e.is_a? Ore::Param_Expr # Or just remove Param expressions from
-
 				result = interpret e
 				break if result.is_a? Ore::Return
 			end
@@ -2142,7 +2146,7 @@ module Ore
 		# @param struct [Ore::Struct]
 		# @param expr [Ore::Call_Expr]
 		def interp_struct_call struct, expr
-			values = expr.arguments.map { |arg| wrap_struct_string_value(arg, interpret(arg)) }
+			values = expr.arguments.map { |arg| wrap_string_literal_value(arg, interpret(arg)) }
 			build_struct struct.names, struct.type_names, struct.type_objects, values
 		end
 
@@ -2231,8 +2235,6 @@ module Ore
 
 			body.compact.each do |expr|
 				# bug todo: Sometimes body contains `nil` when that should never be the case
-				next if expr.is_a? Ore::Param_Expr # Reminder, param expressions are part of the function body by design. This is redundant because I'm subtracting the params from the handler expressions a few lines above, but just in case!
-
 				result = interpret expr
 				break if result.is_a? Ore::Return
 			end
@@ -2506,7 +2508,7 @@ module Ore
 		def interp_conditional expr
 			# All conditional forms (if/unless/while/until) use #truthy? uniformly now -- `if`/`while` used to require the condition be the literal value `true`, so `if [1,2,3]` never took its true branch.
 			case expr.type.value
-			when 'while', 'until', 'elwhile'
+			when 'while', 'until', 'elwhile', 'elswhile'
 				result    = nil
 				condition = interpret expr.condition
 
@@ -2548,14 +2550,13 @@ module Ore
 				end
 
 				return result
-			when 'unless'
-				# @Copypaste from the else clause below. This is simple to factor out.
-				condition = interpret expr.condition
-				body      = if truthy? condition
-					expr.when_false
-				else
-					expr.when_true
-				end
+			else
+				# `unless` is just `if` with when_true/when_false swapped -- both branches used to be
+				# separately maintained copies of this same body-selection + running logic.
+				condition   = interpret expr.condition
+				truthy_body = expr.type.value == 'unless' ? expr.when_false : expr.when_true
+				falsy_body  = expr.type.value == 'unless' ? expr.when_true : expr.when_false
+				body        = truthy?(condition) ? truthy_body : falsy_body
 
 				if body.is_a? Ore::Conditional_Expr
 					interp_conditional body
@@ -2563,24 +2564,6 @@ module Ore
 					body.each.inject(nil) do |result, expr|
 						interpret expr
 					end
-				end
-
-			else
-				condition = interpret expr.condition
-				body      = if truthy? condition
-					expr.when_true
-				else
-					expr.when_false
-				end
-
-				if body.is_a? Ore::Conditional_Expr
-					interp_conditional body
-				else
-					result = body.each.inject(nil) do |result, expr|
-						interpret expr
-					end
-
-					result || nil
 				end
 			end
 		end
@@ -2614,7 +2597,9 @@ module Ore
 				end
 			when 'puts'
 				value = expr.expression ? interpret(expr.expression) : nil
-				puts stringify_for_display(value) # note: Don't remove this like I did, it is supposed to print out. todo: Be able to set your own output stream
+				# Wrapping here (not generally) is what lets @puts reflect the argument's own quote char when it's a literal (see #wrap_string_literal_value) -- a plain variable/expression has no quotation_style to reflect, so it prints unquoted same as before.
+				value = wrap_string_literal_value(expr.expression, value) if expr.expression
+				puts stringify_for_display(value, show_quotes: true) # note: Don't remove this like I did, it is supposed to print out. todo: Be able to set your own output stream
 				value
 			when 'assert'
 				condition = interpret expr.expression
@@ -2661,7 +2646,7 @@ module Ore
 				end
 
 				result
-			when 'start', 'start_server', 'server_up'
+			when 'start_server'
 				server = interpret expr.expression
 				unless server.is_a? Ore::Instance
 					raise Ore::Invalid_Start_Directive_Argument.new(expr, self)
@@ -2673,7 +2658,7 @@ module Ore
 
 				start_server server # sets server thread, webrick server, etc
 				server
-			when 'shut_down', 'server_down'
+			when 'stop_server'
 				server = interpret expr.expression
 				unless server.is_a? Ore::Instance
 					raise Ore::Invalid_Start_Directive_Argument.new(expr, self)
@@ -2747,7 +2732,7 @@ module Ore
 						types << interpret(type_ref)
 						if member.member_default
 							default_value = interpret(member.member_default)
-							values << wrap_struct_string_value(member.member_default, default_value)
+							values << wrap_string_literal_value(member.member_default, default_value)
 						else
 							values << nil
 						end
@@ -2755,7 +2740,7 @@ module Ore
 						# Bare `name := value` member, no `: Type` annotation -- infer the member's declared type from the default's own runtime type, same as plain `:=` does everywhere else.
 						default_value = interpret(member.member_default)
 						types << find_in_stack(type_name_to_string(default_value))
-						values << wrap_struct_string_value(member.member_default, default_value)
+						values << wrap_string_literal_value(member.member_default, default_value)
 					end
 					names << expr.names[i]
 				else
@@ -2767,7 +2752,7 @@ module Ore
 						names.concat value.names
 					else
 						types << value
-						values << wrap_struct_string_value(member, value)
+						values << wrap_string_literal_value(member, value)
 						names << nil
 					end
 				end
@@ -2778,8 +2763,8 @@ module Ore
 			build_struct names, type_names, types, values
 		end
 
-		# A struct/member value built from a string literal gets wrapped into a real Ore::String carrying the literal's own `quotation_style`, instead of staying the bare Ruby string #interp_string normally returns. Member's to_s{;} (ore/member.ore) reads `.quotation_style` straight off the value to decide how to quote it for display.
-		def wrap_struct_string_value source_expr, value
+		# A value built directly from a string literal gets wrapped into a real Ore::String carrying the literal's own `quotation_style`, instead of staying the bare Ruby string #interp_string normally returns. Struct/Member's to_s{;} (ore/member.ore) and Array/Dictionary/Tuple's to_s{;} (ore/array.ore, ore/dictionary.ore, ore/preload.ore) read `.quotation_style` straight off the value to decide how to quote it for display.
+		def wrap_string_literal_value source_expr, value
 			return value unless source_expr.is_a?(Ore::String_Expr) && value.is_a?(::String)
 			finish_intrinsic_instance Ore::String.new(value, source_expr.quotation_style), 'String'
 		end

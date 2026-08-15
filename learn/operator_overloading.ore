@@ -50,6 +50,24 @@ t := 11:22pm
 @puts "`t.hour`:`t.minute` `t.period`"   # 11:22 pm
 
 
+``` Prefix operators
+
+`@prefix` takes just a right operand -- here `$` builds a `Currency` straight out of a bare number, reading like a literal.
+```
+Currency { amount, name, code, }
+
+@operator $ @prefix 900 { amount;
+	c := Currency()
+	c.amount = amount
+	c.name = 'US Dollar'
+	c.code = 'USD'
+	c
+}
+
+price := $42
+@puts "`price.name`: `price.code` `price.amount`"   # US Dollar: USD 42
+
+
 ``` A type's own overload wins over a global one
 
 Dispatch checks the left operand's own declarations first, before falling back to whatever's in scope -- so a type can override an operator for just its own instances without disturbing the global meaning everywhere else:

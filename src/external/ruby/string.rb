@@ -10,7 +10,7 @@ module Ore
 			@value                  = value
 			@quotation_style        = quotation_style
 			self['value']           = value
-			self['quotation_style'] = quotation_style&.to_s # todo; eventually I want to support enums, so this will be a good first implementation of it!
+			self['quotation_style'] = quotation_style # a real Symbol (:single/:double), not stringified -- Array/Dictionary/Tuple/Member's to_s{;} all compare against it directly
 		end
 
 		proxy_delegate 'value'
