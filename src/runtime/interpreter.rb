@@ -144,7 +144,7 @@ module Ore
 			resolved = filepath ? File.expand_path(filepath) : '<inline>'
 
 			self.class.cached_source_by_filename[resolved] = source_code.lines.map(&:chomp)
-			@current_source_file                            = resolved
+			@current_source_file                           = resolved
 		end
 
 		def add_onclick_handler handler
@@ -1456,8 +1456,11 @@ module Ore
 				if overload.is_a? Ore::Func
 					result = call_operator_overload overload, expr, [left, right]
 					negate_result ? !truthy?(result) : result
-				else
+				elsif left.respond_to?(expr.operator.value) && !(expr.operator.value == '<=>' && left.method(:<=>).owner == ::Kernel)
 					left.send expr.operator.value, right
+				else
+					# note; Numbers/Strings reach here fine (they decay to plain Ruby values with a native <=>/</>/etc.), but a plain Ore::Instance has none of these implemented -- except <=>, which Ruby's own Kernel/Object gives every object a trivial, identity-based default for. `respond_to?` alone can't tell that apart from a real one, so the method's actual owner is checked too. There's no sensible fallback to invent here, equality doesn't imply order.
+					raise Ore::Undeclared_Infix_Operator.new expr
 				end
 			end
 		end

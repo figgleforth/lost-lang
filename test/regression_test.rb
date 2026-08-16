@@ -920,4 +920,25 @@ class Regression_Test < Base_Test
 		assert_equal 2, Ore.interp('(1, 2, 3).1')
 		assert_equal 3, Ore.interp('(1, 2, 3).-1')
 	end
+
+	def test_spaceship_on_custom_instance_with_no_overload_raises_regression
+		# `<=>` on a custom Instance with no @operator overload used to fall through to Ruby's own Kernel#<=> (every Object gets a trivial, identity-based default), silently returning nil instead of raising -- respond_to?(:<=>) can't tell the trivial default apart from a real one.
+		assert_raises Ore::Undeclared_Infix_Operator do
+			Ore.interp <<~CODE
+			    Point { x, new { x; ./x = x } }
+			    Point(1) <=> Point(2)
+			CODE
+		end
+
+		# Numbers/Strings still work (they decay to plain Ruby values with a real <=>).
+		assert_equal 1, Ore.interp('5 <=> 3')
+
+		out = Ore.interp <<~CODE
+		    Point { x, new { x; ./x = x }
+		        @operator <=> @infix { left, right; left.x <=> right.x }
+		    }
+		    Point(1) <=> Point(2)
+		CODE
+		assert_equal -1, out
+	end
 end
