@@ -1,0 +1,28 @@
+```
+Reads todos.md and reports how many lines are still open (`+`) vs done (`-`). Run from the repo root:
+bin/ore examples/todo_stats.ore
+```
+
+content := File_System.read('todos.md')
+lines := content.split("\n")
+
+done_count := 0
+open_count := 0
+
+for lines
+    trimmed := it.trim()
+
+    if trimmed.start_with?('-')
+        done_count += 1
+    elif trimmed.start_with?('+')
+        open_count += 1
+    end
+end
+
+total := done_count + open_count
+
+done_percent := (done_count.to_f() / total.to_f() * 100).round()
+open_percent := (open_count.to_f() / total.to_f() * 100).round()
+
+@puts "`done_count` done (`done_percent`%)"
+@puts "`open_count` open (`open_percent`%)"
