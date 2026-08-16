@@ -51,28 +51,19 @@ module Ore
 	end
 
 	class Func_Expr < Expression
-		attr_accessor :name, :expressions, :signature
+		attr_accessor :name, :expressions, :signature, :parameters
 
 		def signature
-			sig         = name&.value || ''
-			sig         += '{'
-			param_decls = expressions.select do |expr|
-				expr.is_a? Param_Expr
-			end
-			sig         += param_decls.map do |param|
+			sig = name&.value || ''
+			sig += '{'
+			sig += parameters.map do |param|
 				label   = param.label ? "#{param.label.value}:" : ''
 				default = param.default ? "=#{param.default.value}" : ''
 				"#{label}#{param.name.value}#{default}"
 			end.join(',')
-			sig         += Ore::FUNCTION_DELIMITER
-			sig         += '}'
+			sig += Ore::FUNCTION_DELIMITER
+			sig += '}'
 			sig
-			# todo, Maybe bring back extra signature details.
-			# if expressions.any?
-			# 	n << '['
-			# 	n << expressions.join(',')
-			# 	n << ']'
-			# end
 		end
 	end
 

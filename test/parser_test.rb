@@ -304,44 +304,36 @@ class Parser_Test < Base_Test
 
 	def test_function_params
 		out = Ore.parse '{ with_param; }'
-		assert_equal 1, out.first.expressions.count
-		out.first.expressions.each do
-			assert_kind_of Ore::Param_Expr, it
-		end
+		assert_equal 1, out.first.parameters.count
+		assert_equal 0, out.first.expressions.count
 
 		out = Ore.parse 'named { with_param; }'
 		assert_equal 'named', out.first.name.value
-		assert_equal 1, out.first.expressions.count
-		out.first.expressions.each do
-			assert_kind_of Ore::Param_Expr, it
-		end
-		refute out.first.expressions.first.label
-		refute out.first.expressions.first.default
-		refute out.first.expressions.first.type
+		assert_equal 1, out.first.parameters.count
+		refute out.first.parameters.first.label
+		refute out.first.parameters.first.default
+		refute out.first.parameters.first.type
 
 		out = Ore.parse '{ labeled param; }'
-		assert_kind_of Ore::Param_Expr, out.first.expressions.first
-		assert_equal 'labeled', out.first.expressions.first.label.value
-		assert out.first.expressions.first.label
-		refute out.first.expressions.first.default
-		refute out.first.expressions.first.type
+		assert_equal 'labeled', out.first.parameters.first.label.value
+		assert out.first.parameters.first.label
+		refute out.first.parameters.first.default
+		refute out.first.parameters.first.type
 
 		out = Ore.parse '{ default_values := 4; }'
-		assert_kind_of Ore::Param_Expr, out.first.expressions.first
-		assert out.first.expressions.first.default
-		assert_kind_of Ore::Number_Expr, out.first.expressions.first.default
+		assert out.first.parameters.first.default
+		assert_kind_of Ore::Number_Expr, out.first.parameters.first.default
 
 		out = Ore.parse 'named { and_labeled with_default := 8; }'
-		assert_kind_of Ore::Param_Expr, out.first.expressions.first
-		assert_equal 'and_labeled', out.first.expressions.first.label.value
-		assert_equal 'with_default', out.first.expressions.first.name.value
+		assert_equal 'and_labeled', out.first.parameters.first.label.value
+		assert_equal 'with_default', out.first.parameters.first.name.value
 		assert_equal 'named', out.first.name.value
 
 		out = Ore.parse 'named { with, multiple, even labeled := 4, params := 5; }'
-		assert_equal 4, out.first.expressions.count
-		assert_equal out.first.expressions.map(&:label), [nil, nil, Ore::Lexeme.new(:identifier, 'even'), nil]
-		assert_equal out.first.expressions.map(&:name), %w(with multiple labeled params).map { Ore::Lexeme.new(:identifier, _1) }
-		assert_equal out.first.expressions.map(&:default).map(&:nil?), [true, true, false, false]
+		assert_equal 4, out.first.parameters.count
+		assert_equal out.first.parameters.map(&:label), [nil, nil, Ore::Lexeme.new(:identifier, 'even'), nil]
+		assert_equal out.first.parameters.map(&:name), %w(with multiple labeled params).map { Ore::Lexeme.new(:identifier, _1) }
+		assert_equal out.first.parameters.map(&:default).map(&:nil?), [true, true, false, false]
 	end
 
 	def test_function_bodies
@@ -350,14 +342,14 @@ class Parser_Test < Base_Test
 			input * input
 		}'
 		refute_empty out.first.expressions
-		assert_kind_of Ore::Infix_Expr, out.first.expressions[1]
+		assert_kind_of Ore::Infix_Expr, out.first.expressions[0]
 
 		out = Ore.parse '
 		nothing { input;
 			return input
 		}'
-		assert_kind_of Ore::Prefix_Expr, out.first.expressions[1]
-		assert_kind_of Ore::Identifier_Expr, out.first.expressions[1].expression
+		assert_kind_of Ore::Prefix_Expr, out.first.expressions[0]
+		assert_kind_of Ore::Identifier_Expr, out.first.expressions[0].expression
 	end
 
 	def test_function_signatures
@@ -389,9 +381,10 @@ class Parser_Test < Base_Test
 		}'
 		assert_kind_of Ore::Func_Expr, out.first
 		assert_equal 'curr?', out.first.name.value
-		assert_equal 4, out.first.expressions.count
+		assert_equal 3, out.first.expressions.count
+		assert_equal 1, out.first.parameters.count
 
-		early_return = out.first.expressions[1]
+		early_return = out.first.expressions[0]
 		assert_kind_of Ore::Conditional_Expr, early_return
 		assert_kind_of Ore::Infix_Expr, early_return.condition
 		assert_equal 'or', early_return.condition.operator.value
@@ -399,7 +392,7 @@ class Parser_Test < Base_Test
 		assert_kind_of Ore::Prefix_Expr, early_return.condition.right
 		assert_equal 1, early_return.when_true.count # todo One for return and one for false in `return false`. Maybe I should make it a prefix keyword.
 
-		slice = out.first.expressions[2]
+		slice = out.first.expressions[1]
 		assert_kind_of Ore::Infix_Expr, slice
 
 		tap = out.first.expressions.last
@@ -483,7 +476,7 @@ class Parser_Test < Base_Test
 				number = 0
 			end
 		 }'
-		assert_kind_of Ore::Conditional_Expr, out.first.expressions[2]
+		assert_kind_of Ore::Conditional_Expr, out.first.expressions[0]
 
 		out = Ore.parse 'if 1 + 2 * 3 == 7
 			"This one!"
@@ -705,8 +698,7 @@ class Parser_Test < Base_Test
 
 	def test_unpack_prefix
 		out = Ore.parse 'funk { @with; }'
-		assert_kind_of Ore::Param_Expr, out.first.expressions.first
-		assert out.first.expressions.first.unpack
+		assert out.first.parameters.first.unpack
 	end
 
 	def test_for_loops

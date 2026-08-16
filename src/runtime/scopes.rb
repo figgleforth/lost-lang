@@ -119,7 +119,7 @@ module Ore
 	end
 
 	class Func < Scope
-		attr_accessor :expressions, :arguments, :func_signature
+		attr_accessor :expressions, :parameters, :arguments, :func_signature
 	end
 
 	class Route < Func

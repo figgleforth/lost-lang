@@ -50,10 +50,9 @@ module Ore
 
 		def register_func expr
 			return unless expr.name
-			params = expr.expressions.select { _1.is_a? Ore::Param_Expr }
-			return unless params.any?(&:type)
+			return unless expr.parameters.any?(&:type)
 
-			param_types = params.map { _1.type&.value }
+			param_types = expr.parameters.map { _1.type&.value }
 			declare :funcs, expr.name.value, param_types
 			@type_info[@type_stack.last][:methods][expr.name.value] = param_types if @type_stack.last
 		end
@@ -177,7 +176,7 @@ module Ore
 			when Ore::Func_Expr
 				# #register_func runs before the new scope is pushed, so the function's own name is declared into the *enclosing* scope (visible to siblings, and to the function's own body too since lookups search outward so recursive calls still resolve).
 				register_func expr
-				with_new_scope { check expr.expressions }
+				with_new_scope { check expr.parameters + expr.expressions }
 			when Ore::Type_Expr
 				if expr.expressions
 					@type_stack.push qualified_type_name(expr)

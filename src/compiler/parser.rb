@@ -272,7 +272,8 @@ module Ore
 			named            = curr?(:identifier)
 			start            = curr_lexeme
 			func             = Ore::Func_Expr.new
-			func.expressions = []
+			func.expressions = [] # Expression
+			func.parameters  = [] # Param_Expr
 
 			if curr?(:identifier) || curr?(SCOPE_OPERATORS)
 				func.name = parse_identifier_expr
@@ -327,7 +328,7 @@ module Ore
 					end
 				end
 
-				func.expressions << param
+				func.parameters << param
 				eat if curr? ','
 				reduce_newlines
 			end
@@ -343,22 +344,18 @@ module Ore
 			# func.expressions = func.expressions #.compact #.uniq # bug, The first Param is twice in the array, with the same object_id. Dedupe it for now. Figure out the real issue later.
 			eat '}'
 
-			has_real_body = func.expressions.any? { |e| !e.is_a?(Ore::Param_Expr) }
+			has_real_body = func.expressions.any?
 
-			# A declared return type with no real body (just params) is a signature-only declaration —
-			# either self-declaring under a name (`double: {Number -> Number;}`) or anonymous
-			# (`{Number, Number -> Number;}`). Every param slot in a signature must carry a type
-			# (there's no name to fall back on at call sites), so a named-but-untyped param here
-			# (`{a -> Number;}`) is malformed.
+			# A declared return type with no real body (just params) is a signature-only declaration — either self-declaring under a name (`double: {Number -> Number;}`) or anonymous (`{Number, Number -> Number;}`). Every param slot in a signature must carry a type (there's no name to fall back on at call sites), so a named-but-untyped param here (`{a -> Number;}`) is malformed.
 			if func.type && !has_real_body
-				untyped_param = func.expressions.find { |param| param.type.nil? }
+				untyped_param = func.parameters.find { |param| param.type.nil? }
 				raise Ore::Invalid_Func_Signature.new(untyped_param.name) if untyped_param
 
 				sig        = Ore::Func_Signature_Expr.new
 				sig.name   = func.name
 				sig.type   = func.type
 				sig.lexeme = func.lexeme
-				sig.params = func.expressions
+				sig.params = func.parameters
 				return copy_location sig, start
 			end
 
@@ -611,10 +608,7 @@ module Ore
 
 			# Validate: handler params must include all route params
 			handler_params = if expr.is_a? Ore::Func_Expr
-				expr.expressions
-				.select { |expr| expr.is_a?(Ore::Param_Expr) }
-				.map(&:name)
-				.map(&:value)
+				expr.parameters.map(&:name).map(&:value)
 			else
 				[]
 			end

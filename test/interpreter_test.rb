@@ -82,39 +82,42 @@ class Interpreter_Test < Base_Test
 
 	def test_basic_func_declaration
 		out = Ore.interp 'enter { numbers := "4815162342"; }'
-		assert_equal 1, out.expressions.count
-		assert_instance_of Ore::Param_Expr, out.expressions.first
-		assert_instance_of Ore::String_Expr, out.expressions.first.default
+		assert_equal 1, out.parameters.count
+		assert_empty out.expressions
+		assert_instance_of Ore::Param_Expr, out.parameters.first
+		assert_instance_of Ore::String_Expr, out.parameters.first.default
 	end
 
 	def test_advanced_func_declaration
 		out = Ore.interp 'add { a, b; a + b }'
-		assert_equal 3, out.expressions.count
+		assert_equal 2, out.parameters.count
+		assert_equal 1, out.expressions.count
 		assert_instance_of Ore::Infix_Expr, out.expressions.last
-		refute out.expressions.first.default
+		refute out.parameters.first.default
 	end
 
 	def test_complex_func_declaration
 		out = Ore.interp 'run { a, labeled b, c := 4, labeled d := 8;
 			c + d
 		}'
-		assert_equal 5, out.expressions.count
+		assert_equal 4, out.parameters.count
+		assert_equal 1, out.expressions.count
 
-		a = out.expressions[0]
+		a = out.parameters[0]
 		assert_equal 'a', a.name.value
 		refute a.label
 		refute a.default
 
-		b = out.expressions[1]
+		b = out.parameters[1]
 		assert b.label
 		assert_equal 'labeled', b.label.value
 		refute b.default
 
-		c = out.expressions[2]
+		c = out.parameters[2]
 		assert c.default
 		refute c.label
 
-		d = out.expressions[3]
+		d = out.parameters[3]
 		assert d.label
 		assert d.default
 
@@ -172,8 +175,8 @@ class Interpreter_Test < Base_Test
 
 		out = Ore.interp 'func { assign_to_nil; }'
 		assert_instance_of Ore::Func, out
-		assert_instance_of Ore::Param_Expr, out.expressions.first
-		assert_equal 'assign_to_nil', out.expressions.first.name.value
+		assert_instance_of Ore::Param_Expr, out.parameters.first
+		assert_equal 'assign_to_nil', out.parameters.first.name.value
 	end
 
 	def test_infix_arithmetic
@@ -485,7 +488,7 @@ class Interpreter_Test < Base_Test
 
 	def test_assigning_function_to_variable
 		out = Ore.interp 'funk := { a, b, c; }'
-		assert_equal 3, out.expressions.count
+		assert_equal 3, out.parameters.count
 	end
 
 	def test_composed_type_declaration
@@ -1192,7 +1195,8 @@ class Interpreter_Test < Base_Test
 		assert_instance_of Ore::Route, out
 		assert_equal 'get', out.http_method.value
 		assert_equal 'some/thing/:id', out.path
-		assert_equal 2, out.handler.expressions.count
+		assert_equal 1, out.handler.parameters.count
+		assert_equal 1, out.handler.expressions.count
 	end
 
 	def test_html_element

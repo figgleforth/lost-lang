@@ -1266,6 +1266,7 @@ module Ore
 				each_scope.enclosing_scope = stack.last
 				push_scope each_scope
 				each_scope.declare 'it', it
+				func_expr.parameters.each { |e| interpret e }
 				func_expr.expressions.each { |e| interpret e }
 				pop_scope
 			end
@@ -2004,13 +2005,11 @@ module Ore
 			func.name            = expr.lexeme
 			func.enclosing_scope = stack.last
 			func.expressions     = expr.expressions
-
-			param_types         = expr.expressions.select do |e|
-				e.is_a? Ore::Param_Expr
-			end.map do |p|
+			func.parameters      = expr.parameters
+			param_types          = expr.parameters.map do |p|
 				p.type&.value
 			end
-			func.func_signature = Ore::Func_Signature.new(param_types, expr.type&.value)
+			func.func_signature  = Ore::Func_Signature.new(param_types, expr.type&.value)
 
 			if func.name&.value
 				stack.last.declare func.name.value, func
@@ -2022,10 +2021,6 @@ module Ore
 		end
 
 		def interp_func_body func, expr, arg_values: nil
-			params = func.expressions.select do |expr|
-				expr.is_a? Ore::Param_Expr
-			end
-
 			# note; Evaluate arguments in caller's scope (before pushing function scopes). A labeled argument (`to: someone`) parses as a plain `:` Infix_Expr, and a named argument (`to := someone`) as a plain `:=` Infix_Expr (same production named struct members use) -- #classify_argument unwraps either rather than letting #interpret try to resolve `to` as an identifier and raise Undeclared_Identifier.
 			# A caller that already evaluated the operands (operator-overload dispatch in #interp_infix) passes them via arg_values so their side effects don't run a second time; labels/named args only exist in real call syntax, so neither applies there.
 			arg_labels = []
@@ -2058,6 +2053,7 @@ module Ore
 			# note: `func` is the single, shared Func object registered when the function was declared. Pushing it directly as the call frame (as this used to do) meant every invocation declared its params onto that same shared object, so recursive/repeated calls stomped on each other's param values. Each call gets its own fresh scope instead.
 			call_scope                 = Ore::Func.new func.name
 			call_scope.expressions     = func.expressions
+			call_scope.parameters      = func.parameters
 			call_scope.enclosing_scope = func.enclosing_scope
 			call_scope.arguments       = arg_values
 
@@ -2073,12 +2069,12 @@ module Ore
 
 			# Validated up front, before binding, so a typo'd name reports as "not a declared parameter" rather than getting masked by whatever other param that typo incidentally starved of a value (a confusing Missing_Argument with no mention of the real mistake).
 			unless named_args.empty?
-				declared_names = params.map { |param| param.name.value }
+				declared_names = func.parameters.map { |param| param.name.value }
 				unknown_name   = named_args.keys.find { |name| !declared_names.include? name }
 				raise Ore::Unknown_Named_Argument.new(expr, unknown_name) if unknown_name
 			end
 
-			params.each_with_index do |param, i|
+			func.parameters.each_with_index do |param, i|
 				name_key       = param.name.value
 				has_positional = i < arg_values.length
 				has_named      = named_args.key? name_key
@@ -2110,7 +2106,7 @@ module Ore
 				end
 			end
 
-			body = call_scope.expressions - params
+			body = call_scope.expressions
 			if call_scope.name == 'assert'
 				raise Ore::Assert_Triggered.new(expr) unless interpret(body.first) == true # Just to be explicit.
 			end
@@ -2215,7 +2211,7 @@ module Ore
 		# @return The result of handler execution
 		def interp_route_body route, req, res, url_params = {}, server_instance: nil
 			handler = route.handler
-			params  = handler.expressions.select { |e| e.is_a? Ore::Param_Expr }
+			params  = handler.parameters
 
 			call_scope = Ore::Scope.new "#{handler.name || 'anonymous'}_route"
 			push_scope handler.enclosing_scope
@@ -2248,7 +2244,7 @@ module Ore
 				call_scope.declare param.name.value, value
 			end
 
-			body   = handler.expressions - params
+			body   = handler.expressions
 			result = nil
 
 			body.compact.each do |expr|
