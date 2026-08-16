@@ -1200,6 +1200,14 @@ module Ore
 		end
 
 		# The dot sub-handlers below all take the receiver #interp_dot_infix already interpreted rather than re-interpreting expr.left themselves — re-interpreting ran the receiver expression's side effects (calls, constructions) a second or third time.
+		# Bounds/type-checked element access for `.N`/`.N.M...` dot-index syntax on an Array/Tuple -- plain `values[index]` (Ruby's own Array#[]) silently returns nil past the end, and silently truncates a non-integer index (e.g. `.0.1` lexes as the single float 0.1, which Ruby's [] truncates to index 0) -- both looked like a legitimate result instead of a mistake.
+		def array_index_value collection, index, expr
+			unless index.is_a?(::Integer) && index.between?(-collection.values.length, collection.values.length - 1)
+				raise Ore::Invalid_Array_Index.new(expr, self)
+			end
+			collection.values[index]
+		end
+
 		def interp_dot_array_or_tuple scope, expr
 			case
 			when expr.right.is(Ore::Func_Expr) && expr.right.name.value == 'each'
@@ -1207,12 +1215,12 @@ module Ore
 				scope
 
 			when expr.right.is(Ore::Number_Expr)
-				scope.values[expr.right.value]
+				array_index_value scope, expr.right.value, expr
 
 			when expr.right.is(Ore::Array_Index_Expr)
 				expr.right.indices_in_order.reduce(scope) do |current, index|
 					raise Ore::Invalid_Dot_Infix_Left_Operand.new(expr, self) unless current.is_a?(Ore::Array)
-					current.proxy_get index
+					array_index_value current, index, expr
 				end
 
 			else

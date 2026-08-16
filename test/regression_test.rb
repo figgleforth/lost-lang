@@ -906,4 +906,18 @@ class Regression_Test < Base_Test
 		CODE
 		assert_equal [-1, 2], out.values
 	end
+
+	def test_tuple_dot_index_out_of_bounds_regression
+		# `.N`/`.N.M...` dot-index access silently returned nil past the collection's length, and silently truncated a non-integer index -- e.g. `.0.1` lexes as the single float 0.1, which Ruby's own Array#[] truncates to index 0, so `((), true).0.1`/`.0.2`/`.0.3`... all silently returned the same first element (a Tuple) instead of erroring past the actual length.
+		assert_raises Ore::Invalid_Array_Index do
+			Ore.interp '((), true).0.1'
+		end
+
+		assert_raises Ore::Invalid_Array_Index do
+			Ore.interp '(1, 2, 3).5'
+		end
+
+		assert_equal 2, Ore.interp('(1, 2, 3).1')
+		assert_equal 3, Ore.interp('(1, 2, 3).-1')
+	end
 end

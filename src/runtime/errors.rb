@@ -78,6 +78,9 @@ module Ore
 	class Invalid_Dot_Infix_Right_Operand < Error
 	end
 
+	class Invalid_Array_Index < Error
+	end
+
 	class Invalid_Unpack_Infix_Operator < Error
 	end
 
