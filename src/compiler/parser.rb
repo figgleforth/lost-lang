@@ -679,7 +679,7 @@ module Ore
 				it.is_a?(Ore::Identifier_Expr) || it.is_a?(Ore::Number_Expr) || it.is_a?(Ore::Operator_Expr) || it.is_a?(Ore::Statement_Expr)
 			end
 
-			raise Ore::Invalid_Percent_Literal_Expression.new(percent_lit, self) unless valid_items
+			raise Ore::Invalid_Percent_Literal_Expression.new(percent_lit) unless valid_items
 
 			copy_location percent_lit, start
 		end

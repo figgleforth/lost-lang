@@ -1,11 +1,10 @@
 module Ore
 	class Error_Formatter
-		attr_reader :error, :expression, :runtime
+		attr_reader :error, :expression
 
-		def initialize error, runtime
+		def initialize error
 			@error      = error
 			@expression = error.expression
-			@runtime    = runtime
 		end
 
 		def error_name
@@ -24,10 +23,6 @@ module Ore
 
 		def location_available?
 			expression&.respond_to? :l0
-		end
-
-		def source_available?
-			runtime && location_available?
 		end
 
 		def location_line
@@ -52,10 +47,9 @@ module Ore
 			# Initial checks and coordinate fetching remain the same
 			l0, c0, l1, c1 = get_location_coords
 			return nil unless l0
-			return nil unless runtime
 
 			source_file = get_source_file
-			lines       = runtime.cached_source_by_filename[source_file] || []
+			lines       = Ore::Interpreter.cached_source_by_filename[source_file] || []
 			return nil if lines.empty?
 
 			# Determine snippet boundaries

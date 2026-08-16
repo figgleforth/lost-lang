@@ -11,7 +11,6 @@
 + Every value passed around inside of Ore should be an Ore::Class of some kind. calling `#maybe_instance` in `#interp_circumfix` for starters.
 + A `Command_Line` class. Lets you execute commands from Ore::String and Ore::Fence. Inspired by Tsoding and Jai.
 + The way Ore::Classes are created differs in many places. I should have some kind of `Interpreter#make klass` that does all the linking to the runtime and stuff
-+ Does errors.rb really need a reference to Interpreter? (the `@runtime` attr)
 + Rename `@cd` and `@ +/-` to something more descriptive. `@push_write <obj>`, `@pop_write <obj>`, `@push_read <obj>`, and `@pop_read <obj>`. Also rename sibling scope, and (add a scope for writing || let push/pop actually manipulate the stack).
 + Ensure `@cd ..` doesn't work if no scope was pushed with `@cd <scope>`. Probably need some kind of stack that remembers the pushes.
 + Rename `Directive` to `Command`? I don't like how long "directive" is.
@@ -164,3 +163,4 @@
 - `test/advent_of_code.rb` wasn't matched by the Rakefile's `test/**/*_test.rb` glob, so it silently never ran under `rake test`. Renamed to `advent_of_code_test.rb` (class `Advent_Of_Code_Test`) -- surfaced the `<`-struct bug above and the compound-assignment bug below, both previously undetected.
 - `instance.member += value` silently no-op'd: `interp_compound_infix` resolved its assignment target via `scope_for_identifier`, which only understands plain identifiers -- a dot-target fell through to `stack.last` and declared a bogus `nil`-named identifier instead of touching the member. Now routes through `assign_dot_member`, same as plain `.`-assignment. Found via `examples/aoc/2015/03/part2.ore` computing the wrong answer.
 - Tuple/Array dot-index access (`.N`/`.N.M...`) silently returned nil past the collection's length, and silently truncated a non-integer index -- `.0.1` lexes as the single float `0.1`, which Ruby's own `Array#[]` truncates to index 0, so `((), true).0.1`/`.0.2`/`.0.3`... all silently returned the same first element instead of erroring. New `#array_index_value` helper + `Ore::Invalid_Array_Index` raise on a non-integer or out-of-bounds index.
+- `errors.rb` no longer needs a live Interpreter reference. `Interpreter.cached_source_by_filename` is now class-level (was per-instance) so `Error_Formatter` can read a source snippet without holding a runtime; `Error#initialize` dropped the `runtime` param entirely.

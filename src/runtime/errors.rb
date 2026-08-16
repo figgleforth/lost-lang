@@ -2,22 +2,21 @@ require_relative 'error_formatter'
 
 module Ore
 	class Error < StandardError
-		attr_accessor :expression, :runtime
+		attr_accessor :expression
 
-		def initialize expression = nil, runtime = nil
-			# `runtime` is the live Interpreter (WEBrick servers, Proc-holding hashes, etc.), which Marshal can't dump -- so any tool that tries to Marshal.dump one of our errors (Minitest does, to report failures raised off the main thread) fails and falls back to reconstructing via `klass.new(original.message)`. That lands here with a single String and no runtime: it's already the final, formatted message, not an AST node to run back through the formatter -- use it as-is instead of silently producing a blank report.
-			if expression.is_a?(::String) && runtime.nil?
+		def initialize expression = nil
+			# Some tool trying to Marshal.dump one of our errors (Minitest does, to report failures raised off the main thread) can still fail if `expression` itself is a live runtime object (holding closures/Procs, etc., not just a parse-time AST node) rather than a String message -- Minitest falls back to reconstructing via `klass.new(original.message)`. That lands here with a single String: it's already the final, formatted message, not an AST node to run back through the formatter -- use it as-is instead of silently producing a blank report.
+			if expression.is_a? ::String
 				super expression
 				return
 			end
 
 			@expression = expression
-			@runtime    = runtime
 			super format_error
 		end
 
 		def format_error
-			Error_Formatter.new(self, runtime).format
+			Error_Formatter.new(self).format
 		end
 
 		def detail_message
@@ -102,9 +101,9 @@ module Ore
 	class Assert_Triggered < Error
 		attr_accessor :assertion_message
 
-		def initialize expression = nil, runtime = nil, assertion_message = nil
+		def initialize expression = nil, assertion_message = nil
 			@assertion_message = assertion_message
-			super expression, runtime
+			super expression
 		end
 
 		def detail_message
@@ -196,7 +195,7 @@ module Ore
 
 		def initialize errors
 			@errors = errors
-			super nil, nil
+			super nil
 		end
 
 		def format_error
@@ -210,7 +209,7 @@ module Ore
 		def initialize expression, declared, inferred
 			@declared = declared
 			@inferred = inferred
-			super expression, nil
+			super expression
 		end
 
 		def detail_message
@@ -227,10 +226,10 @@ module Ore
 	class Type_Contract_Violation < Error
 		attr_accessor :contract, :actual
 
-		def initialize expression, contract, actual, interpreter
+		def initialize expression, contract, actual
 			@contract = contract
 			@actual   = actual
-			super expression, interpreter
+			super expression
 		end
 
 		def message
@@ -275,10 +274,10 @@ module Ore
 	class Argument_Label_Mismatch < Error
 		attr_accessor :expected, :actual
 
-		def initialize expression, expected, actual, runtime = nil
+		def initialize expression, expected, actual
 			@expected = expected
 			@actual   = actual
-			super expression, runtime
+			super expression
 		end
 
 		def detail_message
@@ -299,9 +298,9 @@ module Ore
 	class Duplicate_Named_Argument < Error
 		attr_accessor :name
 
-		def initialize expression, name, runtime = nil
+		def initialize expression, name
 			@name = name
-			super expression, runtime
+			super expression
 		end
 
 		def detail_message
@@ -313,9 +312,9 @@ module Ore
 	class Argument_Given_By_Name_And_Position < Error
 		attr_accessor :name
 
-		def initialize expression, name, runtime = nil
+		def initialize expression, name
 			@name = name
-			super expression, runtime
+			super expression
 		end
 
 		def detail_message
@@ -327,9 +326,9 @@ module Ore
 	class Unknown_Named_Argument < Error
 		attr_accessor :name
 
-		def initialize expression, name, runtime = nil
+		def initialize expression, name
 			@name = name
-			super expression, runtime
+			super expression
 		end
 
 		def detail_message
@@ -365,10 +364,10 @@ module Ore
 	class Destructuring_Arity_Mismatch < Error
 		attr_accessor :expected, :actual
 
-		def initialize expression, expected, actual, runtime = nil
+		def initialize expression, expected, actual
 			@expected = expected
 			@actual   = actual
-			super expression, runtime
+			super expression
 		end
 
 		def detail_message

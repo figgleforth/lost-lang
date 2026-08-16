@@ -4,11 +4,17 @@ require 'json'
 
 module Ore
 	class Interpreter
-		attr_accessor :input, :lexer, :parser, :load_standard_library, :stack, :route_functions_by_route_name, :servers, :dom_onclick_function_handlers, :dom_input_elements, :cached_expressions_by_filepath, :cached_source_by_filename, :last_output, :current_source_file
+		# Source lines by filepath, keyed the same way #register_source always has -- kept class-level (not per-instance) so Error_Formatter can read a snippet without holding a live Interpreter, which used to be the only reason errors.rb needed a `runtime` reference at all.
+		@cached_source_by_filename = {} # {filepath: [String]}
+
+		class << self
+			attr_accessor :cached_source_by_filename
+		end
+
+		attr_accessor :input, :lexer, :parser, :load_standard_library, :stack, :route_functions_by_route_name, :servers, :dom_onclick_function_handlers, :dom_input_elements, :cached_expressions_by_filepath, :last_output, :current_source_file
 
 		def initialize
 			@cached_expressions_by_filepath = {} # {filepath: [Ore::Expression]}
-			@cached_source_by_filename      = {} # {filepath: String}
 			@dom_input_elements             = {} # {element_hash: Ore::Instance} for inputs/textareas
 			@dom_onclick_function_handlers  = {} # {handler_hash: Ore::Func}
 			@route_functions_by_route_name  = {} # {route: Ore::Route}
@@ -135,9 +141,10 @@ module Ore
 		end
 
 		def register_source filepath, source_code
-			resolved                            = filepath ? File.expand_path(filepath) : '<inline>'
-			cached_source_by_filename[resolved] = source_code.lines.map(&:chomp)
-			@current_source_file                = resolved
+			resolved = filepath ? File.expand_path(filepath) : '<inline>'
+
+			self.class.cached_source_by_filename[resolved] = source_code.lines.map(&:chomp)
+			@current_source_file                            = resolved
 		end
 
 		def add_onclick_handler handler
@@ -239,16 +246,16 @@ module Ore
 			case scope
 			when Ore::Instance
 				if privacy == :private && stack.last != scope
-					raise Ore::Cannot_Call_Private_Instance_Member.new(expr, self)
+					raise Ore::Cannot_Call_Private_Instance_Member.new(expr)
 				end
 			when Ore::Type
 				if binding == :instance
 					# todo: This does not print the correct code location, here is a paste of the output:
 					#       Cannot_Call_Instance_Member_On_Type
 					#       :1:1
-					raise Ore::Cannot_Call_Instance_Member_On_Type.new(expr, self)
+					raise Ore::Cannot_Call_Instance_Member_On_Type.new(expr)
 				elsif privacy == :private
-					raise Ore::Cannot_Call_Private_Static_Member_On_Type.new(expr, self)
+					raise Ore::Cannot_Call_Private_Static_Member_On_Type.new(expr)
 				end
 			end
 		end
@@ -646,11 +653,11 @@ module Ore
 		def raise_missing_scope_operator_target! expr, scope_operator_value
 			case scope_operator_value
 			when './'
-				raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr, self)
+				raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr)
 			when '../'
-				raise Ore::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr, self)
+				raise Ore::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr)
 			else
-				raise Ore::Invalid_Scope_Syntax.new(expr, self)
+				raise Ore::Invalid_Scope_Syntax.new(expr)
 			end
 		end
 
@@ -694,7 +701,7 @@ module Ore
 				if found && found.has?(expr.value)
 					found[expr.value]
 				else
-					raise Ore::Undeclared_Identifier.new(expr, self)
+					raise Ore::Undeclared_Identifier.new(expr)
 				end
 			elsif scope
 				# note: Delegate ruby calls automatically
@@ -739,7 +746,7 @@ module Ore
 				elsif expr.type || expr.type_struct
 					self_declare_annotated_identifier expr
 				else
-					raise Ore::Undeclared_Identifier.new(expr, self)
+					raise Ore::Undeclared_Identifier.new(expr)
 				end
 			else
 				# When scope is nil, errors must be raised
@@ -748,7 +755,7 @@ module Ore
 				elsif expr.type || expr.type_struct
 					self_declare_annotated_identifier expr
 				else
-					raise Ore::Undeclared_Identifier.new(expr, self)
+					raise Ore::Undeclared_Identifier.new(expr)
 				end
 			end
 
@@ -815,7 +822,7 @@ module Ore
 					call.arguments = [expr.expression]
 					interp_func_body overload_func, call
 				else
-					raise Ore::Unhandled_Prefix.new(expr, self)
+					raise Ore::Unhandled_Prefix.new(expr)
 				end
 			end
 		end
@@ -852,7 +859,7 @@ module Ore
 
 			if expr.left.is_a? Ore::Subscript_Expr
 				if expr.left.expression.expressions.count > 1
-					raise Ore::Too_Many_Subscript_Expressions.new(expr.left, self)
+					raise Ore::Too_Many_Subscript_Expressions.new(expr.left)
 				end
 				# note: I'm interpreting only the first expression of left.expression.expressions as the key because the brackets are a Circumfix_Expr which uses an array to store the values.
 				receiver = interpret expr.left.receiver
@@ -895,12 +902,12 @@ module Ore
 				# It can only be assigned once, so if the declaration exists, fail. An undeclared
 				# constant falls through to the Cannot_Reassign_Undeclared_Identifier check below.
 				if assignment_scope&.has? expr.left.value
-					raise Ore::Cannot_Reassign_Constant.new(expr.left, self)
+					raise Ore::Cannot_Reassign_Constant.new(expr.left)
 				end
 			when :Identifier
 				# It can only be assigned `value` of Ore::Scope, which includes Ore::Type
 				if !right_value.is_a?(Ore::Scope)
-					raise Ore::Cannot_Assign_Incompatible_Type.new(expr, self)
+					raise Ore::Cannot_Assign_Incompatible_Type.new(expr)
 				end
 			when :identifier
 				if assignment_scope
@@ -916,12 +923,12 @@ module Ore
 
 					if signature
 						unless signature.matches? right_value
-							raise Ore::Type_Contract_Violation.new(expr, signature.to_s, describe_value_shape(right_value), self)
+							raise Ore::Type_Contract_Violation.new(expr, signature.to_s, describe_value_shape(right_value))
 						end
 					else
 						name = type_name_to_string(right_value)
 						if type && name != type
-							raise Ore::Type_Contract_Violation.new(expr, type, name, self)
+							raise Ore::Type_Contract_Violation.new(expr, type, name)
 						end
 					end
 				end
@@ -929,7 +936,7 @@ module Ore
 
 			unless assignment_scope && (assignment_scope.has?(expr.left.value) || has_type_annotation || is_class_declaration)
 				# it may not be declared using =
-				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr, self)
+				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr)
 			end
 
 			if expr.left.is_a?(Ore::Identifier_Expr) && expr.left.type
@@ -993,7 +1000,7 @@ module Ore
 					assignment_scope.declaration_in_progress
 				end
 
-				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr, self) unless still_under_construction
+				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr) unless still_under_construction
 			end
 
 			right_value = if expr.right.is_a?(Ore::Directive_Expr) && expr.right.name.value == Ore::IMPORT_FILE_DIRECTIVE
@@ -1026,18 +1033,18 @@ module Ore
 			targets = expr.left.expressions
 
 			unless targets.all? { |target| destructuring_target? target }
-				raise Ore::Invalid_Destructuring_Target.new(expr, self)
+				raise Ore::Invalid_Destructuring_Target.new(expr)
 			end
 
 			right_value = interpret expr.right
 			values      = destructurable_values right_value
 
 			unless values
-				raise Ore::Invalid_Destructuring_Source.new(expr, self)
+				raise Ore::Invalid_Destructuring_Source.new(expr)
 			end
 
 			if targets.length > values.length
-				raise Ore::Destructuring_Arity_Mismatch.new(expr, targets.length, values.length, self)
+				raise Ore::Destructuring_Arity_Mismatch.new(expr, targets.length, values.length)
 			end
 
 			targets.each_with_index do |target, i|
@@ -1063,7 +1070,7 @@ module Ore
 				expected = target.type.value
 				actual   = type_name_to_string value
 				if actual != expected
-					raise Ore::Type_Contract_Violation.new(expr, expected, actual, self)
+					raise Ore::Type_Contract_Violation.new(expr, expected, actual)
 				end
 			end
 
@@ -1088,11 +1095,11 @@ module Ore
 			property = target.right.value
 
 			unless receiver.is_a?(Ore::Scope) && receiver.has?(property)
-				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr, self)
+				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr)
 			end
 
 			if Ore.type_of_identifier(property) == :IDENTIFIER
-				raise Ore::Cannot_Reassign_Constant.new(expr, self)
+				raise Ore::Cannot_Reassign_Constant.new(expr)
 			end
 
 			check_dot_access_permissions! receiver, property, expr
@@ -1103,7 +1110,7 @@ module Ore
 			else
 				expected = receiver.type_by_identifier[property]
 				if expected && actual != expected
-					raise Ore::Type_Contract_Violation.new(expr, expected, actual, self)
+					raise Ore::Type_Contract_Violation.new(expr, expected, actual)
 				end
 			end
 
@@ -1126,7 +1133,7 @@ module Ore
 			receiver = maybe_instance interpret expr.left
 
 			unless receiver.kind_of?(Ore::Scope) || receiver.kind_of?(Ore::Range)
-				raise Ore::Invalid_Dot_Infix_Left_Operand.new(expr, self)
+				raise Ore::Invalid_Dot_Infix_Left_Operand.new(expr)
 			end
 
 			case receiver
@@ -1190,7 +1197,7 @@ module Ore
 		def interp_dot_new expr
 			receiver = interpret expr.left
 			unless receiver.is_a? Ore::Type
-				raise Ore::Cannot_Initialize_Non_Type_Identifier.new(expr.left, self)
+				raise Ore::Cannot_Initialize_Non_Type_Identifier.new(expr.left)
 			end
 
 			call           = Ore::Call_Expr.new
@@ -1203,7 +1210,7 @@ module Ore
 		# Bounds/type-checked element access for `.N`/`.N.M...` dot-index syntax on an Array/Tuple -- plain `values[index]` (Ruby's own Array#[]) silently returns nil past the end, and silently truncates a non-integer index (e.g. `.0.1` lexes as the single float 0.1, which Ruby's [] truncates to index 0) -- both looked like a legitimate result instead of a mistake.
 		def array_index_value collection, index, expr
 			unless index.is_a?(::Integer) && index.between?(-collection.values.length, collection.values.length - 1)
-				raise Ore::Invalid_Array_Index.new(expr, self)
+				raise Ore::Invalid_Array_Index.new(expr)
 			end
 			collection.values[index]
 		end
@@ -1219,7 +1226,7 @@ module Ore
 
 			when expr.right.is(Ore::Array_Index_Expr)
 				expr.right.indices_in_order.reduce(scope) do |current, index|
-					raise Ore::Invalid_Dot_Infix_Left_Operand.new(expr, self) unless current.is_a?(Ore::Array)
+					raise Ore::Invalid_Dot_Infix_Left_Operand.new(expr) unless current.is_a?(Ore::Array)
 					array_index_value current, index, expr
 				end
 
@@ -1245,8 +1252,8 @@ module Ore
 		end
 
 		def interp_dot_scope scope, expr
-			raise Ore::Invalid_Dot_Infix_Left_Operand.new(expr, self) if scope.nil?
-			raise Ore::Invalid_Dot_Infix_Right_Operand.new(expr.right, self) unless expr.right.instance_of? Ore::Identifier_Expr
+			raise Ore::Invalid_Dot_Infix_Left_Operand.new(expr) if scope.nil?
+			raise Ore::Invalid_Dot_Infix_Right_Operand.new(expr.right) unless expr.right.instance_of? Ore::Identifier_Expr
 
 			check_dot_access_permissions! scope, expr.right.value, expr
 
@@ -1354,15 +1361,15 @@ module Ore
 			case expr.operator.value
 			when '+='
 				right = interpret expr.right
-				raise Ore::Invalid_Unpack_Infix_Right_Operand.new(expr, self) unless right.is_a? Ore::Scope
+				raise Ore::Invalid_Unpack_Infix_Right_Operand.new(expr) unless right.is_a? Ore::Scope
 				stack.last.sibling_scopes << right
 			when '-='
 				right = interpret expr.right
-				raise Ore::Invalid_Unpack_Infix_Right_Operand.new(expr, self) if right && !(right.is_a? Ore::Scope)
+				raise Ore::Invalid_Unpack_Infix_Right_Operand.new(expr) if right && !(right.is_a? Ore::Scope)
 				stack.last.sibling_scopes.delete right
 				# todo: Warn or error when trying to -= a scope that isn't a sibling?
 			else
-				raise Invalid_Unpack_Infix_Operator.new(expr, self)
+				raise Invalid_Unpack_Infix_Operator.new(expr)
 			end
 		end
 
@@ -1495,7 +1502,7 @@ module Ore
 		def interp_custom_infix expr, left, right
 			overload = find_operator_overload expr.operator.value, maybe_instance(left)
 			unless overload.is_a? Ore::Func
-				raise Ore::Undeclared_Infix_Operator.new(expr, self)
+				raise Ore::Undeclared_Infix_Operator.new(expr)
 			end
 
 			call_operator_overload overload, expr, [left, right]
@@ -1594,10 +1601,10 @@ module Ore
 								dict.proxy_set it.left.value.to_sym, interpret(it.right)
 							else
 								# The left operand should be allowed to be any hashable object. It's too early in the project to consider hashing but this'll be a good reminder.
-								raise Ore::Invalid_Dictionary_Key.new(it, self)
+								raise Ore::Invalid_Dictionary_Key.new(it)
 							end
 						else
-							raise Ore::Invalid_Dictionary_Infix_Operator.new(it, self)
+							raise Ore::Invalid_Dictionary_Infix_Operator.new(it)
 						end
 					end
 					# In case I forget, #reduce requires that the injected value be returned to be passed to the next iteration.
@@ -1606,7 +1613,7 @@ module Ore
 				link_instance_to_type dict, 'Dictionary'
 				dict
 			else
-				raise Ore::Unknown_Circumfix_Grouping.new(expr, self)
+				raise Ore::Unknown_Circumfix_Grouping.new(expr)
 			end
 		end
 
@@ -1617,7 +1624,7 @@ module Ore
 				type = interpret expr.receiver.left
 
 				unless type.is_a? Ore::Type
-					raise Ore::Cannot_Initialize_Non_Type_Identifier.new(expr.receiver.left, self)
+					raise Ore::Cannot_Initialize_Non_Type_Identifier.new(expr.receiver.left)
 				end
 
 				return interp_type_call type, expr
@@ -1655,10 +1662,10 @@ module Ore
 				interp_type_call receiver, expr
 
 			when Ore::Func_Signature
-				raise Ore::Cannot_Call_Func_Signature.new expr, self
+				raise Ore::Cannot_Call_Func_Signature.new expr
 
 			else
-				raise Ore::Cannot_Initialize_Non_Type_Identifier.new expr.receiver, self
+				raise Ore::Cannot_Initialize_Non_Type_Identifier.new expr.receiver
 			end
 		end
 
@@ -1677,12 +1684,12 @@ module Ore
 
 					existing = find_structured_type_variant lookup_name, supplied
 					unless existing.is_a? Ore::Type
-						raise Ore::Undeclared_Type_Structure.new(expr, self)
+						raise Ore::Undeclared_Type_Structure.new(expr)
 					end
 				else
 					existing = find_in_stack expr.name
 					unless existing.is_a? Ore::Type
-						raise Ore::Undeclared_Identifier.new(expr, self)
+						raise Ore::Undeclared_Identifier.new(expr)
 					end
 				end
 
@@ -1964,7 +1971,7 @@ module Ore
 				interp_func_body func_new, expr
 			else
 				if expr.arguments.count > 0
-					raise Ore::Arguments_Given_But_Not_Expected.new(expr, self)
+					raise Ore::Arguments_Given_But_Not_Expected.new(expr)
 				end
 			end
 
@@ -2029,12 +2036,12 @@ module Ore
 
 					# Named arguments must come last -- once you switch to naming arguments, every argument after that has to be named too. A positional argument (bare or labeled) can never follow one.
 					if seen_named && kind != :named
-						raise Ore::Positional_Argument_After_Named.new(expr, self)
+						raise Ore::Positional_Argument_After_Named.new(expr)
 					end
 
 					if kind == :named
 						seen_named = true
-						raise Ore::Duplicate_Named_Argument.new(expr, name_or_label, self) if named_args.key? name_or_label
+						raise Ore::Duplicate_Named_Argument.new(expr, name_or_label) if named_args.key? name_or_label
 						named_args[name_or_label] = interpret value_expr
 					else
 						arg_labels << (kind == :labeled ? name_or_label : nil)
@@ -2065,7 +2072,7 @@ module Ore
 			unless named_args.empty?
 				declared_names = params.map { |param| param.name.value }
 				unknown_name   = named_args.keys.find { |name| !declared_names.include? name }
-				raise Ore::Unknown_Named_Argument.new(expr, unknown_name, self) if unknown_name
+				raise Ore::Unknown_Named_Argument.new(expr, unknown_name) if unknown_name
 			end
 
 			params.each_with_index do |param, i|
@@ -2074,7 +2081,7 @@ module Ore
 				has_named      = named_args.key? name_key
 
 				if has_positional && has_named
-					raise Ore::Argument_Given_By_Name_And_Position.new(expr, name_key, self)
+					raise Ore::Argument_Given_By_Name_And_Position.new(expr, name_key)
 				end
 
 				value = if has_named
@@ -2084,13 +2091,13 @@ module Ore
 				elsif param.default
 					interpret param.default
 				else
-					raise Ore::Missing_Argument.new(expr, self)
+					raise Ore::Missing_Argument.new(expr)
 				end
 
 				# Labels are positional, not a lookup key -- a labeled argument at position `i` must match that position's declared label (Swift/ObjC-style), never used to reorder arguments. A bare, unlabeled argument is always accepted regardless of whether the param declares a label -- labels are opt-in at the call site, not mandatory. Named arguments bypass label-checking entirely -- they're matched by declared name, not position, so there's no positional label to compare against.
 				supplied_label = arg_labels[i]
 				if !has_named && supplied_label && supplied_label != param.label&.value
-					raise Ore::Argument_Label_Mismatch.new(expr, param.label&.value, supplied_label, self)
+					raise Ore::Argument_Label_Mismatch.new(expr, param.label&.value, supplied_label)
 				end
 
 				stack.last.declare param.name.value, value
@@ -2102,7 +2109,7 @@ module Ore
 
 			body = call_scope.expressions - params
 			if call_scope.name == 'assert'
-				raise Ore::Assert_Triggered.new(expr, self) unless interpret(body.first) == true # Just to be explicit.
+				raise Ore::Assert_Triggered.new(expr) unless interpret(body.first) == true # Just to be explicit.
 			end
 
 			result = nil
@@ -2125,7 +2132,7 @@ module Ore
 			if func.func_signature.return_type
 				actual_type = type_name_to_string return_value
 				if actual_type != func.func_signature.return_type
-					raise Ore::Type_Contract_Violation.new(expr, func.func_signature.return_type, actual_type, self)
+					raise Ore::Type_Contract_Violation.new(expr, func.func_signature.return_type, actual_type)
 				end
 			end
 
@@ -2223,7 +2230,7 @@ module Ore
 				if value.nil?
 					if route.param_names.include? param.name.value
 						# todo: I haven't triggered this yet to ensure this works.
-						raise Ore::Route_Param_Expected_But_Not_Found.new(route, self)
+						raise Ore::Route_Param_Expected_But_Not_Found.new(route)
 					end
 
 					# Use default value or raise
@@ -2231,7 +2238,7 @@ module Ore
 						value = interpret param.default
 					else
 						# todo: Is this reachable?
-						raise Ore::Missing_Argument.new(expr, self)
+						raise Ore::Missing_Argument.new(expr)
 					end
 				end
 
@@ -2336,7 +2343,7 @@ module Ore
 
 			right      = maybe_instance interpret expr.identifier
 			unless right.is_a? Ore::Scope
-				raise Ore::Invalid_Composition_With_A_Non_Scope_type.new(right, self)
+				raise Ore::Invalid_Composition_With_A_Non_Scope_type.new(right)
 			end
 			curr_scope = stack.last
 
@@ -2408,7 +2415,7 @@ module Ore
 					curr_scope[key] = right[key]
 				end
 			else
-				raise Ore::Invalid_Composition_Operator.new(expr, self)
+				raise Ore::Invalid_Composition_Operator.new(expr)
 			end
 		end
 
@@ -2601,7 +2608,7 @@ module Ore
 					# name, value, type
 					stack.last.declare data[0], data[1], data[2]
 				else
-					raise Ore::Invalid_Directive_Usage.new(expr, self)
+					raise Ore::Invalid_Directive_Usage.new(expr)
 				end
 			when 'puts'
 				value = expr.expression ? interpret(expr.expression) : nil
@@ -2613,13 +2620,13 @@ module Ore
 				condition = interpret expr.expression
 				unless condition
 					message = interpret expr.message if expr.message
-					raise Ore::Assert_Triggered.new(expr, self, message)
+					raise Ore::Assert_Triggered.new(expr, message)
 				end
 			when 'ruby'
 				# The @ruby directive evaluates to the result of calling the ruby Ruby method
 				func_scope = stack.last
 				unless func_scope.is_a? Ore::Func
-					raise Ore::Invalid_Ruby_Proxy_Directive_Usage.new func_scope, self
+					raise Ore::Invalid_Ruby_Proxy_Directive_Usage.new func_scope
 				end
 
 				func_name        = func_scope.name
@@ -2642,7 +2649,7 @@ module Ore
 				end
 
 				unless target.respond_to? proxy_method
-					raise Ore::Missing_Ruby_Proxy_Declaration.new expr, self
+					raise Ore::Missing_Ruby_Proxy_Declaration.new expr
 				end
 
 				result = target.send proxy_method, *func_scope.arguments
@@ -2657,7 +2664,7 @@ module Ore
 			when 'start_server'
 				server = interpret expr.expression
 				unless server.is_a? Ore::Instance
-					raise Ore::Invalid_Start_Directive_Argument.new(expr, self)
+					raise Ore::Invalid_Start_Directive_Argument.new(expr)
 				end
 
 				server.port   = Integer(server.get(:port) || Ore::Server::DEFAULT_PORT)
@@ -2669,7 +2676,7 @@ module Ore
 			when 'stop_server'
 				server = interpret expr.expression
 				unless server.is_a? Ore::Instance
-					raise Ore::Invalid_Start_Directive_Argument.new(expr, self)
+					raise Ore::Invalid_Start_Directive_Argument.new(expr)
 				end
 
 				stop_server server
@@ -2688,7 +2695,7 @@ module Ore
 					if target
 						push_scope target
 					else
-						raise Ore::Invalid_Directive_Usage.new(expr, self)
+						raise Ore::Invalid_Directive_Usage.new(expr)
 					end
 				end
 			when 'sleep' # @sleep <seconds>
@@ -2699,13 +2706,13 @@ module Ore
 				load_file_into_scope filepath, stack.last
 				# note: #load_file_into_scope returns the output but it's ignored. Assigning the value of a @load directive executes code in #interp_infix_expr
 			else
-				raise Ore::Invalid_Directive_Usage.new(expr, self)
+				raise Ore::Invalid_Directive_Usage.new(expr)
 			end
 		end
 
 		def interp_subscript expr
 			if expr.expression.expressions.count > 1
-				raise Ore::Too_Many_Subscript_Expressions.new(expr.expression, self)
+				raise Ore::Too_Many_Subscript_Expressions.new(expr.expression)
 			end
 
 			receiver = maybe_instance interpret expr.receiver
@@ -2721,7 +2728,7 @@ module Ore
 				index = interpret expr.expression.expressions.first
 				receiver.value[index]
 			else
-				raise Ore::Invalid_Subscript_Receiver.new(expr.receiver, self)
+				raise Ore::Invalid_Subscript_Receiver.new(expr.receiver)
 			end
 		end
 
@@ -2919,7 +2926,7 @@ module Ore
 				maybe_instance nil
 
 			else
-				raise Ore::Interpret_Expr_Not_Implemented.new(expr, self)
+				raise Ore::Interpret_Expr_Not_Implemented.new(expr)
 			end
 		end
 	end
