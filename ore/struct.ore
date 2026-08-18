@@ -1,26 +1,29 @@
 @load 'ore/member.ore'
 
-# Valid members:
-# <Member, m: Member, m2: Member = Member(), m3 := Member()>
-Struct {
-	members: Array<Member> = []
+``` Valid members syntax:
 
-	names: Array<String> = []
+m := Member()
+<Member, mem1: Member, mem2 := Member(), mem3: Member = Member(), m>
+```
+
+Struct {
+	members: Array<Member>    = []
+	names: Array<String>      = []
 	type_names: Array<String> = []
-	values: Array = []
+	values: Array             = []
 
 	has? { member: Member -> Bool;
 		members.include?(member)
 	}
 
 	include? { query;
-		members.include?({;
+		members.any?({ it;
 			it.name == query or it.type == query
 		})
 	}
 
 	to_s {;
-		formatted_members := members.map({; it.to_s() }).join(', ')
+		formatted_members := members.map({it; it.to_s() }).join(', ')
 		"<`formatted_members`>"
 	}
 
@@ -31,7 +34,7 @@ Struct {
 
 	@operator === @infix { left, right;
 		pairs := left.members.zip(right.members)
-		pairs.all?({;
+		pairs.all?({it;
 			it.0 === it.1
 		})
 	}

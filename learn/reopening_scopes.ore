@@ -1,14 +1,14 @@
 ``` Introduction
 
-`@cd <Type or instance>` pushes that scope directly onto the stack, so declarations made inside it become real members of the target -- unlike sibling scopes (see learn/sibling_scopes.ore), which only add a fallback lookup place without mutating anything. `@cd ..` pops back out to whatever scope was active before.
+`@push_scope <Type or instance>` pushes that scope directly onto the stack, so declarations made inside it become real members of the target -- unlike readable/writable scopes (see learn/readable_scopes.ore, learn/writable_scopes.ore), which only add a fallback lookup place without mutating anything. `@pop_scope <same target>` pops back out to whatever scope was active before -- it asserts the target is identical to what `@push_scope` actually pushed, raising instead of popping the wrong thing.
 ```
 Button {
 	label := 'default'
 }
 
-@cd Button
+@push_scope Button
 	css_filter := 'invert()'
-@cd ..
+@pop_scope Button
 
 b := Button()
 @puts "b.css_filter: `b.css_filter`"   # b.css_filter: invert()
@@ -24,14 +24,14 @@ another_button := Button()
 
 ``` Reopening one instance changes just that instance
 
-`@cd` also accepts an instance directly, in which case the new declarations land only on that one value -- every other instance of the same type is untouched:
+`@push_scope` also accepts an instance directly, in which case the new declarations land only on that one value -- every other instance of the same type is untouched:
 ```
 c := Button()
 d := Button()
 
-@cd c
+@push_scope c
 	onclick := 'clicked'
-@cd ..
+@pop_scope c
 
 @puts "c.onclick: `c.onclick`"   # c.onclick: clicked
 # d.onclick would raise Ore::Undeclared_Identifier -- only c was reopened, not the Button type

@@ -49,18 +49,6 @@ class Error_Test < Base_Test
 		end
 	end
 
-	def test_invalid_unpack_infix_operator
-		error = assert_raises Ore::Invalid_Unpack_Infix_Operator do
-			Ore.interp 'Point { x, y, }, p := Point(), @ * p'
-		end
-	end
-
-	def test_invalid_unpack_infix_right_operand
-		error = assert_raises Ore::Invalid_Unpack_Infix_Right_Operand do
-			Ore.interp '@ += 5'
-		end
-	end
-
 	def test_missing_argument
 		# todo: Doesn't display code and location
 		assert_raises Ore::Missing_Argument do
@@ -97,7 +85,7 @@ class Error_Test < Base_Test
 
 	def test_arguments_given_but_not_expected
 		assert_raises Ore::Arguments_Given_But_Not_Expected do
-			Ore.interp 'Person { name, }, Person(5)'
+			Ore.interp 'funk {; 42 }, funk(5)'
 		end
 	end
 

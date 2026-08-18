@@ -696,9 +696,20 @@ class Parser_Test < Base_Test
 		assert_kind_of Ore::Operator_Expr, out.first
 	end
 
-	def test_unpack_prefix
-		out = Ore.parse 'funk { @with; }'
-		assert out.first.parameters.first.unpack
+	def test_writable_unpack_prefix
+		out = Ore.parse 'funk { @writable with; }'
+		assert_equal 'with', out.first.parameters.first.value
+		assert_kind_of Ore::Param_Expr, out.first.parameters.first
+		assert out.first.parameters.first.add_to_writable
+		refute out.first.parameters.first.add_to_readable
+	end
+
+	def test_readable_unpack_prefix
+		out = Ore.parse 'funk { @readable with; }'
+		assert_equal 'with', out.first.parameters.first.value
+		assert_kind_of Ore::Param_Expr, out.first.parameters.first
+		assert out.first.parameters.first.add_to_readable
+		refute out.first.parameters.first.add_to_writable
 	end
 
 	def test_for_loops

@@ -1669,7 +1669,7 @@ class Interpreter_Test < Base_Test
 		assert_equal [1, 2], out.values
 	end
 
-	def test_unpack_parameter
+	def test_readable_unpack_parameter
 		out = Ore.interp "
 		Vector {
 			x := 0
@@ -1681,7 +1681,7 @@ class Interpreter_Test < Base_Test
 			}
 		}
 
-		add { @vec;
+		add { @add_readable_scope vec;
 			x + y
 		}
 
@@ -1690,7 +1690,7 @@ class Interpreter_Test < Base_Test
 		assert_equal 7, out
 	end
 
-	def test_unpack_identifier
+	def test_readable_unpack_with_identifier
 		out = Ore.interp "
 		Point {
 			a := 0
@@ -1705,7 +1705,7 @@ class Interpreter_Test < Base_Test
 
 		calc {;
 			p := Point(10, 20)
-			@ += p
+			@add_readable_scope p
 			a + b
 		}
 
@@ -1713,7 +1713,7 @@ class Interpreter_Test < Base_Test
 		assert_equal 30, out
 	end
 
-	def test_sibling_stack_manipulation_with_unpack_operator
+	def test_readable_unpack_with_local_declarations
 		out = Ore.interp "
 		Point {
 			a := 0
@@ -1726,11 +1726,11 @@ class Interpreter_Test < Base_Test
 		}
 
 		p := Point(4, 8)
-		@ += p
+		@add_readable_scope p
 		one := a + b
-		@ -= p
+		@remove_readable_scope p
 
-		@ += Point(15, 16)
+		@add_readable_scope Point(15, 16)
 		(one, a + b)"
 		assert_equal [12, 31], out.values
 	end
@@ -1749,7 +1749,7 @@ class Interpreter_Test < Base_Test
 
 		outer {;
 			p := Point(23, 42)
-			@ += p
+			@add_readable_scope p
 
 			inner {;
 				a + b
@@ -1759,26 +1759,6 @@ class Interpreter_Test < Base_Test
 		}
 		outer()"
 		assert_equal 65, out
-	end
-
-	def test_unpack_right_operand
-		assert_raises Ore::Invalid_Unpack_Infix_Right_Operand do
-			Ore.interp "@ += 4"
-		end
-
-		assert_raises Ore::Invalid_Unpack_Infix_Right_Operand do
-			Ore.interp "@ -= 'eight'"
-		end
-	end
-
-	def test_unpack_invalid_operator
-		assert_raises Ore::Invalid_Unpack_Infix_Operator do
-			Ore.interp "@ *= 4"
-		end
-
-		assert_raises Ore::Invalid_Unpack_Infix_Operator do
-			Ore.interp "@ + 'eight'"
-		end
 	end
 
 	def test_privacy_and_binding
@@ -2194,7 +2174,7 @@ class Interpreter_Test < Base_Test
 
 		out = Ore.interp "#{shared_code}
 		p := Point(4, 8)
-		@ += p
+		@add_readable_scope p
 		(a, b)"
 		assert_equal [4, 8], out.values
 
@@ -2202,16 +2182,16 @@ class Interpreter_Test < Base_Test
 		out = Ore.interp "#{shared_code}
 		p := Point(4, 8)
 		p2 := Point(15, 16)
-		@ += p
-		@ += p2
+		@add_readable_scope p
+		@add_readable_scope p2
 		(a, b)"
 		assert_equal [15, 16], out.values
 
 		out = Ore.interp "#{shared_code}
 		p := Point(4, 8)
 		p2 := Point(15, 16)
-		@ += p
-		@ -= p2
+		@add_readable_scope p
+		@remove_readable_scope p2
 		(a, b)"
 		assert_equal [4, 8], out.values
 	end

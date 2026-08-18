@@ -941,4 +941,10 @@ class Regression_Test < Base_Test
 		CODE
 		assert_equal -1, out
 	end
+
+	def test_struct_include_uses_predicate_correctly_regression
+		# `Struct#include?` called `Array#include?` (equality-only, `it == item`) with a predicate function instead of `Array#any?` (which actually invokes it) -- always silently returned false. No test exercised it until now.
+		assert_equal true, Ore.interp("<name: String, age: Number>.include?('name')")
+		assert_equal false, Ore.interp("<name: String, age: Number>.include?('missing')")
+	end
 end

@@ -295,9 +295,17 @@ module Ore
 
 				param = Ore::Param_Expr.new
 
-				if curr? Ore::UNPACK_OPERATOR
-					eat Ore::UNPACK_OPERATOR
-					param.unpack = true
+				if curr? Ore::BUILTIN_OPERATOR
+					identifier = parse_identifier_expr
+					case identifier&.value
+					when 'add_readable_scope', 'add_readable', 'readable'
+						param.add_to_readable = true
+					when 'add_writable_scope', 'add_writable', 'writable'
+						param.add_to_writable = true
+					else
+						# could be nil here
+						raise "unsupported directive #{identifier.value} in the context of func params"
+					end
 				end
 
 				if curr?(:Identifier) || curr?(:IDENTIFIER)

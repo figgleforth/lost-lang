@@ -103,7 +103,7 @@ The AST is executed to produce output:
 
 ### Standard Library
 
-- `ore/preload.ore` - Auto-loaded into the global scope when `load_standard_library` is `true` (default)
+- `ore/preload.ore` - Auto-loaded when `load_standard_library` is `true` (default) — lands in its own `Standard_Library` scope added to Global's readable scope, not as direct Global declarations (see Readable and Writable Scopes below)
 - Standard library path defined in `Ore::STANDARD_LIBRARY_PATH`
 
 ## Type Checker
@@ -185,7 +185,7 @@ Ore uses a scope hierarchy, all defined in `src/runtime/scopes.rb`:
 - **Html_Element** - HTML element scopes (tracks `@expressions`, `@attributes`, `@types`)
 - **Return** - Return value wrapper (tracks `@value`)
 
-Each scope can have **sibling scopes** - additional scopes checked as a fallback during identifier lookup (after the scope's own declarations), used by the unpack feature.
+Each scope can also have **readable** and **writable** fallback scopes - additional scopes checked after the scope's own declarations during identifier lookup, populated via `@add_readable_scope`/`@add_writable_scope` (or the `@readable`/`@writable` shorthand in function params) - see Readable and Writable Scopes below. This is distinct from `@push_scope`/`@pop_scope` (see Reopening a Scope below), which pushes a scope directly onto the interpreter's stack rather than adding a fallback lookup place.
 
 ### Scope Operators
 
@@ -213,6 +213,25 @@ Identifiers starting with `_` are considered private by convention (e.g., `_priv
 - Using `../` outside a type context raises `Cannot_Use_Type_Scope_Operator_Outside_Type`
 
 **Dot access (`x.y`)** resolves `y` only against `x` (plus global scope) via `#interp_member_access` (`interpreter.rb`), never the ambient call stack — without this, a member missing on `x` could fall through to an unrelated same-named member still active further down the interpreter's stack (e.g. the very method currently executing) instead of raising `Undeclared_Identifier`.
+
+## Reopening a Scope
+
+`@push_scope scope` pushes a `Type` or `Instance` directly onto the interpreter's stack, so its members become reachable without a prefix, and any bare declaration made while "inside" lands on the pushed scope itself — this actually mutates the target, unlike the readable/writable scopes described below. `@pop_scope scope` pops back out; it asserts (by identity) that `scope` is exactly what `@push_scope` last pushed, raising a plain `RuntimeError` instead of silently popping the wrong thing.
+
+```ore
+Button {
+	label := 'default'
+}
+
+@push_scope Button
+	css_filter := 'invert()'   # declared directly on the Button type -- every instance sees it
+@pop_scope Button
+
+b := Button()
+b.css_filter   # 'invert()'
+```
+
+Reopening a `Type` extends every instance (past and future); reopening a specific `Instance` directly changes only that one value. Implemented as `#interp_directive`'s `'push_scope'`/`'pop_scope'` cases in `interpreter.rb`, calling `#push_scope`/`#pop_scope` on the interpreter's `stack`. This replaces the older `@cd`/`@cd ..` directive, which popped without naming (or checking) a target.
 
 ## Static Declarations
 
@@ -555,26 +574,38 @@ Point {
 p := Point(3, 4)  # Calls new
 ```
 
-## Unpack Feature
+## Readable and Writable Scopes
 
-The `@` operator allows unpacking instance members into sibling scopes for cleaner access in two ways:
+Every scope keeps two extra fallback places identifier lookup checks, after its own declarations: a **readable** scope set (read-only) and a **writable** scope set (also a fallback for writes). Neither overrides anything already reachable on the scope itself.
+
+Both are held **weakly** — adding an instance doesn't keep it alive. Once every other reference to it is gone, it becomes eligible for GC on its own, even though it's technically still "in" the readable/writable set, and it silently stops resolving through it. This matters most for long-lived scopes (Global, or anything a running `@start_server` keeps reusing across requests) — a `Set` of strong references would otherwise pin whatever gets added for the life of the process unless it's explicitly removed.
 
 ### Auto-unpack in Function Parameters
 
-`@` behaves as a prefix operator here.
+`@readable`/`@writable` are shorthand for `@add_readable_scope`/`@add_writable_scope`, meant specifically for function param lists, where the longer names get noisy fast.
 
 ```ore
-add { @vec;
-    x + y  "# Access vec.x and vec.y directly
+add { @readable vec;
+	x + y   # Access vec.x and vec.y directly
 }
 
 v := Vector(3, 4)
-add(v)  "# Returns 7
+add(v)   # Returns 7
 ```
 
-### Manual Sibling Scope Control
+`@writable` unpacks the same way, but a plain write inside the body to a name the argument already has lands on that member directly instead of declaring a fresh local:
 
-`@` behaves as a standalone left hand operand operator
+```ore
+double { @writable vec;
+	x *= 2   # writes straight through to vec.x
+	y *= 2
+	vec
+}
+```
+
+### Manual Scope Control
+
+`@add_readable_scope instance` / `@add_writable_scope instance` (medium alias: `@add_readable`/`@add_writable`) do the same unpacking by hand, in any scope, not just a function's param list. `@remove_readable_scope`/`@remove_writable_scope` (medium alias: `@remove_readable`/`@remove_writable`) take an instance back out.
 
 ```ore
 Island {
@@ -582,23 +613,25 @@ Island {
 }
 
 island := Island()
-@ += island  # Add island's members to sibling scope
-x := island_member  # Access members directly
+@add_readable_scope island   # Add island's members to the readable scope
+x := island_member           # Access members directly
 
-@ -= island  # Remove island from sibling scope
+@remove_readable_scope island   # Remove island from the readable scope
 
-thingy { @island;
+thingy { @readable island;
 	# use island.name here unpacked
 }
 ```
 
 **Implementation details:**
 
-- `@param` in function signature automatically unpacks parameter into sibling scope
-- `@ += instance` and `@ -= instance` provide manual control in any scope
-- The scope's own declarations are checked first during identifier lookup; sibling scopes are only checked as a fallback
-- Only works with Instance types; errors with `Invalid_Unpack_Infix_Right_Operand` for non-instances
-- Only `+=` and `-=` operators supported; other operators error with `Invalid_Unpack_Infix_Operator`
+- `Scope#readable_scopes`/`Scope#writable_scopes` (`scopes.rb`) are `ObjectSpace::WeakMap`s (each entry stored as its own key *and* value — `wm[x] = x` — since there's no dedicated weak-Set in the stdlib), not `Set`s, specifically so membership can't keep an instance alive on its own
+- Adding/removing goes through `Scope#add_readable_scope`/`#add_writable_scope`/`#remove_readable_scope`/`#remove_writable_scope` — the only code that touches the WeakMaps directly. `#interp_directive`'s `'add_readable_scope'`/`'add_writable_scope'`/`'remove_readable_scope'`/`'remove_writable_scope'` cases (and their aliases) call these, as does `param.add_to_readable`/`param.add_to_writable` handling in `#interp_func_body` for the `@readable`/`@writable` param shorthand
+- Lookup order, for both reads and writes, is `[self, writable, readable]`: own `@declarations` first, then `@writable_scopes` (most-recently-added first), then `@readable_scopes`. `Scope#get`/`#[]=`/`#delete` all check own declarations before falling back to `@writable_scopes` — an own declaration always wins over a same-named member reachable through a writable scope, for both reads and writes
+- "Most-recently-added first" (`test_multiple_unpacks`) means lookups walk `@writable_scopes.keys.reverse_each`/`@readable_scopes.keys.reverse_each` — `WeakMap#keys` does preserve insertion order in practice, but unlike `Hash`/`Set`, Ruby doesn't document that as a guarantee
+- Only works with `Type`/`Instance` values for the param shorthand (silently skipped for anything else); the directive forms run the target through `#maybe_instance` first (so a raw primitive like `4` becomes a real `Ore::Number`, which counts as a `Scope`) and then raise `Ore::Invalid_Scope_Directive_Argument` if it still isn't one. Because `#maybe_instance` also turns Ore `nil`/`false` into the real, Ruby-truthy `Ore::Nil.shared`/`Ore::Bool::FALSE` singletons, the `if target` truthiness guard those directives use to detect "nothing was passed" never actually fires for `nil`/`false` — they're silently accepted rather than rejected (`test_add_readable_scope_with_nil_argument_is_silently_accepted`/`..._with_false_argument_is_silently_accepted`, `scopes_test.rb`) — harmless in practice, since ordinary dot-write rules already prevent mutating those singletons regardless of what scope they end up sitting in
+- Renamed and split from the older combined `@ += instance`/`@ -= instance`/`@param` "sibling scope" mechanism, which had no readable/writable distinction and used a strong-reference `Set`
+- `ore/preload.ore` is loaded into its own `Standard_Library` scope (`Interpreter#run`), added to Global's readable scope rather than merged into Global's own declarations — so `String`/`Array`/etc. are reachable but not directly declared on Global (`global.declarations.key?('Array')` is `false`; `global.has?('Array')` is `true`, via the fallback). `global` is pushed onto `stack` *before* this load (rather than being the load's own target) so `~/` still resolves to real Global throughout the stdlib's own loading. Reassigning a built-in (`Array = Mine`) can never mutate the real one — `Scope#[]=` only redirects through `writable_scopes`, never `readable_scopes` — it just creates a new entry directly in Global's own declarations, shadowing the readable fallback for the rest of that `Global`'s lifetime. If `Mine` composes the original (`Mine | Array {}`), everything keeps working afterward, since proxy-method dispatch (`.length()` etc.) finds its owning type by looking up the type name in the stack, and `Mine` has those declarations composed in — and reassigning this way is a real, working way to extend every array literal in the rest of a program, not just a safe no-op
 
 ## Operator Overloading
 
@@ -1099,5 +1132,5 @@ The `@load` directive allows importing Ore files:
 - Expressions are cached keyed by resolved filepath
 - Comment lexemes are filtered out before parsing, matching `#run`'s top-level behavior — otherwise a trailing comment at the end of a loaded file's function/program body would silently become that body's return value
 - The target scope depends on the call form:
-  - Bare `@load 'file'` merges the file's top-level declarations directly into the current scope (`stack.last`) — this is how `ore/preload.ore` loads the stdlib, so e.g. `String` lands as a plain global identifier
+  - Bare `@load 'file'` merges the file's top-level declarations directly into the current scope (`stack.last`) — `ore/preload.ore` uses this same mechanism, but `Interpreter#run`'s bootstrap passes a fresh `Standard_Library` scope as the target (not `global` itself), so e.g. `String` lands there, not as a direct Global declaration — see Readable and Writable Scopes below
   - `some_lib := @load 'file'` instead creates a fresh `Ore::Scope` named after the left-hand identifier, loads the file into *that*, and assigns it — giving real namespace isolation, e.g. `some_lib.square(5)`

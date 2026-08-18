@@ -44,7 +44,7 @@ find_vincent { survivors;
 `return` only ever exits the function it's lexically written in -- a `{; ... }` passed as an argument (like `.each`'s callback) is a DIFFERENT function, not part of `find_vincent` at all. When it hits `return`, it returns from itself; `each` (which just called it like any other function) never finds out, and `find_vincent` falls through to its own trailing `nil`. Same reason Python's `return` inside a lambda passed to `map` doesn't return from the caller either -- a passed-in function is still its own function, no matter who calls it or from where.
 ```
 find_vincent_via_each { survivors;
-	survivors.each({;
+	survivors.each({it;
 		return it if it == 'Vincent'   # only exits this anonymous function
 	})
 	nil

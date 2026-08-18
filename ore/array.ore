@@ -113,7 +113,7 @@ Array {
 	}
 
 	to_s {;
-		pieces := values.map({; if it === String
+		pieces := values.map({it; if it === String
 			it.pretty_print()
 		else
 			"`it`"

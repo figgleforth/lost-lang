@@ -34,10 +34,13 @@ module Ore
 			if @stack.empty?
 				# todo; Global should be created by interping ore/global.ore, which is what I want to rename ore/preload.ore to
 				global = Global.new
-				if load_standard_library
-					load_file_into_scope STANDARD_LIBRARY_PATH, global
-				end
 				@stack << global
+				if load_standard_library
+					# Stdlib lives in its own Scope, reachable via Global's readable scope -- not Global's own declarations. Reassigning a builtin can't mutate it (readable_scopes never redirects writes), just shadows locally. Composing and deliberate @push_scope reopening still work. `global` is pushed before this load so `~/` still resolves to Global while the stdlib itself loads.
+					stdlib_scope = Ore::Scope.new('Standard_Library')
+					load_file_into_scope STANDARD_LIBRARY_PATH, stdlib_scope
+					global.add_readable_scope stdlib_scope
+				end
 			end
 			@lexer.source_file    = top_level_source_file
 			@lexer.input          = source_code
@@ -759,9 +762,12 @@ module Ore
 				end
 			end
 
-			# todo: Currently there is no clear rule on multiple unpacks. :double_unpack
-			if expr.unpack && value.is_a?(Ore::Instance)
-				stack.last.sibling_scopes << value
+			if value.is_a?(Ore::Type)
+				if expr.respond_to?(:add_to_readable) && expr.add_to_readable
+					stack.last.add_readable_scope value
+				elsif expr.respond_to?(:add_to_writable) && expr.add_to_writable
+					stack.last.add_writable_scope value
+				end
 			end
 
 			value
@@ -880,7 +886,7 @@ module Ore
 				return assign_dot_member expr, expr.left, interpret(expr.right)
 			end
 
-			if expr.right.is_a?(Ore::Directive_Expr) && expr.right.name.value == Ore::IMPORT_FILE_DIRECTIVE
+			if expr.right.is_a?(Ore::Directive_Expr) && expr.right.name.value == 'load'
 				filepath  = interpret expr.right.expression
 				new_scope = Ore::Scope.new expr.left.value
 				load_file_into_scope filepath, new_scope
@@ -1003,7 +1009,7 @@ module Ore
 				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr) unless still_under_construction
 			end
 
-			right_value = if expr.right.is_a?(Ore::Directive_Expr) && expr.right.name.value == Ore::IMPORT_FILE_DIRECTIVE
+			right_value = if expr.right.is_a?(Ore::Directive_Expr) && expr.right.name.value == 'load'
 				filepath  = interpret expr.right.expression
 				new_scope = Ore::Scope.new expr.left.value
 				load_file_into_scope filepath, new_scope
@@ -1182,10 +1188,15 @@ module Ore
 		end
 
 		# Interprets `expr` (the right side of `x.y`) scoped only to `receiver` and global scope, so a missing member can't fall through to an unrelated identically-named one still active further down the caller's stack (this caused a real infinite recursion before the fix).
-		def interp_member_access receiver, expr
-			saved_stack = stack
-			self.stack  = [saved_stack.first, receiver]
+		def interp_member_access receiver, expr, exclude_global_scope: false
 			begin
+				saved_stack = stack
+				self.stack  = if exclude_global_scope
+					[receiver]
+				else
+					[stack.first, receiver]
+				end
+
 				interpret expr
 			ensure
 				self.stack = saved_stack
@@ -1196,8 +1207,9 @@ module Ore
 		# @param expr [Ore::Infix_Expr]
 		def interp_dot_new expr
 			receiver = interpret expr.left
+
 			unless receiver.is_a? Ore::Type
-				raise Ore::Cannot_Initialize_Non_Type_Identifier.new(expr.left)
+				raise Ore::Cannot_Initialize_Non_Type_Identifier.new expr.left
 			end
 
 			call           = Ore::Call_Expr.new
@@ -1257,7 +1269,7 @@ module Ore
 
 			check_dot_access_permissions! scope, expr.right.value, expr
 
-			interp_member_access scope, expr.right
+			interp_member_access scope, expr.right, exclude_global_scope: true
 		end
 
 		def interp_each_loop collection, func_expr
@@ -1329,7 +1341,6 @@ module Ore
 			return interp_infix_assignment expr if operator == '='
 			return interp_infix_declaration expr if operator == ':='
 			return interp_dot_infix expr if operator == '.' || operator == '.?'
-			return interp_unpack_infix expr if expr.left.value == Ore::BUILTIN_OPERATOR
 			return interp_logical_infix expr if LOGICAL_OPERATORS.include? operator
 
 			left  = interpret expr.left
@@ -1354,24 +1365,6 @@ module Ore
 			call           = Ore::Call_Expr.new
 			call.arguments = [expr.left, expr.right]
 			interp_func_body overload, call, arg_values: values
-		end
-
-		# `@ += instance` / `@ -= instance` — sibling-scope unpack control.
-		# todo: Choose a different name for this, and a different character to use. @ is now gonna be exclusively "builtin" operator.
-		def interp_unpack_infix expr
-			case expr.operator.value
-			when '+='
-				right = interpret expr.right
-				raise Ore::Invalid_Unpack_Infix_Right_Operand.new(expr) unless right.is_a? Ore::Scope
-				stack.last.sibling_scopes << right
-			when '-='
-				right = interpret expr.right
-				raise Ore::Invalid_Unpack_Infix_Right_Operand.new(expr) if right && !(right.is_a? Ore::Scope)
-				stack.last.sibling_scopes.delete right
-				# todo: Warn or error when trying to -= a scope that isn't a sibling?
-			else
-				raise Invalid_Unpack_Infix_Operator.new(expr)
-			end
 		end
 
 		# Interprets its own operands (the one infix handler that does) because `&&`/`||` must short-circuit. A scope-level @operator overload still wins first, called with the raw expressions so the operands evaluate once, eagerly, inside the call.
@@ -1902,8 +1895,8 @@ module Ore
 		# - Interpret type.expressions so the declarations are made on the instance
 		# - Keep instance on the stack
 		# - For each Ore::Func declared on instance, set `func.enclosing_scope = instance`
-		# - Interpret instance[:new], the initializer
-		# - Delete :new from instance, no longer needed
+		# - Interpret type[:new], the initializer
+		# - Delete :new from instance, inheritd from type, not needed on the instance
 		#
 		# note: There was a bug here where I wasn't popping the instance after interpreting the type's expressions. That caused the #new function below (func_new) to not properly interpret arguments passed to it.
 		# note: We push type.enclosing_scope first (when present) so sibling types declared in the same scope can be found during instantiation.
@@ -1973,10 +1966,9 @@ module Ore
 			func_new = instance[:new]
 			if func_new
 				interp_func_body func_new, expr
-			else
-				if expr.arguments.count > 0
-					raise Ore::Arguments_Given_But_Not_Expected.new(expr)
-				end
+			elsif expr.arguments.count > 0
+				# No initializer was declared so we have nowhere to pass the arguments
+				raise Ore::Arguments_Given_But_Not_Expected.new(expr)
 			end
 
 			instance.delete :new
@@ -2074,6 +2066,10 @@ module Ore
 				raise Ore::Unknown_Named_Argument.new(expr, unknown_name) if unknown_name
 			end
 
+			if func.parameters.empty? && arg_values.any?
+				raise Ore::Arguments_Given_But_Not_Expected.new(expr)
+			end
+
 			func.parameters.each_with_index do |param, i|
 				name_key       = param.name.value
 				has_positional = i < arg_values.length
@@ -2101,9 +2097,14 @@ module Ore
 
 				stack.last.declare param.name.value, value
 
-				if param.unpack && value.is_a?(Ore::Instance)
-					call_scope.sibling_scopes << value
+				if value.is_a? Ore::Type
+					if param.respond_to?(:add_to_readable) && param.add_to_readable
+						call_scope.add_readable_scope value
+					elsif param.respond_to?(:add_to_readable) && param.add_to_writable
+						call_scope.add_writable_scope value
+					end
 				end
+
 			end
 
 			body = call_scope.expressions
@@ -2660,6 +2661,7 @@ module Ore
 				end
 
 				result
+
 			when 'start_server'
 				server = interpret expr.expression
 				unless server.is_a? Ore::Instance
@@ -2672,6 +2674,7 @@ module Ore
 
 				start_server server # sets server thread, webrick server, etc
 				server
+
 			when 'stop_server'
 				server = interpret expr.expression
 				unless server.is_a? Ore::Instance
@@ -2680,30 +2683,76 @@ module Ore
 
 				stop_server server
 				server
+
 			when 'connect'
 				database = interpret expr.expression
 				database.create_connection!
 				database
 
-			when 'cd'
-				# note: This can be destructive to the scope pushed.
-				if expr.expression&.value == '..'
-					pop_scope
+			when 'push_scope'
+				# Target must be a bare identifier naming something already bound -- a literal or constructor call builds a fresh object every evaluation, so #pop_scope's identity assert could never match it later (Scope#get returns the same object for repeat lookups of an existing Type/Instance).
+				raise Ore::Invalid_Scope_Directive_Argument.new(expr.expression) unless expr.expression.is_a?(Ore::Identifier_Expr)
+
+				if target = maybe_instance(interpret expr.expression)
+					# Only Type/Instance makes sense to reopen -- a Func is duped on every lookup (#interp_identifier's enclosing_scope rebind), so it could never satisfy the identity check either.
+					raise Ore::Invalid_Scope_Directive_Argument.new(expr.expression) unless target.is_a?(Ore::Type)
+					push_scope target
 				else
-					target = interpret expr.expression
-					if target
-						push_scope target
-					else
-						raise Ore::Invalid_Directive_Usage.new(expr)
-					end
+					raise Ore::Invalid_Directive_Usage.new(expr)
 				end
+
+			when 'pop_scope'
+				raise Ore::Invalid_Directive_Usage.new(expr) unless expr.expression
+				raise Ore::Invalid_Scope_Directive_Argument.new(expr.expression) unless expr.expression.is_a?(Ore::Identifier_Expr)
+
+				scope_to_pop = maybe_instance interpret expr.expression
+				raise Ore::Invalid_Scope_Directive_Argument.new(expr.expression) unless scope_to_pop.is_a?(Ore::Type)
+
+				# note; these are by identity, so you cannot interchange an instance of a type and a reference to its type. push 1 cannot pair with pop Number
+				Ore.assert pop_scope == scope_to_pop
+				scope_to_pop
+
+			when 'add_readable_scope', 'add_readable', 'readable'
+				target = maybe_instance interpret(expr.expression)
+				if target
+					raise Ore::Invalid_Scope_Directive_Argument.new(expr.expression) unless target.is_a?(Ore::Scope)
+					stack.last.add_readable_scope target
+				else
+					raise Ore::Invalid_Directive_Usage.new(expr)
+				end
+
+			when 'add_writable_scope', 'add_writable', 'writable'
+				target = maybe_instance interpret(expr.expression)
+				if target
+					raise Ore::Invalid_Scope_Directive_Argument.new(expr.expression) unless target.is_a?(Ore::Scope)
+					stack.last.add_writable_scope target
+				else
+					raise Ore::Invalid_Directive_Usage.new(expr)
+				end
+
+			when 'remove_readable_scope', 'remove_readable'
+				raise Ore::Invalid_Directive_Usage.new(expr) unless expr.expression
+				scope_to_remove = maybe_instance interpret expr.expression
+
+				stack.last.remove_readable_scope scope_to_remove
+				scope_to_remove
+
+			when 'remove_writable_scope', 'remove_writable'
+				raise Ore::Invalid_Directive_Usage.new(expr) unless expr.expression
+				scope_to_remove = maybe_instance interpret expr.expression
+
+				stack.last.remove_writable_scope scope_to_remove
+				scope_to_remove
+
 			when 'sleep' # @sleep <seconds>
 				sleep interpret expr.expression
-			when Ore::IMPORT_FILE_DIRECTIVE
+
+			when 'load'
+				# note: #load_file_into_scope returns the output but it's ignored. Assigning the value of a @load directive executes code in #interp_infix_expr
 				# Standalone load is interpreted into current scope by passing the scope into runtime#load_file
 				filepath = interpret expr.expression
 				load_file_into_scope filepath, stack.last
-				# note: #load_file_into_scope returns the output but it's ignored. Assigning the value of a @load directive executes code in #interp_infix_expr
+
 			else
 				raise Ore::Invalid_Directive_Usage.new(expr)
 			end

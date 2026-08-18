@@ -1,9 +1,7 @@
 module Ore
 	BUILTIN_OPERATOR            = '@'
-	UNPACK_OPERATOR             = '@' # todo: Pick a different symbol
 	NIL_INIT_POSTFIX            = ','
 	FUNCTION_DELIMITER          = ';'
-	IMPORT_FILE_DIRECTIVE       = 'load'
 	PERCENT_LITERALS            = %w(string symbol str Str STR sym Sym SYM)
 	FOR_VERBS                   = %w(each map select reject count)
 	HTML_ATTRS                  = %w(id class href)

@@ -400,12 +400,14 @@ find_first { predicate;
 }
 ```
 
-## Sibling Scopes
+## Readable and Writable Scopes
 
-Sibling scopes are checked as a fallback after the current scope during identifier lookup, making an instance's members accessible without an `instance.` prefix.
+Every scope keeps two extra fallback places identifier lookup checks, after its own declarations — a **readable** scope (read-only) and a **writable** scope (also a fallback for writes) — making an instance's members accessible without an `instance.` prefix. Lookup order is always `[self, writable, readable]`: a scope's own declarations win first, then anything reachable through a writable scope, then a readable scope.
 
-1. `@param` in a function signature adds the argument to a sibling scope, making its members directly accessible in the function body
-2. `@ += instance` and `@ -= instance` manually add and remove instances from sibling scopes in any scope
+1. `@readable`/`@writable` in a function signature adds the argument to a readable/writable scope, making its members directly accessible in the function body
+2. `@add_readable_scope instance` / `@add_writable_scope instance` manually add an instance to a readable/writable scope, in any scope; `@remove_readable_scope`/`@remove_writable_scope` take it back out
+3. Both are held *weakly* — adding an instance doesn't keep it alive. Once nothing else refers to it, it's free to be garbage collected on its own, even though it's technically still "added". You only need `@remove_readable_scope`/`@remove_writable_scope` for explicitly taking something out early, not to avoid a leak
+4. The standard library itself lives this way — `String`/`Array`/etc. are reachable through Global's own readable scope, not declared on Global directly. Reassigning a built-in name (`Array = Mine`) can never mutate the real one; it just shadows the name for the rest of your program
 
 ```ore
 Vector {
@@ -414,7 +416,7 @@ Vector {
 }
 
 # Auto-unpack in parameters
-magnitude { @vec;
+magnitude { @readable vec;
     (x ** 2 + y ** 2).sqrt()  # Access x, y directly
 }
 
@@ -423,9 +425,26 @@ v.x = 3
 v.y = 4
 magnitude(v)  # 5
 
-# Manual sibling scope control
-@ += some_instance   # Add members to scope
-@ -= some_instance   # Remove from scope
+# A writable unpack lets a plain write reach the unpacked instance's own member
+double { @writable vec;
+    x *= 2   # writes straight through to vec.x
+    y *= 2
+    vec
+}
+doubled := double(v)  # doubled.x: 6, doubled.y: 8
+
+# Manual scope control
+@add_readable_scope some_instance     # Add to readable scope
+@remove_readable_scope some_instance  # Remove from readable scope
+```
+
+```ore
+# The standard library works the same way -- Array is reachable through
+# Global's own readable scope, not declared on Global directly
+Mine | Array { extra := true }
+Array = Mine          # shadows the name -- the real Array is untouched
+[1, 2, 3].length()    # 3 -- still works, Mine composes Array
+[1].extra              # true -- and every array literal now has this too
 ```
 
 An unpacked instance stays visible to functions defined after the unpack, even nested ones:
@@ -443,10 +462,10 @@ Point {
 
 outer {;
     p := Point(23, 42)
-    @ += p
+    @add_readable_scope p
 
     inner {;
-        a + b   # a, b resolved from p via the sibling scope, despite being nested inside outer
+        a + b   # a, b resolved from p via the readable scope, despite being nested inside outer
     }
 
     inner()
@@ -454,27 +473,27 @@ outer {;
 outer()  # 65
 ```
 
-## Reopening Scopes (`@cd`)
+## Reopening Scopes (`@push_scope`/`@pop_scope`)
 
-1. `@cd <Type or instance>` pushes that scope directly onto the stack, so declarations made inside it become real members of the target
-2. `@cd ..` pops back to the previous scope
-3. Unlike sibling scopes, `@cd` mutates its target — reopening a Type extends every instance of it, reopening a specific instance changes only that one
+1. `@push_scope <Type or instance>` pushes that scope directly onto the stack, so declarations made inside it become real members of the target
+2. `@pop_scope <same target>` pops back to the previous scope — it asserts (by identity) that you're popping what you actually pushed, raising instead of popping the wrong thing
+3. Unlike readable/writable scopes, `@push_scope` mutates its target — reopening a Type extends every instance of it, reopening a specific instance changes only that one
 
 ```ore
 Button {
     label := 'default'
 }
 
-@cd Button
+@push_scope Button
     css_filter := 'invert()'   # extends the Type itself
-@cd ..
+@pop_scope Button
 
 b := Button()
 b.css_filter   # 'invert()' — every Button gets it, since Button itself was extended
 
-@cd b
+@push_scope b
     onclick := { @puts 'clicked' }   # modifies just this instance
-@cd ..
+@pop_scope b
 
 c := Button()
 c.onclick   # raises Ore::Undeclared_Identifier — only b was modified

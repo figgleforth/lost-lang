@@ -80,12 +80,6 @@ module Ore
 	class Invalid_Array_Index < Error
 	end
 
-	class Invalid_Unpack_Infix_Operator < Error
-	end
-
-	class Invalid_Unpack_Infix_Right_Operand < Error
-	end
-
 	class Unhandled_Prefix < Error
 	end
 
@@ -152,6 +146,9 @@ module Ore
 
 	class Invalid_Directive_Usage < Error
 		# todo: This is not printing anything to stdouts
+	end
+
+	class Invalid_Scope_Directive_Argument < Error
 	end
 
 	class Missing_Ruby_Proxy_Declaration < Error

@@ -47,7 +47,7 @@ module Ore
 	end
 
 	class Param_Expr < Expression
-		attr_accessor :name, :label, :type, :default, :unpack
+		attr_accessor :name, :label, :type, :default, :add_to_readable, :add_to_writable
 	end
 
 	class Func_Expr < Expression

@@ -1,6 +1,6 @@
 ``` Introduction
 
-A directive is `@word`, optionally followed by arguments. They're the interpreter's own escape hatch -- things that aren't really expressions (printing, asserting, declaring on the fly, moving the scope stack around) but still read like part of the language. This file covers `@puts`, `@assert`, `@declare`, `@cd`, and `@sleep`. A few other directives already have their own walkthrough, since they only make sense alongside the feature they belong to, like `@load` (`load_directive.ore`), `@start_server`/`@stop_server` (`web_server.ore`), `@connect` (`database.ore`), and `@ +=`/`@ -=`/`@param` unpacking (`sibling_scopes.ore`).
+A directive is `@word`, optionally followed by arguments. They're the interpreter's own escape hatch -- things that aren't really expressions (printing, asserting, declaring on the fly, moving the scope stack around) but still read like part of the language. This file covers `@puts`, `@assert`, `@declare`, `@push_scope`/`@pop_scope`, and `@sleep`. A few other directives already have their own walkthrough, since they only make sense alongside the feature they belong to, like `@load` (`load_directive.ore`), `@start_server`/`@stop_server` (`web_server.ore`), `@connect` (`database.ore`), and `@add_readable_scope`/`@readable` (`readable_scopes.ore`), `@add_writable_scope`/`@writable` (`writable_scopes.ore`).
 ```
 @puts 'a directive is just @word plus one or more arguments'
 
@@ -46,18 +46,20 @@ supplies := <water: Number = 40, wood := 12>
 @puts "water: `water`, wood: `wood`"   # water: 40, wood: 12
 
 
-``` @cd
+``` @push_scope / @pop_scope
 
-`@cd scope` pushes a scope onto the interpreter's stack, so its members become reachable without a prefix -- similar in spirit to `@ += instance` (see `sibling_scopes.ore`), but `@cd` replaces the current scope outright instead of adding a fallback, and any bare declaration made while "inside" lands on the pushed scope itself. `@cd ..` pops back.
+`@push_scope scope` pushes a scope directly onto the interpreter's stack, so its members become reachable without a prefix, and any bare declaration made while "inside" lands on the pushed scope itself. `@pop_scope scope` pops back out -- unlike the old `@cd ..`, you name the scope you're popping, and `@pop_scope` asserts it's identical to whatever `@push_scope` actually pushed; naming the wrong one raises instead of silently popping something else.
 ```
 Camp {
 	survivors := 12
 }
+Other { }
 
 camp := Camp()
-@cd camp
+@push_scope camp
+# @pop_scope Other  -- would raise: Other was never pushed, camp was
 survivors += 3   # no camp. prefix needed -- camp IS the current scope now
-@cd ..
+@pop_scope camp
 @puts "camp.survivors: `camp.survivors`"   # camp.survivors: 15
 
 

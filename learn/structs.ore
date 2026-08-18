@@ -5,7 +5,7 @@ Sometimes you want to attach a small bundle of typed data to something without d
 This file is about Structs as standalone values. Attaching `<...>` to a Type name instead (to create independent variants of that type) is a related but separate feature -- see learn/structured_types.ore for that.
 ```
 pair := <String, Number>
-type_names := pair.types.values.map({;
+type_names := pair.types.values.map({it;
 	it.name
 }).join(', ')
 @puts "pair's member types: `type_names`"   # pair's member types: String, Number
