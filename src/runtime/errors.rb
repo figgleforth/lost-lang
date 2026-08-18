@@ -65,6 +65,10 @@ module Ore
 	class Cannot_Initialize_Non_Type_Identifier < Error
 	end
 
+	# Distinct from Cannot_Initialize_Non_Type_Identifier -- this is calling () on an ordinary value that just isn't callable, not X.new/X() on a non-Type.
+	class Cannot_Call_Value < Error
+	end
+
 	class Invalid_Dictionary_Key < Error
 	end
 

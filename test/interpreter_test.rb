@@ -2468,6 +2468,26 @@ class Interpreter_Test < Base_Test
 		assert_equal 23, out
 	end
 
+	def test_string_interpolation_can_see_custom_operators_declared_elsewhere_in_the_program
+		# Same operators/functions as the test above, interpolated instead -- used to only evaluate to "4" (stopped at the first token it didn't recognize), since interp_string re-parsed the substring in total isolation from the rest of the program's @operator registrations.
+		out = Ore.interp <<~CODE
+		    @operator -> @infix 300 { left, right;
+		    	right(left)
+		    }
+
+		    double { n;
+		    	n * 2
+		    }
+
+		    add_fifteen { n;
+		    	n + 15
+		    }
+
+		    "`4 -> double -> add_fifteen`"
+		CODE
+		assert_equal '23', out
+	end
+
 	def test_dictionary_in_for_loops
 		out = Ore.interp <<~CODE
 		    dict := {

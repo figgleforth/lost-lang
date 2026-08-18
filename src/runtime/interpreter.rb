@@ -799,9 +799,10 @@ module Ore
 				sub_exprs = result.scan(/(?<!\\)`(.*?)(?<!\\)`/).flatten
 
 				sub_exprs.each do |sub|
-					expression = Ore.parse sub
-					value      = interpret expression.first
-					result     = result.gsub "`#{sub}`", "#{stringify_for_display(value)}"
+					# Reuses the interpreter's own @parser (not a fresh Ore.parse) so it still knows about @operator declarations registered elsewhere in the program -- #input= resets the cursor but not @custom_infix/etc.
+					parser.input = Lexer.new(sub).output
+					value        = interpret parser.output.first
+					result       = result.gsub "`#{sub}`", "#{stringify_for_display(value)}"
 				end
 				result.gsub('\\', '') # Remove any escapes from the resulting string? Is this okay? I don't know...
 			end
@@ -1662,7 +1663,7 @@ module Ore
 				raise Ore::Cannot_Call_Func_Signature.new expr
 
 			else
-				raise Ore::Cannot_Initialize_Non_Type_Identifier.new expr.receiver
+				raise Ore::Cannot_Call_Value.new expr.receiver
 			end
 		end
 

@@ -31,9 +31,16 @@ class Error_Test < Base_Test
 		end
 	end
 
-	def test_cannot_initialize_non_type_identifier
-		assert_raises Ore::Cannot_Initialize_Non_Type_Identifier do
+	def test_cannot_call_value
+		# Was Cannot_Initialize_Non_Type_Identifier -- misleading, since nothing here is a construction attempt, just a plain value that isn't callable.
+		assert_raises Ore::Cannot_Call_Value do
 			Ore.interp 'x := 5, x()'
+		end
+	end
+
+	def test_cannot_call_value_when_a_dictionary_field_shadows_a_builtin_method_name
+		assert_raises Ore::Cannot_Call_Value do
+			Ore.interp 'dict := {keys: 4}, dict.keys()'
 		end
 	end
 
