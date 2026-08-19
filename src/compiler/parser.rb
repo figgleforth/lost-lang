@@ -446,6 +446,7 @@ module Ore
 			Ore.assert is_type || is_const, "Type names can only be Capitalized or UPPERCASE" # todo; proper error
 
 			it.structure = parse_struct # returns nil if none was found
+			it.structure.name = it.name if it.structure
 
 			# When no body and no composition chain follow e.g.
 			#
@@ -537,6 +538,7 @@ module Ore
 				type_ref           = Ore::Type_Expr.new
 				type_ref.name      = ident.value
 				type_ref.structure = parse_struct
+				type_ref.structure.name = type_ref.name if type_ref.structure
 				copy_location type_ref, ident
 				ident = type_ref
 			end
@@ -573,6 +575,7 @@ module Ore
 				eat ':'
 				expr.type        = eat(:Identifier)
 				expr.type_struct = parse_struct # returns nil if none was found
+				expr.type_struct.name = expr.type.value if expr.type_struct
 			elsif curr?(':', '<')
 				eat ':'
 				expr.type_struct = parse_struct # bare struct annotation, e.g. `thing: <String, Number>`

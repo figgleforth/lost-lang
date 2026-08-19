@@ -17,7 +17,7 @@ module Ore
 			attr_accessor :cached_source_by_filename, :cached_expressions_by_filepath, :type_checked_filepaths
 		end
 
-		attr_accessor :input, :lexer, :parser, :load_standard_library, :stack, :route_functions_by_route_name, :servers, :dom_onclick_function_handlers, :dom_input_elements, :last_output, :current_source_file, :stdlib_scope
+		attr_accessor :input, :lexer, :parser, :load_standard_library, :stack, :route_functions_by_route_name, :servers, :dom_onclick_function_handlers, :dom_input_elements, :last_output, :current_source_file, :stdlib_scope, :declarations, :global
 
 		def initialize
 			@dom_input_elements            = {} # {element_hash: Ore::Instance} for inputs/textareas
@@ -29,8 +29,10 @@ module Ore
 			@stack                 = [] # [Ore::Scope]
 			@servers               = [] # [Ore::Server]
 
-			@lexer  = Lexer.new
-			@parser = Parser.new
+			@lexer               = Lexer.new
+			@parser              = Parser.new
+			@declarations        = {} # {::String => Ore::Declaration}, see Forward_Declarator
+			@forced_declarations = Set.new # identity-tracked Ore::Expression, see #resolve_forward_declaration
 		end
 
 		def run source_code
@@ -38,7 +40,8 @@ module Ore
 
 			if @stack.empty?
 				# todo; Global should be created by interping ore/global.ore, which is what I want to rename ore/preload.ore to
-				global = Global.new
+				global  = Global.new
+				@global = global # kept separately from @stack -- #interp_member_access temporarily swaps @stack out for dot-access resolution, so `stack.first` isn't reliably Global the way this needs
 				@stack << global
 				if load_standard_library
 					# Stdlib lives in its own Scope, reachable via Global's readable scope -- not Global's own declarations. Reassigning a builtin can't mutate it (readable_scopes never redirects writes), just shadows locally. Composing and deliberate @push_scope reopening still work. `global` is pushed before this load so `~/` still resolves to Global while the stdlib itself loads.
@@ -63,15 +66,58 @@ module Ore
 			end
 		end
 
-		def output skip_type_check: false
+		def output skip_type_check: false, skip_forward_declarations: false
 			unless skip_type_check
 				checker = Type_Checker.new input
 				raise checker.output if checker.output
 			end
 
-			input.each.inject(nil) do |_, expr|
-				interpret expr
+			unless skip_forward_declarations
+				declarator    = Forward_Declarator.new input
+				@declarations = declarator.output
 			end
+
+			input.each.inject(nil) do |result, expr|
+				# already ran ahead of turn via #resolve_forward_declaration -- don't run it twice. Keeping the running `result` (not a bare `next`, which resets it to nil) matters when the skipped statement is the *last* one -- the program's own reported result would otherwise silently become nil instead of the true last value.
+				if @forced_declarations.include? expr
+					result
+				else
+					interpret expr
+				end
+			end
+		end
+
+		# Only these expression kinds are eligible to be forward-referenced -- kept here rather than constants.rb since it references Expression subclasses (constants.rb loads before expressions.rb does)
+		FORWARD_DECLARABLE_EXPRESSIONS = [Func_Expr, Type_Expr, Route_Expr, Struct_Expr, Func_Signature_Expr, Operator_Expr, Operator_Overload_Expr].freeze
+
+		def hoistable_declaration_expr? expr
+			return true if FORWARD_DECLARABLE_EXPRESSIONS.any? { |type| expr.is_a? type }
+			return false unless expr.is_a?(Infix_Expr) && %w(:= =).include?(expr.operator.value)
+			return true if hoistable_declaration_expr? expr.right
+
+			# `Ident := @load 'file'` / `IDENT := @load 'file'` -- a named load builds a scope of its own, same declarative category as `This := That {}` above. Only a Capitalized/UPPERCASE left-hand name opts in, matching Ore's own casing convention for a namespace-like binding -- a lowercase `mod := @load 'file'` stays a plain variable, not hoisted
+			expr.right.is_a?(Directive_Expr) && expr.right.name.value == 'load' &&
+				%i(Identifier IDENTIFIER).include?(Ore.type_of_identifier(expr.left.value))
+		end
+
+		# A bare `@load 'file'` (no assignment) merges directly into the current scope -- always hoistable, no casing concept applies since there's no left-hand name to check. Kept separate from #hoistable_declaration_expr?'s recursive `:=`/`=` unwrap so this can't accidentally leak permissiveness into the *named* load case, which is deliberately restricted to a Capitalized/UPPERCASE left-hand name.
+		def bare_load_directive_expr? expr
+			expr.is_a?(Directive_Expr) && expr.name.value == 'load'
+		end
+
+		# @param [::String] name
+		# @return [::Boolean] whether a declaration was found and forced
+		def resolve_forward_declaration name
+			decl = @declarations[name]
+			return false unless decl&.expr
+			return false unless hoistable_declaration_expr?(decl.expr) || bare_load_directive_expr?(decl.expr)
+			return false if @forced_declarations.include? decl.expr
+
+			@forced_declarations << decl.expr
+			push_then_pop global do
+				interpret decl.expr
+			end
+			true
 		end
 
 		def loop_servers
@@ -123,10 +169,12 @@ module Ore
 			end
 
 			saved                = @input
+			saved_declarations   = @declarations
 			@input               = self.class.cached_expressions_by_filepath[resolved_path]
 			already_type_checked = self.class.type_checked_filepaths[resolved_path]
 			result               = output skip_type_check: already_type_checked # note: Okay to call #output directly here
 			@input               = saved
+			@declarations        = saved_declarations
 
 			self.class.type_checked_filepaths[resolved_path] = true
 
@@ -386,9 +434,7 @@ module Ore
 				ready << e
 			end
 
-			# Thread.new returns before the new thread has run at all, so reading .status
-			# right after this would race WEBrick's own startup and almost always see :Stop.
-			# Block until StartCallback actually fires (or the thread dies trying) instead.
+			# Thread.new returns before the new thread has run at all, so reading .status right after this would race WEBrick's own startup and almost always see :Stop. Block until StartCallback actually fires (or the thread dies trying) instead.
 			result = ready.pop
 			raise result if result.is_a? Exception
 
@@ -682,10 +728,7 @@ module Ore
 			end
 		end
 
-		# A function found via #interp_identifier needs to be duplicated and rebound to the resolving
-		# scope before use, so composed types (e.g. `Thing | Record`) call functions against the right
-		# receiver instead of whatever scope they happened to be declared on. Non-Func values pass
-		# through unchanged.
+		# A function found via #interp_identifier needs to be duplicated and rebound to the resolving scope before use, so composed types (e.g. `Thing | Record`) call functions against the right receiver instead of whatever scope they happened to be declared on. Non-Func values pass through unchanged.
 		def rebind_func_to_scope value, scope
 			return value unless value.is_a? Ore::Func
 			func                 = value.dup
@@ -705,10 +748,10 @@ module Ore
 			when 'nil'
 				return nil
 			when 'true'
-				# todo, return Ore::Bool.truthy
+				# todo; return Ore::Bool.truthy
 				return true
 			when 'false'
-				# todo, return Ore::Bool.falsy
+				# todo; return Ore::Bool.falsy
 				return false
 			else
 				scope_for_identifier expr
@@ -733,12 +776,7 @@ module Ore
 					return rebind_func_to_scope(result, scope) if result.is_a? Ore::Func
 					result
 				elsif scope.respond_to? proxy_method
-					# Prefer the instance's own owning Type first -- for a structured variant
-					# (e.g. `Array<Web_Server>`) this is a distinct Type from the plain
-					# global one, and holds the actual override. Only fall back to a blind
-					# by-name search of the stack (which only ever finds the plain global
-					# type, e.g. plain "Array") when the instance isn't linked to a Type
-					# that declares this method itself.
+					# Prefer the instance's own owning Type first -- for a structured variant (e.g. `Array<Web_Server>`) this is a distinct Type from the plain global one, and holds the actual override. Only fall back to a blind by-name search of the stack (which only ever finds the plain global type, e.g. plain "Array") when the instance isn't linked to a Type that declares this method itself.
 					type_def       = if scope.enclosing_scope.is_a?(Ore::Type) && scope.enclosing_scope.has?(expr.value)
 						scope.enclosing_scope
 					else
@@ -775,6 +813,9 @@ module Ore
 					raise_missing_scope_operator_target! expr, expr.scope_operator.value
 				elsif expr.type || expr.type_struct
 					self_declare_annotated_identifier expr
+				elsif stack.any? { |s| s.equal? global } && resolve_forward_declaration(expr.value) && global.has?(expr.value)
+					# not reached yet in file order, but declared somewhere later on -- forced early. Identity check (not #include?, which is `==` and can hit an Ore type's own overload -- e.g. Ore::Array#== assumes its operand also has .values). Global being absent from the stack means we're deliberately excluding it (a plain `x.y` dot access, #interp_dot_scope's exclude_global_scope: true) -- a member missing on x should stay missing, not quietly resolve to an unrelated global
+					global[expr.value]
 				else
 					raise Ore::Undeclared_Identifier.new(expr)
 				end
@@ -872,8 +913,7 @@ module Ore
 
 				if (current_scope.is_a?(Ore::Instance) || current_scope.is_a?(Ore::Type)) &&
 				   assignment_scope != current_scope && !current_scope.has?(expr.left.value)
-					# The identifier exists in some enclosing scope but not in the current
-					# Instance/Type. Treat this as a new declaration on the current scope.
+					# The identifier exists in some enclosing scope but not in the current Instance/Type. Treat this as a new declaration on the current scope.
 					assignment_scope = current_scope
 				end
 			end
@@ -914,18 +954,14 @@ module Ore
 				right_value = interpret expr.right
 			end
 
-			# A Class-styled identifier (`My_Type = Other {}`) assigning a Scope value is itself a
-			# declaration, same reasoning as has_type_annotation above: `=` onto a fresh
-			# Class-styled name is how types get named/aliased, so it's allowed to introduce the
-			# identifier rather than requiring `:=` first.
+			# A Class-styled identifier (`My_Type = Other {}`) assigning a Scope value is itself a declaration, same reasoning as has_type_annotation above: `=` onto a fresh Class-styled name is how types get named/aliased, so it's allowed to introduce the identifier rather than requiring `:=` first.
 			is_class_declaration = Ore.type_of_identifier(expr.left.value) == :Identifier && right_value.is_a?(Ore::Scope)
 			assignment_scope     ||= stack.last if is_class_declaration
 
 			# Before the actual assignment, the identifier is checked for specific behavior errors based on its expression type (class, constant, variable/function)
 			case Ore.type_of_identifier expr.left.value
 			when :IDENTIFIER
-				# It can only be assigned once, so if the declaration exists, fail. An undeclared
-				# constant falls through to the Cannot_Reassign_Undeclared_Identifier check below.
+				# It can only be assigned once, so if the declaration exists, fail. An undeclared constant falls through to the Cannot_Reassign_Undeclared_Identifier check below.
 				if assignment_scope&.has? expr.left.value
 					raise Ore::Cannot_Reassign_Constant.new(expr.left)
 				end
@@ -980,44 +1016,27 @@ module Ore
 		# todo; Types may be composed of multiple types, what happens in that case?
 		# @param expr [Ore::Infix_Expr]
 		def interp_infix_declaration expr
-			# `(a, b) := <tuple-or-struct-valued expr>` -- destructuring, handled entirely separately
-			# from the single-identifier case below (no scope operators, no type-by-identifier
-			# locking against a bare `.value`, none of it applies to a target list).
+			# `(a, b) := <tuple-or-struct-valued expr>` -- destructuring, handled entirely separately from the single-identifier case below (no scope operators, no type-by-identifier locking against a bare `.value`, none of it applies to a target list).
 			if expr.left.is_a?(Ore::Circumfix_Expr) && expr.left.grouping == '()'
 				return interp_destructuring_declaration expr
 			end
 
-			# `thing.member := value` -- an external dot target, categorically different from
-			# `./member := value` (a scope *operator*, parsed onto the Identifier_Expr itself, handled
-			# by the has_scope_operator branch below -- this is a real Infix_Expr with `.` as the
-			# receiver-and-member access operator). Strict: `.` never creates a member regardless of
-			# `=` vs `:=` -- #assign_dot_member raises Cannot_Assign_Undeclared_Identifier if `member`
-			# isn't already declared on whatever `thing` resolves to. For an existing member, `:=`
-			# still means something distinct from `=` here: it re-infers/overwrites the recorded type
-			# rather than checking the new value against it.
 			if expr.left.is_a?(Ore::Infix_Expr) && expr.left.operator&.value == '.'
 				return assign_dot_member expr, expr.left, interpret(expr.right), declare: true
 			end
 
-			# Only scope-operator forms (`../x`, `./x`, `.x`) target a specific scope. A plain `:=`
-			# always declares on the current scope, shadowing any identically-named identifier in an
-			# enclosing scope rather than re-declaring on it.
+			# Only scope-operator forms (`../x`, `./x`, `.x`) target a specific scope. A plain `:=` always declares on the current scope, shadowing any identically-named identifier in an enclosing scope rather than re-declaring on it.
 			has_scope_operator = expr.left.is_a?(Ore::Identifier_Expr) && expr.left.scope_operator
 			assignment_scope   = scope_for_identifier expr.left if has_scope_operator
 
-			# If using a scope operator but the scope doesn't exist, raise an error
-			# (mirrors interp_infix_assignment).
+			# If using a scope operator but the scope doesn't exist, raise an error (mirrors interp_infix_assignment).
 			if has_scope_operator && assignment_scope.nil?
 				raise_missing_scope_operator_target! expr, expr.left.scope_operator.value
 			end
 
 			assignment_scope ||= stack.last
 
-			# note; `./`, `../` self-declaring a member that doesn't exist yet is valid but only while the
-			# type/instance is still under construction: for an Instance that's the class body's own
-			# declarations or new{;} itself (has?('new')); for a bare Type (a `../` static) it's the
-			# type's own body walk (#finish_type_declaration, tracked via declaration_in_progress) --
-			# calling a static method later and self-declaring a brand-new static from inside it isn't allowed.
+			# note; `./`, `../` self-declaring a member that doesn't exist yet is valid but only while the type/instance is still under construction: for an Instance that's the class body's own declarations or new{;} itself (has?('new')); for a bare Type (a `../` static) it's the type's own body walk (#finish_type_declaration, tracked via declaration_in_progress) -- calling a static method later and self-declaring a brand-new static from inside it isn't allowed.
 			if has_scope_operator && assignment_scope.is_a?(Ore::Type) && !assignment_scope.has?(expr.left.value)
 				still_under_construction = if assignment_scope.is_a?(Ore::Instance)
 					assignment_scope.has? 'new' # note; new{;} is stripped from an instance
@@ -1104,17 +1123,7 @@ module Ore
 			track_static_declaration assignment_scope, target
 		end
 
-		# Shared by every way of writing through `.` onto an already-interpreted receiver: plain
-		# `thing.member = value` / `thing.member := value`, and destructuring dot-targets
-		# (`(thing.member, ...) := ...`). Strict: `.` never creates a member, no matter which of these
-		# forms is used -- only `./`/`../` self-declaration, from inside a type's own body (its own
-		# `new{;}` or any other method), gets to do that (handled entirely separately, by the
-		# existing scope-operator path in #interp_infix_declaration/#interp_infix_assignment). So the
-		# member must already be declared on the receiver, and must not be a constant (an UPPERCASE
-		# member name). `declare: true` (the `:=` forms) re-infers/overwrites the member's recorded
-		# type instead of checking it, same as re-running `:=` on a plain identifier does; `declare:
-		# false` (the `=` forms, including destructuring targets) checks the extracted/assigned value
-		# against any previously recorded type, raising Type_Contract_Violation on mismatch.
+		# Shared by every way of writing through `.` onto an already-interpreted receiver.
 		def assign_dot_member expr, target, value, declare: false
 			receiver = interpret target.left
 			property = target.right.value
@@ -1181,12 +1190,6 @@ module Ore
 			nil
 		end
 
-		# `@puts` used to hand its value straight to Ruby's own `puts`, which calls Ruby's `#to_s` for any Scope (Array, Dictionary, custom types, all of them).
-		# `show_quotes:` calls String's `pretty_print{;}` instead of `to_s{;}` for a String value --
-		# only @puts opts into this (see #interp_directive's 'puts' case). Never the default: to_s is
-		# used pervasively as a plain string-building primitive via backtick interpolation
-		# (Array/Dictionary/Tuple's own to_s do exactly this internally), so preferring quotes here
-		# generally would recursively re-quote every nested interpolation of a String value.
 		def stringify_for_display value, show_quotes: false
 			value = maybe_instance value
 			return value unless value.is_a? Ore::Scope
@@ -1309,11 +1312,7 @@ module Ore
 			# attr_accessor :operator, :left, :right
 			current_scope = stack.last
 
-			# Same shadowing fix as interp_infix_assignment: inside an Instance/Type body, a plain
-			# identifier's nil-init must declare on the current Instance/Type even if an enclosing
-			# scope (e.g. the Type, whose body already ran once at definition time) already has an
-			# identically-named identifier. Otherwise re-running `thing,` per-instance in
-			# interp_type_call finds the Type's stale copy and never declares it on the instance.
+			# Same shadowing fix as interp_infix_assignment: inside an Instance/Type body, a plain identifier's nil-init must declare on the current Instance/Type even if an enclosing scope (e.g. the Type, whose body already ran once at definition time) already has an identically-named identifier. Otherwise re-running `thing,` per-instance in interp_type_call finds the Type's stale copy and never declares it on the instance.
 			if (current_scope.is_a?(Ore::Instance) || current_scope.is_a?(Ore::Type)) && !current_scope.has?(expr.left.value)
 				current_scope.declare expr.left.value, interpret(expr.right)
 				track_static_declaration current_scope, expr.left
@@ -1610,10 +1609,7 @@ module Ore
 						case it.operator.value
 						when ':', '='
 							if it.left.is_a?(Ore::Identifier_Expr) || it.left.is_a?(Ore::Symbol_Expr) || it.left.is_a?(Ore::String_Expr)
-								# note; Deliberately NOT wrap_string_literal_value here, unlike Array/Tuple literals -- Dictionary#hash is
-								# handed straight to Ruby-level consumers as a raw Hash (Sequel queries in table.rb chief among them), so
-								# wrapping a value into Ore::String here broke every DB call passing string attributes. #to_s below just
-								# always double-quotes String values instead of matching the original literal's quote char.
+								# note; Deliberately NOT wrap_string_literal_value here, unlike Array/Tuple literals -- Dictionary#hash is handed straight to Ruby-level consumers as a raw Hash (Sequel queries in table.rb chief among them), so wrapping a value into Ore::String here broke every DB call passing string attributes. #to_s below just always double-quotes String values instead of matching the original literal's quote char.
 								dict.proxy_set it.left.value.to_sym, interpret(it.right)
 							else
 								# The left operand should be allowed to be any hashable object. It's too early in the project to consider hashing but this'll be a good reminder.
@@ -1646,9 +1642,7 @@ module Ore
 				return interp_type_call type, expr
 			end
 
-			# A bare `` `expr`() `` written and called in the same place -- always immediate, in
-			# whatever scope it's written in. No Ore::Statement is ever built here, so #invoke_statement
-			# (used below, once one *has* been built and stored) doesn't apply.
+			# A bare `` `expr`() `` written and called in the same place -- always immediate, in whatever scope it's written in. No Ore::Statement is ever built here, so #invoke_statement (used below, once one *has* been built and stored) doesn't apply.
 			if expr.receiver.is_a? Ore::Statement_Expr
 				return interpret expr.receiver.expression
 			end
@@ -1874,11 +1868,7 @@ module Ore
 				candidates.find { |variant| variant.structure_declaration.satisfied_by_candidates? candidate_lists }
 		end
 
-		# Structured variants declared under `base_name`, searched the same way #find_in_stack resolves a
-		# plain identifier -- innermost to outermost, stopping at the first scope that has any (lexical
-		# shadowing, not merging). `current_scope_only` restricts the search to `stack.last` alone, for
-		# declaration-time collision checks -- a nested structured declaration should only ever collide with
-		# another declared in that exact scope, never one from an enclosing one.
+		# Structured variants declared under `base_name`, searched the same way #find_in_stack resolves a plain identifier -- innermost to outermost, stopping at the first scope that has any (lexical shadowing, not merging). `current_scope_only` restricts the search to `stack.last` alone, for declaration-time collision checks -- a nested structured declaration should only ever collide with another declared in that exact scope, never one from an enclosing one.
 		def structured_variants_for base_name, current_scope_only: false
 			scopes = current_scope_only ? [stack.last] : stack.reverse_each
 			scopes.each do |scope|
@@ -1888,10 +1878,7 @@ module Ore
 			[]
 		end
 
-		# Searches the full scope stack (innermost to outermost) for `key`, the same way a bare identifier resolves via #scope_for_identifier -- checking only `stack.last` would miss a type declared in an outer/global scope while evaluating from inside a nested context (e.g. a type's own declaration body during composition). This returns an Ore type.
-		# `excluding:` skips scopes of that class -- used by #find_operator_overload to keep looking past
-		# a currently-executing Type/Instance body, since merely being on the stack doesn't mean the
-		# *current* operands belong to it (Instance < Type, so excluding: Ore::Type skips both).
+		# Searches the full scope stack (innermost to outermost) for `key`, the same way a bare identifier resolves via #scope_for_identifier -- checking only `stack.last` would miss a type declared in an outer/global scope while evaluating from inside a nested context (e.g. a type's own declaration body during composition). This returns an Ore type. `excluding:` skips scopes of that class -- used by #find_operator_overload to keep looking past a currently-executing Type/Instance body, since merely being on the stack doesn't mean the *current* operands belong to it (Instance < Type, so excluding: Ore::Type skips both).
 		def find_in_stack key, excluding: nil
 			stack.reverse_each do |scope|
 				next if excluding && scope.is_a?(excluding)

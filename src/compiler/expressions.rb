@@ -84,6 +84,7 @@ module Ore
 
 	class Struct_Expr < Expression
 		attr_accessor :types, :names # names[i] is nil for unnamed members, e.g. `Type<String>` but has value for named members, e.g. `Type<str: String>`
+		attr_accessor :name # the type name this struct was parsed after, e.g. `Named` in `Named<String, Number>` -- nil for an anonymous struct (`<String, Number>` with nothing preceding it)
 
 		def to_s
 			::String.new("<").tap do |str|

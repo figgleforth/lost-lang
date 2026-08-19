@@ -115,6 +115,77 @@ for 1...15
 end
 ```
 
+## Forward Declarations
+
+Calling a function, or referencing a type, works even before its own declaration is reached in the file — including mutual recursion between two functions declared in either order.
+
+```ore
+result := main()   # `main` hasn't been declared yet, but this still works
+
+main {; helper() }
+helper {; 42 }
+
+result  # 42
+```
+
+```ore
+is_even { n;
+    if n == 0
+        true
+    else
+        is_odd(n - 1)
+    end
+}
+
+is_odd { n;
+    if n == 0
+        false
+    else
+        is_even(n - 1)
+    end
+}
+
+is_even(4)  # true
+```
+
+A class-styled alias (`This := That {}`) hoists the same way, since it's declaring a type just spelled through an assignment:
+
+```ore
+p := This()
+
+This := That {}
+That { greet {; 'hi' } }
+
+p.greet()  # 'hi'
+```
+
+A bare `@load` hoists too, so imports can live at the bottom of the file instead of the top:
+
+```ore
+sign := Div([P('hi')])
+sign.to_s()  # '<div><p>hi</p></div>'
+
+@load 'ore/html.ore'
+```
+
+`Ident := @load 'file'` / `IDENT := @load 'file'` work the same way — only a Capitalized or UPPERCASE left-hand name opts in, since that's what marks it as a namespace rather than an ordinary variable:
+
+```ore
+sign := Html_Lib.Div([Html_Lib.P('hi')])
+sign.to_s()  # '<div><p>hi</p></div>'
+
+Html_Lib := @load 'ore/html.ore'
+
+# html_lib := @load 'ore/html.ore'   -- lowercase stays a plain variable, not hoisted
+```
+
+Plain variable assignments are never hoisted this way — reading one before its own line has actually run still raises `Undeclared_Identifier`, same as any language with top-to-bottom execution:
+
+```ore
+@puts "`a`"   # raises Undeclared_Identifier
+a := 123
+```
+
 ## Classes
 
 1. Must start with an uppercase character

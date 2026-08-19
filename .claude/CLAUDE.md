@@ -59,7 +59,7 @@ bundle install
 
 ## Architecture
 
-Four phases: **Lexer → Parser → Type Checker → Interpreter**
+Five phases: **Lexer → Parser → Type Checker → Forward Declarator → Interpreter**
 
 `Interpreter` is the main entry point. It owns a `Lexer` and `Parser`, and exposes `run(source_code)` which drives all phases. `Lexer` and `Parser` are plain transformation classes you can also call directly.
 
@@ -72,6 +72,7 @@ Source code is tokenized, parsed into an AST, and statically type checked:
 - `lexeme.rb` - Token representation
 - `expressions.rb` - AST node definitions
 - `type_checker.rb` - Static type checker; runs on the AST before interpretation
+- `forward_declarator.rb` - Builds `Interpreter#declarations`, the table `#resolve_forward_declaration` lazily interprets from — see Forward Declarations below
 
 ### Runtime (src/runtime/)
 
@@ -172,6 +173,51 @@ Call sites that appear before the function definition are not checked — the si
 
 - `Ore::Type_Mismatch < Ore::Type_Checking_Failed` — carries `expression`, `declared`, and `inferred`
 - `Ore::Type_Checking_Failed` — raised by `output` if any errors were collected
+
+## Forward Declarations
+
+Top-level function/type declarations are hoisted ahead of the point where they're actually reached in the file, so calling a function (or referencing a type) before its own declaration works — including mutual recursion between two top-level functions declared in either order. Plain variable assignments (`:=`/`=`/`ident,`) are never hoisted this way; reading one before its own line has run still raises `Ore::Undeclared_Identifier`, exactly as if this feature didn't exist:
+
+```ore
+result := main()   # `main` hasn't been reached yet -- works anyway
+main {; helper() }
+helper {; 42 }
+result             # 42
+
+@puts "`a`"        # raises Ore::Undeclared_Identifier -- `a` is a plain variable, not hoistable
+a := 123
+```
+
+### `Forward_Declarator` (`src/compiler/forward_declarator.rb`)
+
+Walks the whole top-level AST once, before interpretation (invoked from `Interpreter#output`, same spot `Type_Checker` runs from), building `Interpreter#declarations`: `Hash{::String => Ore::Declaration}`. `Ore::Declaration = Data.define(:key, :expr_or_decl, :expr)` — `expr` is always the *original* expression (what would need to be `interpret`ed to actually bring the declaration into being); `expr_or_decl` is a more inspectable rendering (a nested Hash for a `Type_Expr`/`Func_Expr`/`Route_Expr` body, the raw value expression for `:=`/`=`, etc.). Inspect either directly via `bin/ore declare <code>` / `declaref <file>`.
+
+`#declare` dispatches per expression kind:
+
+- **Nests** under its own key: `Type_Expr`, `Func_Expr` (named only), `Route_Expr`, `Func_Signature_Expr` — each recurses into its own body/params via `#declare_all`, the same Hash-building the top level itself uses. A `Type_Expr`'s own `.structure` (if any) rides along under a `'structure'` key
+- **Flattens** into the enclosing level instead: `Conditional_Expr` (`if`/`unless`/`while`/`until` don't push their own scope, so a `:=` inside a branch really does land in the enclosing scope — chains through `elif`/`elwhile` via `.when_false`) and `Circumfix_Expr` (groupings don't push a scope either) — `#declare_all` accepts either a `Declaration` or a `Hash` back from `#declare`, merging the latter flat rather than nesting it under a made-up key
+- **Deliberately excluded**: `For_Loop_Expr` (pushes its own scope per iteration in `#interp_for_loop` — loop-local, not forward-referenceable from outside), `Call_Expr` (its arguments can themselves use `:=` for named-argument passing, which looks identical to a declaration but isn't one — see Named Function Arguments above), and a bare `Identifier_Expr` (reads a value, doesn't declare one — registering one used to be a real bug: it silently clobbered a same-named real declaration reached later in the same Hash, since both share a key)
+- **Literals** (`String_Expr`/`Number_Expr`/`Symbol_Expr`) aren't declarations on their own, but are preserved (not dropped to `nil`) as the *value* on the right of a `:=`/`=` via `#resolve_value` — a separate helper from `#declare`, used only for RHS resolution, so a literal or plain identifier RHS is stored as-is instead of wrapped in another `Declaration`
+
+### `@load` (`Forward_Declarator#declarations_for_load`)
+
+A bare `@load 'file'` also participates: `#declare`'s `Directive_Expr` branch hands `declarations_for_load` off to compute the *other* file's own Forward_Declarator output (parsed + declared once, cached class-level in `cached_declarations_by_filepath`, keyed by resolved path — mirrors `Interpreter.cached_expressions_by_filepath`; `currently_loading_filepaths` guards a load cycle, A `@load`ing B `@load`ing A, from recursing forever), then **rebinds every entry's `.expr` to the `@load` directive itself**, not the isolated node it was found on in the other file. This matters twice over: a loaded file's declarations aren't independent of each other (`Div | Dom {}` needs `Dom` too — forcing `Div` alone and leaving `Dom` unhoisted would break), and forcing any single name has to mark the *whole* `@load` as forced, or `#output`'s own walk redundantly re-runs the entire file a second time once it reaches that line for real. Returns nil (declines) when the path isn't a plain string literal (`@load some_var`) — nothing statically known to walk. The rebound Hash flattens into the current level the same way `Conditional_Expr`/`Circumfix_Expr` already do.
+
+`Ident := @load 'file'` / `IDENT := @load 'file'` (a *named*, namespace-isolating load — see File Loading below) doesn't need any of the above: it's handled entirely by the existing `Infix_Expr` branch plus `#hoistable_declaration_expr?`'s casing check (next section) — forcing the whole `Infix_Expr` re-runs the real assignment, which builds the isolated scope correctly on its own.
+
+### Interpreter (`#resolve_forward_declaration`)
+
+The consuming side lives in `#interp_identifier`'s final `else` branch — the case where ordinary lookup found nothing and `scope` is `nil` — right before it would raise `Ore::Undeclared_Identifier`. It checks `declarations[name]`, and if a hoistable declaration is found, runs its `.expr` immediately (`interpret decl.expr`, pushed against `#global` specifically, not whatever's currently on top of `stack`), then retries the lookup.
+
+- **Hoistable vs. not** — `HOISTABLE_EXPRESSIONS` (`Func_Expr`, `Type_Expr`, `Route_Expr`, `Struct_Expr`, `Func_Signature_Expr`, `Operator_Expr`, `Operator_Overload_Expr`; lives on `Interpreter`, not `constants.rb` — it references `Expression` subclasses, and `constants.rb` loads before `expressions.rb` does) are declarative and order-independent, so running one early changes nothing about what the program means. `#hoistable_declaration_expr?` also unwraps one level of `:=`/`=` to catch `This := That {}` (see Runtime Type Contracts above, "Class-styled identifier assigned a Scope value") — same declarative category as a bare `Type_Expr`, just spelled through an assignment. A *named* `@load` (`Ident := @load 'file'` / `IDENT := @load 'file'`) is checked the same way, but additionally requires a Capitalized/UPPERCASE left-hand name (`Ore.type_of_identifier`) — a lowercase `mod := @load 'file'` stays a plain variable, not hoisted. A *bare* `@load` (no assignment at all) is checked separately, via `#bare_load_directive_expr?` — always hoistable, since there's no left-hand name to apply a casing rule to; kept out of `#hoistable_declaration_expr?`'s own recursive unwrap specifically so it can't leak permissiveness into the named/casing-restricted case. Anything else — a plain `x := 5`, `x := some_call()`, `ident,` — is a step in the program's own imperative order, and reading it before that step runs is a bug in the *program*; forward-resolving it anyway would silently paper over that instead of raising
+- **Guards against double execution** — forcing a declaration marks its `.expr` in `@forced_declarations` (identity-tracked, a plain `Set` — `Expression` doesn't override `hash`/`eql?`); `#output`'s own top-level walk skips any expression already in that set when it reaches it for real, so a forced function/type/`@load` only ever runs once. That skip has to *keep* the running result (`result` in `input.each.inject(nil) { |result, expr| ... }`), not reset it via a bare `next` — otherwise, if the skipped statement happens to be the file's *last* one, the whole program's reported result silently becomes `nil` instead of the true last value
+- **Only fires when Global is actually reachable** — guarded by `stack.any? { |s| s.equal? global }` (identity check, not `#include?`, which is `==` and can hit an Ore type's own overload — e.g. `Ore::Array#==` assumes its operand also has `.values`). A plain `x.y` dot access deliberately excludes Global from its lookup (`#interp_dot_scope`'s `exclude_global_scope: true`, see Scope System below) specifically so a member missing on `x` stays missing — without this guard, forward-resolution would quietly reach past that exclusion and resolve to an unrelated global of the same name. Consequence worth knowing: a plain identifier reference (`This()`) hoists, but a `.method()` call doesn't independently hoist the method it's calling — `sign.warning()` only works once `warning`'s own declaration has actually been reached, even if `sign`'s type was itself forced early (see `learn/forward_declarations.ore`)
+- **`#global`** — a dedicated reference set once when Global is created, independent of `stack` (which `#interp_member_access` temporarily swaps out during dot-access resolution — `stack.first` isn't reliably Global during that window)
+- **`declarations` is saved/restored around `#load_file_into_scope`'s recursive `#output` call**, same as `@input` already was — otherwise loading a file (`@load`, especially the `x := @load 'file'` isolated-scope form) would overwrite the outer program's own `declarations` with the loaded file's, and forward-resolution would leak names declared inside an isolated module scope straight onto Global
+
+### Known limitation
+
+`declarations` is keyed by name at one flat level per file — a declaration nested inside a Type/Func body (or a top-level `if`/tuple, whose own declarations flatten into this same level) isn't distinguished from a genuinely top-level one. Forcing one of those runs only that one inner expression, not the construct around it (an `if`'s condition, say).
 
 ## Scope System
 

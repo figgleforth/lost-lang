@@ -12,6 +12,7 @@ require_relative 'compiler/lexer'
 require_relative 'compiler/parser'
 require_relative 'compiler/documenter'
 require_relative 'compiler/type_checker'
+require_relative 'compiler/forward_declarator'
 
 # Runtime (AST to execution)
 require_relative 'runtime/errors'
@@ -68,6 +69,14 @@ module Ore
 
 	def self.lex_file filepath
 		Lexer.new(File.read(filepath)).output
+	end
+
+	def self.declare source_code
+		Forward_Declarator.new(parse(source_code)).output
+	end
+
+	def self.declare_file filepath
+		Forward_Declarator.new(parse_file(filepath)).output
 	end
 
 	def self.type_check_file filepath
