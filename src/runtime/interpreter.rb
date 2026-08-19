@@ -7,17 +7,22 @@ module Ore
 		# Source lines by filepath, keyed the same way #register_source always has -- kept class-level (not per-instance) so Error_Formatter can read a snippet without holding a live Interpreter, which used to be the only reason errors.rb needed a `runtime` reference at all.
 		@cached_source_by_filename = {} # {filepath: [String]}
 
+		# Parsed ASTs by resolved filepath, kept class-level (not per-instance) for the same reason: `ore/preload.ore` (and everything it transitively @loads) is immutable source, identical for every Interpreter in the process, so re-lexing/re-parsing it fresh on every `Ore.interp` call was pure waste -- it used to be instance-level, meaning a brand-new Interpreter (which every `Ore.interp` call constructs) never saw a warm cache. Doesn't cache the *interpretation* of that AST (each Interpreter still builds its own fresh Standard_Library scope from it), only the lex+parse step, so per-instance isolation (mutating a builtin in one test can't leak into another) is unaffected.
+		@cached_expressions_by_filepath = {} # {filepath: [Ore::Expression]}
+
+		# Resolved filepaths whose AST has already passed type-checking at least once, kept class-level alongside the cache above. Type-checking is a pure function of the AST (no interpreter state involved) -- a cached, never-changing file that already passed once will always pass, so re-walking it on every subsequent load is pure waste, same as re-parsing was.
+		@type_checked_filepaths = {} # {filepath: true}
+
 		class << self
-			attr_accessor :cached_source_by_filename
+			attr_accessor :cached_source_by_filename, :cached_expressions_by_filepath, :type_checked_filepaths
 		end
 
-		attr_accessor :input, :lexer, :parser, :load_standard_library, :stack, :route_functions_by_route_name, :servers, :dom_onclick_function_handlers, :dom_input_elements, :cached_expressions_by_filepath, :last_output, :current_source_file
+		attr_accessor :input, :lexer, :parser, :load_standard_library, :stack, :route_functions_by_route_name, :servers, :dom_onclick_function_handlers, :dom_input_elements, :last_output, :current_source_file
 
 		def initialize
-			@cached_expressions_by_filepath = {} # {filepath: [Ore::Expression]}
-			@dom_input_elements             = {} # {element_hash: Ore::Instance} for inputs/textareas
-			@dom_onclick_function_handlers  = {} # {handler_hash: Ore::Func}
-			@route_functions_by_route_name  = {} # {route: Ore::Route}
+			@dom_input_elements            = {} # {element_hash: Ore::Instance} for inputs/textareas
+			@dom_onclick_function_handlers = {} # {handler_hash: Ore::Func}
+			@route_functions_by_route_name = {} # {route: Ore::Route}
 
 			@load_standard_library = true
 			@input                 = [] # [Ore::Expression]
@@ -57,9 +62,11 @@ module Ore
 			end
 		end
 
-		def output
-			checker = Type_Checker.new input
-			raise checker.output if checker.output
+		def output skip_type_check: false
+			unless skip_type_check
+				checker = Type_Checker.new input
+				raise checker.output if checker.output
+			end
 
 			input.each.inject(nil) do |_, expr|
 				interpret expr
@@ -103,21 +110,24 @@ module Ore
 
 			push_scope into_scope
 
-			unless @cached_expressions_by_filepath[resolved_path]
+			unless self.class.cached_expressions_by_filepath[resolved_path]
 				code = File.read resolved_path
 				register_source resolved_path, code
-				@lexer.source_file                             = resolved_path
-				@lexer.input                                   = code
-				@parser.input                                  = @lexer.output.reject do |lexeme|
+				@lexer.source_file                                       = resolved_path
+				@lexer.input                                             = code
+				@parser.input                                            = @lexer.output.reject do |lexeme|
 					%I(comment).include? lexeme.type
 				end
-				@cached_expressions_by_filepath[resolved_path] = @parser.output
+				self.class.cached_expressions_by_filepath[resolved_path] = @parser.output
 			end
 
-			saved  = @input
-			@input = @cached_expressions_by_filepath[resolved_path]
-			result = output # note: Okay to call #output directly here
-			@input = saved
+			saved                = @input
+			@input               = self.class.cached_expressions_by_filepath[resolved_path]
+			already_type_checked = self.class.type_checked_filepaths[resolved_path]
+			result               = output skip_type_check: already_type_checked # note: Okay to call #output directly here
+			@input               = saved
+
+			self.class.type_checked_filepaths[resolved_path] = true
 
 			pop_scope
 			result

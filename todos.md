@@ -1,4 +1,5 @@
 [+ todo at top / - done at bottom]
++ A few of the Advent of Code tests are super slow because they crunch a lot of data. One of them was like 50% of the entire testing time. I don't want to leave them completely untested. Look into maybe some env var that tracks number of times tests have run, then every n full test runs (maybe 100) then test those as well. 
 + Turn `Number{}` from joke into real number system. It would also be cool to support any system that's incrementable in any way. Imagine a 52 card deck class. `deck := Standard_Deck(), card: Standard_Card = deck.random()`, say it's 2 of hearts. `card += 1` card is now 3 of hearts.
 + Make all directives passthrough (return the expression given) or at least as many it makes sense for
 + How can types represent optional or required? `Type?` could be it or nil. `Type!` must be Type  
@@ -54,6 +55,7 @@
 + Annotating an expression as `Expression` type, like `x: Expression = run.some.piece_of_code()` which gives you back the AST of that expression as instances of its equivalent nodes written in Ore. Like `Infix | Expression {}`, etc.
 
 [LANGUAGE DESIGN]
++ Think about what kind of Error system do I want. Ruby's is an obvious choice to copy, since I'm familiar with it. But I also like how Tsoding tends to use API that give you an error message or bool. `result, ok := some_thing()`
 + Ability to extract a member based on its type when name collisions exist. `dict := {keys: 4}, dict.keys()` fails because you cannot call the value 4 that you'd get from `dict.keys` in this case, as it shadows the function `keys` due to how keys in a dict work at the moment. It would be neat to do `keys: Number = dict.keys` and `keys: Func = dict.keys`
 + Jai uses `=` when passing named arguments, I use `:=` which does not make sense. But it's okay for now
 + Since private members require leading underscores, you cannot mark an entire expression as private.
@@ -182,3 +184,4 @@
 - `for x by n` stride chunks were raw Ruby Arrays, not `Ore::Array` -- broke `==`/`.push` on `it` (dot-index access worked by accident via `maybe_instance`). Same bug found across several more proxies once `@puts`→`@assert` conversion in `learn/*.ore` started actually checking equality instead of printing: `Array#first`/`#last`/`#slice`/`#reverse`/`#sort`/`#uniq`, `String#split`/`#chars`, `Dictionary#keys`/`#values`/`#merge` all returned raw Ruby Array/Hash instead of wrapping the result. All now wrap; `test/proxies_test.rb`/`interpreter_test.rb`/`regression_test.rb` updated to match.
 - Add `@refute condition`. Both `@assert` and `@refute` are passthrough, meaning they just return the expression given.
 - Every `learn/*.ore` file's `@puts` demonstrations converted to `@assert` (except `directives.ore`, which keeps a few real `@puts` calls since it's specifically demonstrating what `@puts` does). Cut console noise during `rake test` and gave each example a real, checked assertion instead of just eyeballed output. Surfaced the proxy-wrapping bug above.
+- `rake test`: ~50s -> ~2.3s. Cached `ore/preload.ore`'s parsed AST and type-check pass class-level instead of per-Interpreter (both were redone from scratch on every `Ore.interp` call). AoC tests (real compute, not stdlib overhead) excluded entirely by renaming `advent_of_code_test.rb` -> `advent_of_code_test_no_more.rb`, which no longer matches the Rakefile's `test/**/*_test.rb` glob.
