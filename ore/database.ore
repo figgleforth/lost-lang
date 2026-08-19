@@ -12,14 +12,14 @@ Database {
 Sqlite | Database {
 	new { url;
 		adapter = 'sqlite'
-		./url = url
+		self.url = url
 	}
 
-	../local { url := './test/fixtures/sqlite_test.db';
+	Self.local { url := './test/fixtures/sqlite_test.db';
 		Sqlite(url)
 	}
 
-	../memory {;
+	Self.memory {;
 		Sqlite(':memory:')
 	}
 }

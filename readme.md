@@ -240,8 +240,6 @@ escaped := "Literal \`backticks\`"
 2. `Self` accesses current type/class scope only
 3. `~/` accesses global scope
 
-`self`/`Self` are keyword sugar for the older `./`/`../` scope operators — `self.x` and `./x` are exactly the same thing, just spelled differently. `./`/`../` still work, but `self`/`Self` read better and are the preferred spelling now.
-
 ```ore
 My_Class {
     Self.count := 0   # Type-level (static) variable

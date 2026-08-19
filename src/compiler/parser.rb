@@ -282,7 +282,7 @@ module Ore
 			func.parameters  = [] # Param_Expr
 
 			if curr?(SELF_KEYWORDS, '.')
-				func.name = parse_self_prefixed_func_name
+				func.name = parse_self_prefixed_identifier
 			elsif curr?(:identifier) || curr?(SCOPE_OPERATORS)
 				func.name = parse_identifier_expr
 			end
@@ -587,7 +587,8 @@ module Ore
 			copy_location expr, start
 		end
 
-		def parse_self_prefixed_func_name
+		# `self.identifier`/`Self.identifier` -- keyword sugar for `./identifier`/`../identifier` (see SELF_KEYWORDS), desugared right here by synthesizing the equivalent scope_operator lexeme, so every downstream scope-operator-aware check (static-declaration tracking, per-instance re-run skipping, ...) treats it identically with no interpreter-side special-casing. Shared by function names (`self.funk {;}`) and nil-init targets (`self.x,`).
+		def parse_self_prefixed_identifier
 			keyword = eat
 			eat '.'
 
@@ -750,7 +751,7 @@ module Ore
 
 			expr          = Ore::Nil_Init_Expr.new
 			expr.lexeme   = start
-			expr.left     = parse_identifier_expr
+			expr.left     = curr?(SELF_KEYWORDS, '.') ? parse_self_prefixed_identifier : parse_identifier_expr
 			expr.operator = Lexeme.new(:operator, '=')
 
 			nil_expr         = Ore::Identifier_Expr.new
@@ -768,7 +769,7 @@ module Ore
 			if curr? :route
 				parse_route_expr
 
-			elsif curr?(ANY_IDENTIFIER, Ore::NIL_INIT_POSTFIX) || curr?(SCOPE_OPERATORS, ANY_IDENTIFIER, Ore::NIL_INIT_POSTFIX)
+			elsif curr?(ANY_IDENTIFIER, Ore::NIL_INIT_POSTFIX) || curr?(SCOPE_OPERATORS, ANY_IDENTIFIER, Ore::NIL_INIT_POSTFIX) || curr?(SELF_KEYWORDS, '.', ANY_IDENTIFIER, Ore::NIL_INIT_POSTFIX)
 				parse_nil_init_expr
 
 			elsif peek_contains?(Ore::FUNCTION_DELIMITER, '}') && (curr?('{') || curr?(:identifier, '{') || curr?(:identifier, ':', '{') || curr?(SCOPE_OPERATORS, :identifier, '{') || curr?(SCOPE_OPERATORS, :identifier, ':', '{') || curr?(SELF_KEYWORDS, '.', :identifier, '{') || curr?(SELF_KEYWORDS, '.', :identifier, ':', '{'))

@@ -4,9 +4,9 @@ Member {
 	value: Any
 
 	new { name: String, value := nil, type := nil;
-		./name  = name
-		./value = value
-		./type  = type
+		self.name  = name
+		self.value = value
+		self.type  = type
 	}
 
 	to_s {;

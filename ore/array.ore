@@ -2,7 +2,7 @@ Array {
 	values, # is the internal backing array
 
 	new { values := [];
-		./values = values
+		self.values = values
 	}
 
 	# add to back/end

@@ -5,12 +5,12 @@ Table {
 
 	infer_table_name_from_class! {; @ruby }
 
-	../database,
-	../all {; @ruby }
-	../find { id; @ruby }
-	../find_by { dict; @ruby }
-	../where { dict; @ruby }
-	../create { dict; @ruby }
-	../update { id, dict; @ruby }
-	../delete { id; @ruby }
+	Self.database,
+	Self.all {; @ruby }
+	Self.find { id; @ruby }
+	Self.find_by { dict; @ruby }
+	Self.where { dict; @ruby }
+	Self.create { dict; @ruby }
+	Self.update { id, dict; @ruby }
+	Self.delete { id; @ruby }
 }

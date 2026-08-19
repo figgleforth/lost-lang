@@ -2,7 +2,7 @@ Dictionary {
 	hash,
 
 	new { hash := {};
-		./hash = hash
+		self.hash = hash
 	}
 
 	keys {; @ruby }

@@ -5,7 +5,7 @@ String {
 	quotation_style: Symbol
 
 	new { value := '';
-		./value = value
+		self.value = value
 	}
 
 	to_s {;

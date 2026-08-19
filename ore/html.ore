@@ -4,7 +4,7 @@ Dom {
 	children,
 
 	new { children := [];
-		./children = children
+		self.children = children
 	}
 
 	render {; children }
@@ -44,7 +44,7 @@ Title | Dom {
 	title,
 
 	new { title;
-		./title = title
+		self.title = title
 	}
 
 	render {; title }
@@ -95,7 +95,7 @@ A | Dom {
 
 	new { href, title;
 		html_href = href
-		./title = title
+		self.title = title
 	}
 
 	render {; title }
