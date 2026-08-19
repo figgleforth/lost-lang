@@ -260,6 +260,16 @@ Identifiers starting with `_` are considered private by convention (e.g., `_priv
 
 **Dot access (`x.y`)** resolves `y` only against `x` (plus global scope) via `#interp_member_access` (`interpreter.rb`), never the ambient call stack — without this, a member missing on `x` could fall through to an unrelated same-named member still active further down the interpreter's stack (e.g. the very method currently executing) instead of raising `Undeclared_Identifier`.
 
+### `self` / `Self` Keywords
+
+`self` and `Self` are keyword sugar for `./` and `../` respectively — `self.x` and `./x` (`Self.x` and `../x`) are exactly the same thing, just spelled differently. **The user prefers `self`/`Self` over `./`/`../` in new/edited Ore code** (`.ore` files under `learn/`, `ore/`, `examples/`, and `readme.md`) — `./`/`../` still work and aren't being removed, but default to `self`/`Self` when writing or updating Ore source unless the surrounding code is specifically demonstrating the scope-operator spelling itself (e.g. the Scope Operators section above).
+
+- Bare `self`/`Self` (no trailing `.identifier`) are handled in `#interp_identifier` (`interpreter.rb`): each does the same stack search `./`/`../` already do (`#current_instance`/nearest `Ore::Type`) and returns that Scope object as a real value — so `Self()` constructs the type (`Self() === Type_Name()`), `Self.declaration` reads a static, and passing `self`/`Self` around works like passing any other value
+- `self.x`/`Self.x` as a `:=`/`=` write target is special-cased in `#assign_dot_member` (`interpreter.rb`, `Ore::SELF_KEYWORDS`) to route around the stricter external-`.`-write rules (`Cannot_Reassign_Constant`, `#check_dot_access_permissions!`) that a real dot-write always enforces — `./`/`../` never run those checks either, so this makes both spellings behave identically for both new and already-declared members
+- `self.funk {;}`/`Self.funk {;}` (bare function declarations, no `:=`) are desugared entirely at parse time: `#parse_self_prefixed_func_name` (`parser.rb`) synthesizes the equivalent `./`/`../` scope-operator lexeme onto the function name's `Identifier_Expr`, so every downstream scope-operator-aware check (`#track_static_declaration`, the per-instance re-run skip in `#run_type_body_on_instance`) treats it identically with zero interpreter-side special-casing for this form
+- `#static_var_declaration_expr?` (`interpreter.rb`) recognizes both the `../x := value` AST shape (scope-operator identifier) and the `Self.x := value` shape (dot-target) as static declarations that must run once, not per-instance — these are structurally different ASTs, so `#run_type_body_on_instance`'s skip-check needs to recognize both explicitly
+- `#current_instance` (`interpreter.rb`) is the nearest `Ore::Instance` in the stack (role-based, not positional) — shared by `self`/`./` resolution and `#check_dot_access_permissions!`'s privacy check. This mattered for a real bug: `#interp_func_body` always pushes a fresh per-call `Func` frame on top of the instance, so `stack.last` during any method body is never the instance itself — a privacy check that compared against `stack.last` directly would (and did) wrongly reject `self.some_private_member` read from inside that very instance's own method, until fixed to compare against `#current_instance` instead
+
 ## Reopening a Scope
 
 `@push_scope scope` pushes a `Type` or `Instance` directly onto the interpreter's stack, so its members become reachable without a prefix, and any bare declaration made while "inside" lands on the pushed scope itself — this actually mutates the target, unlike the readable/writable scopes described below. `@pop_scope scope` pops back out; it asserts (by identity) that `scope` is exactly what `@push_scope` last pushed, raising a plain `RuntimeError` instead of silently popping the wrong thing.
@@ -281,30 +291,30 @@ Reopening a `Type` extends every instance (past and future); reopening a specifi
 
 ## Static Declarations
 
-Type-level (static) members are declared using the `../` scope operator:
+Type-level (static) members are declared using the `Self.` scope operator (keyword sugar for `../` — see `self` / `Self` Keywords above):
 
 ```ore
 Person {
-    ../count := 0      # Static variable shared across all instances
+    Self.count := 0      # Static variable shared across all instances
 
-    ../increment {;  # Static method
+    Self.increment {;  # Static method
         count += 1
     }
 
     init {;
-        ../count += 1  # Access static from instance method
+        Self.count += 1  # Access static from instance method
     }
 }
 
 Person().init()
 Person().init()
-Person.increment()   # Call static method on type => 2
+Person.increment()   # Call static method on type => 3 (2 from init(), 1 more from this call)
 ```
 
 **Implementation Details:**
 
 - Static declarations are tracked in `type.static_declarations` set
-- Instance methods can access type-level variables via `../` operator
+- Instance methods can access type-level variables via `Self.`/`../`
 - When calling instance methods, the interpreter pushes both the type scope and instance scope onto the stack
 - Instances are linked to their types via `instance.enclosing_scope = type`
 - Static functions and variables are declared on the Type scope

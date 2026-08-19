@@ -6,7 +6,7 @@ Every route body gets `request` and `response` for free, no parameter needed -- 
 
 Camp | Server {
 	new {;
-		./port = 8081
+		self.port = 8081
 	}
 
 	post://join {;

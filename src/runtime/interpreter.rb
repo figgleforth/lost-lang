@@ -234,9 +234,7 @@ module Ore
 					scope.instance_of? Ore::Type
 				end
 			when './' # instance within context, aka self, this, etc
-				stack.reverse_each.find do |scope|
-					scope.is_a? Ore::Instance
-				end
+				current_instance
 			else
 				# If no scope operator, search through all scopes to find the identifier
 				found_scope = nil
@@ -301,13 +299,18 @@ module Ore
 			scope.static_declarations.add ident_expr.value.to_s
 		end
 
+		# The Instance the currently executing method body belongs to, if any -- searched by role (nearest Ore::Instance in the stack), not position. #interp_func_body always pushes a fresh per-call Func frame on top of the instance for every call, so `stack.last` is never the instance itself while a method runs -- shared by `self`/`./` resolution (#interp_identifier, #scope_for_identifier) and privacy enforcement (#check_dot_access_permissions!) below, all three needing "the instance I'm currently running as".
+		def current_instance
+			stack.reverse_each.find { |scope| scope.is_a? Ore::Instance }
+		end
+
 		def check_dot_access_permissions! scope, ident, expr
 			binding = Ore.binding_of_ident scope, ident
 			privacy = Ore.privacy_of_ident ident
 
 			case scope
 			when Ore::Instance
-				if privacy == :private && stack.last != scope
+				if privacy == :private && !current_instance.equal?(scope)
 					raise Ore::Cannot_Call_Private_Instance_Member.new(expr)
 				end
 			when Ore::Type
@@ -753,6 +756,13 @@ module Ore
 			when 'false'
 				# todo; return Ore::Bool.falsy
 				return false
+			when 'Self'
+				found = stack.reverse_each.find { |scope| scope.instance_of? Ore::Type }
+				return found if found
+				raise Ore::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr)
+			when 'self'
+				return current_instance if current_instance
+				raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr)
 			else
 				scope_for_identifier expr
 			end
@@ -1036,15 +1046,9 @@ module Ore
 
 			assignment_scope ||= stack.last
 
-			# note; `./`, `../` self-declaring a member that doesn't exist yet is valid but only while the type/instance is still under construction: for an Instance that's the class body's own declarations or new{;} itself (has?('new')); for a bare Type (a `../` static) it's the type's own body walk (#finish_type_declaration, tracked via declaration_in_progress) -- calling a static method later and self-declaring a brand-new static from inside it isn't allowed.
+			# note; `./`, `../` self-declaring a member that doesn't exist yet is valid but only while the type/instance is still under construction (see #still_under_construction?) -- calling a static method later and self-declaring a brand-new static from inside it isn't allowed.
 			if has_scope_operator && assignment_scope.is_a?(Ore::Type) && !assignment_scope.has?(expr.left.value)
-				still_under_construction = if assignment_scope.is_a?(Ore::Instance)
-					assignment_scope.has? 'new' # note; new{;} is stripped from an instance
-				else
-					assignment_scope.declaration_in_progress
-				end
-
-				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr) unless still_under_construction
+				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr) unless still_under_construction? assignment_scope
 			end
 
 			right_value = if expr.right.is_a?(Ore::Directive_Expr) && expr.right.name.value == 'load'
@@ -1123,10 +1127,52 @@ module Ore
 			track_static_declaration assignment_scope, target
 		end
 
+		# True for a top-level `../x := value` or `Self.x := value` static declaration -- both run once during the type's own body walk and must not be re-run for every constructed instance (see #run_type_body_on_instance). `Self.x := value` has a different AST shape than `../x := value` (a `.` dot-target on the left of `:=`, not a scope-operator-prefixed Identifier_Expr), so it needs its own check here rather than falling out of the same one.
+		def static_var_declaration_expr? expr
+			return false unless expr.is_a?(Ore::Infix_Expr) && expr.operator&.value == ':='
+
+			left = expr.left
+			return true if left.is_a?(Ore::Identifier_Expr) && left.scope_operator&.value == '../'
+
+			left.is_a?(Ore::Infix_Expr) && left.operator&.value == '.' &&
+				left.left.is_a?(Ore::Identifier_Expr) && !left.left.scope_operator && left.left.value == 'Self'
+		end
+
+		# A scope that is "under construction" is still allowed to self-declare a brand-new member via `./`, `../`, `self`, or `Self`
+		def still_under_construction? scope
+			if scope.is_a? Ore::Instance
+				scope.has? 'new'
+			else
+				scope.declaration_in_progress
+			end
+		end
+
 		# Shared by every way of writing through `.` onto an already-interpreted receiver.
 		def assign_dot_member expr, target, value, declare: false
 			receiver = interpret target.left
 			property = target.right.value
+
+			# `self`/`Self` are keyword sugar for `./`/`../` (see #interp_identifier) but arrive here as an ordinary `.` dot-target. `./x`/`../x` writes (#interp_infix_declaration's scope-operator branch, #interp_infix_assignment's general flow) never run Cannot_Reassign_Constant or check_dot_access_permissions! at all -- only the external-`.`-write rules below do (see "Member Creation Is Strict") -- so self/Self route around both entirely here too, for both `=` and `:=`, matching `./`/`../` exactly rather than just the not-yet-declared case.
+			self_keyword = target.left.is_a?(Ore::Identifier_Expr) && !target.left.scope_operator &&
+			               Ore::SELF_KEYWORDS.include?(target.left.value)
+
+			if self_keyword && receiver.is_a?(Ore::Scope)
+				unless receiver.has?(property) || still_under_construction?(receiver)
+					raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr)
+				end
+
+				if declare
+					receiver.static_declarations.add property if target.left.value == 'Self'
+					return receiver.declare property, value, type_name_to_string(value)
+				end
+
+				expected = receiver.type_by_identifier[property]
+				actual   = type_name_to_string value
+				raise Ore::Type_Contract_Violation.new(expr, expected, actual) if expected && actual != expected
+
+				receiver[property] = value
+				return value
+			end
 
 			unless receiver.is_a?(Ore::Scope) && receiver.has?(property)
 				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr)
@@ -1917,10 +1963,7 @@ module Ore
 					push_then_pop instance do |scope|
 						type.expressions.each do |expr|
 							# Skip static declarations - they were already executed during type definition and shouldn't be re-executed for each instance
-							if expr.is_a?(Ore::Infix_Expr) && expr.operator&.value == ':=' &&
-							   expr.left.is_a?(Ore::Identifier_Expr) && expr.left.scope_operator&.value == '../'
-								next
-							end
+							next if static_var_declaration_expr? expr
 
 							if expr.is_a?(Ore::Func_Expr) && expr.name.is_a?(Ore::Identifier_Expr) &&
 							   expr.name.scope_operator&.value == '../'

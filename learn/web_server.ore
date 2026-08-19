@@ -6,7 +6,7 @@
 
 Camp | Server {
 	new {;
-		./port = 8080 # port is declared by Server, you're only setting it here
+		self.port = 8080 # port is declared by Server, you're only setting it here
 		# Even this initializer is declared on Server, and takes the port as input. This is just to illustrate.
 	}
 

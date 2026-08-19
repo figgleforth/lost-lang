@@ -27,8 +27,8 @@ Point {
 	x, y,
 
 	new { x, y;
-		./x = x
-		./y = y
+		self.x = x
+		self.y = y
 	}
 
 	to_s {;

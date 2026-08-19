@@ -31,6 +31,7 @@ module Ore
 	INFIX_ARITHMETIC_OPERATORS  = %w(+ - * ** / % << >> ^ & |)
 	RANGE_OPERATORS             = %w(... ..< >.. >.<)
 	SCOPE_OPERATORS             = %w(~/ ./ ../)
+	SELF_KEYWORDS               = %w(self Self)
 	DOT_ACCESS_OPERATORS        = %w(. .?)
 	TYPE_COMPOSITION_OPERATORS  = %w(| & ~ ^) # Union, Intersection, Removal, Symmetric Difference
 	ANY_IDENTIFIER              = %i(identifier Identifier IDENTIFIER)
@@ -67,6 +68,7 @@ module Ore
 		true false nil
 		and or return
 		skip stop
+		self Self
 	)
 
 	PRECEDENCES = {

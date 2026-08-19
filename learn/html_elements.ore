@@ -16,7 +16,7 @@ Camp_Sign | Dom {
 	message,
 
 	new { message;
-		./message = message
+		self.message = message
 	}
 
 	render {; P(message) }

@@ -1,6 +1,6 @@
 ``` Introduction
 
-`Table` (`ore/table.ore`) is an ActiveRecord-style ORM on top of `ore/database.ore` -- see learn/database.ore first if `Sqlite`/`@connect` are new to you. Compose a type with `Table`, point its static `../database` at a connected database, and give it a `table_name`.
+`Table` (`ore/table.ore`) is an ActiveRecord-style ORM on top of `ore/database.ore` -- see learn/database.ore first if `Sqlite`/`@connect` are new to you. Compose a type with `Table`, point its static `Self.database` at a connected database, and give it a `table_name`.
 ```
 @load 'ore/database.ore'
 @load 'ore/table.ore'
@@ -14,7 +14,7 @@ db.create_table('survivors', {
 })
 
 Survivor | Table {
-	../database := ~/db
+	Self.database := ~/db
 	table_name := 'survivors'
 }
 

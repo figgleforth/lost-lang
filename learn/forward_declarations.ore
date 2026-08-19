@@ -21,7 +21,7 @@ survivor := Castaway('Jack')
 
 Castaway {
 	name,
-	new { name; ./name = name }
+	new { name; self.name = name }
 }
 
 

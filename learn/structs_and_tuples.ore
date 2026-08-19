@@ -59,8 +59,8 @@ A target doesn't have to be a fresh local -- `thing.member` reassigns an existin
 Point {
 	x, y,
 	new { x, y;
-		./x = x
-		./y = y
+		self.x = x
+		self.y = y
 	}
 }
 

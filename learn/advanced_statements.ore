@@ -55,7 +55,7 @@ Slacker {
 	statement: Statement
 
 	new { statement;
-		./statement = statement
+		self.statement = statement
 	}
 
 	live_count {-> Number;

@@ -196,7 +196,7 @@ My_Class {
     input,
     
     new { input;
-        ./input = input  # ./input is equivalent to this.input or self.input
+        self.input = input  # self is the current instance, like this in other languages
         @puts 'Initted with "`input`"'
     }
 }
@@ -236,18 +236,20 @@ escaped := "Literal \`backticks\`"
 
 ## Scope Operators
 
-1. `./` accesses current instance scope only
-2. `../` accesses current type/class scope only
+1. `self` accesses current instance scope only
+2. `Self` accesses current type/class scope only
 3. `~/` accesses global scope
+
+`self`/`Self` are keyword sugar for the older `./`/`../` scope operators — `self.x` and `./x` are exactly the same thing, just spelled differently. `./`/`../` still work, but `self`/`Self` read better and are the preferred spelling now.
 
 ```ore
 My_Class {
-    ../count := 0     # Type-level (static) variable
+    Self.count := 0   # Type-level (static) variable
     value,
 
     new { value;
-        ./value = value   # Instance variable (like this.value or self.value)
-        ../count += 1     # Access static from instance
+        self.value = value   # Instance variable (like this.value in other languages)
+        Self.count += 1      # Access static from instance
     }
 
     get_global {;
@@ -258,20 +260,20 @@ My_Class {
 
 ## Static Declarations
 
-1. Use `../` to declare type-level (static) members
+1. Use `Self.` to declare type-level (static) members
 2. Shared across all instances
 3. Accessed on the type itself: `Type.member`
 
 ```ore
 Counter {
-    ../count := 0
+    Self.count := 0
 
-    ../increment {;
+    Self.increment {;
         count += 1
     }
 
     new {;
-        ../count += 1
+        Self.count += 1
     }
 }
 
@@ -334,7 +336,7 @@ A type can even compose with itself, to extend or override a built-in type's own
 ```ore
 Array | Array {
     each { func;
-        for ./values   # ./values reaches the original Array's own values, despite `each` itself now being redefined
+        for self.values   # self.values reaches the original Array's own values, despite `each` itself now being redefined
             func(it)
         end
     }
@@ -526,8 +528,8 @@ Point {
     b := 0
 
     new { a, b;
-        ./a = a
-        ./b = b
+        self.a = a
+        self.b = b
     }
 }
 
@@ -778,7 +780,7 @@ supplies := <water: Number = 40, wood: Number = 12>
 
 App | Server {
     new {;
-        ./port = 3000
+        self.port = 3000
     }
 
     get:// {;
@@ -870,13 +872,13 @@ db.delete_table('users')
 ## Record ORM
 
 1. Compose with `Table` type
-2. Set static `../database` and instance `table_name` (or call `infer_table_name_from_class!()` to derive it, e.g. `User` → `'users'`)
+2. Set static `Self.database` and instance `table_name` (or call `infer_table_name_from_class!()` to derive it, e.g. `User` → `'users'`)
 
 ```ore
 @load 'ore/table.ore'
 
 User | Table {
-    ../database := ~/db
+    Self.database := ~/db
     table_name := 'users'
 }
 
@@ -1062,7 +1064,7 @@ $42  # Currency(amount: 42, name: 'US Dollar', code: 'USD')
 
 Wrapped {
     val,
-    new { v; ./val = v }
+    new { v; self.val = v }
     @operator ~> @infix 300 { left, right; left.val }
 }
 

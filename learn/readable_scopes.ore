@@ -70,8 +70,8 @@ Camp {
 	water := 0
 
 	new { survivors, water;
-		./survivors = survivors
-		./water = water
+		self.survivors = survivors
+		self.water = water
 	}
 }
 

@@ -7,8 +7,8 @@ Survivor {
 	number,
 
 	new { name, number;
-		./name   = name
-		./number = number
+		self.name   = name
+		self.number = number
 	}
 
 	to_s {;
@@ -22,17 +22,17 @@ jack := Survivor('Jack Shephard', 23)
 
 ``` Static declarations: the hatch
 
-The `../` prefix declares (and accesses) a STATIC member -- shared across every instance of the type, instead of one copy per instance. `../presses` is one single counter, not one per Hatch.
+`Self.` declares (and accesses) a STATIC member -- shared across every instance of the type, instead of one copy per instance. `Self.presses` is one single counter, not one per Hatch.
 ```
 Hatch {
-	../presses := 0
+	Self.presses := 0
 
-	../push_button {;
+	Self.push_button {;
 		presses += 1
 	}
 
 	enter {;
-		../push_button()
+		Self.push_button()
 	}
 }
 
@@ -44,27 +44,29 @@ Hatch().enter()
 
 ``` Scope operators
 
-Three operators reach into a specific scope explicitly, rather than searching outward through everything in reach: `./` is the current instance only, `../` is the current type (static members) only, `~/` is the global scope only. All three skip the normal "search everything in reach" fallback a bare identifier gets -- each looks in exactly one place, so a name collision elsewhere can't quietly shadow the one you meant.
+Three operators reach into a specific scope explicitly, rather than searching outward through everything in reach: `self` is the current instance only, `Self` is the current type (static members) only, `~/` is the global scope only. All three skip the normal "search everything in reach" fallback a bare identifier gets -- each looks in exactly one place, so a name collision elsewhere can't quietly shadow the one you meant.
+
+`self`/`Self` are keyword sugar for the older `./`/`../` scope operators -- `self.x` and `./x` are exactly the same thing, just spelled differently. `./`/`../` still work (and `Self` alone even calls the type as a constructor, `Self() === Type_Name()`), but `self`/`Self` read better and are the preferred spelling now.
 ```
 ISLAND := 'The Island'
 
 Dharma_Station {
-	../station_count := 0
+	Self.station_count := 0
 	station_name,
 
 	new { station_name;
-		./station_name = station_name
-		../station_count += 1
+		self.station_name = station_name
+		Self.station_count += 1
 	}
 
 	describe {;
-		"`./station_name` on `~/ISLAND` (station #`../station_count`)"
+		"`self.station_name` on `~/ISLAND` (station #`Self.station_count`)"
 	}
 }
 
 swan   := Dharma_Station('The Swan')
 orchid := Dharma_Station('The Orchid')
-@assert swan.describe() == 'The Swan on The Island (station #2)', '../station_count should be shared, not per-instance'
+@assert swan.describe() == 'The Swan on The Island (station #2)', 'Self.station_count should be shared, not per-instance'
 @assert orchid.describe() == 'The Orchid on The Island (station #2)', 'both instances should see the same shared counter'
 
 
@@ -77,12 +79,12 @@ Smoke_Monster {
 	name,
 
 	new { name, agenda;
-		./name          = name
-		./_true_agenda  = agenda
+		self.name          = name
+		self._true_agenda  = agenda
 	}
 
 	confess { claim;
-		claim == ./_true_agenda
+		claim == self._true_agenda
 	}
 }
 

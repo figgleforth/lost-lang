@@ -3254,4 +3254,162 @@ class Interpreter_Test < Base_Test
 		assert_equal 1, calls_memoized
 		assert_equal 2, calls_unmemoized
 	end
+
+	def test_self_resolves_to_nearest_instance
+		out = Ore.interp <<~CODE
+		    Thing {
+		        value := 42
+		        get_val {; self.value }
+		    }
+		    Thing().get_val()
+		CODE
+		assert_equal 42, out
+	end
+
+	def test_Self_resolves_to_nearest_type
+		out = Ore.interp <<~CODE
+		    Thing {
+		        klass {; Self }
+		    }
+		    Thing().klass() === Thing
+		CODE
+		assert out
+	end
+
+	def test_Self_dot_access_identical_to_class_name_dot_access
+		out = Ore.interp <<~CODE
+		    Thing {
+		        ../count := 5
+		        get_via_Self {; Self.count }
+		        get_via_name {; Thing.count }
+		    }
+		    t := Thing()
+		    (t.get_via_Self(), t.get_via_name())
+		CODE
+		assert_equal [5, 5], out.values
+	end
+
+	def test_self_outside_instance_raises_same_error_as_dot_slash
+		assert_raises Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance do
+			Ore.interp 'self'
+		end
+	end
+
+	def test_Self_outside_type_raises_same_error_as_dot_dot_slash
+		assert_raises Ore::Cannot_Use_Type_Scope_Operator_Outside_Type do
+			Ore.interp 'Self'
+		end
+	end
+
+	def test_self_dot_declare_self_declares_new_member_during_construction
+		out = Ore.interp <<~CODE
+		    Thing {
+		        new {;
+		            self.member := 123
+		        }
+		    }
+		    Thing().member
+		CODE
+		assert_equal 123, out
+
+		assert_raises Ore::Cannot_Assign_Undeclared_Identifier do
+			Ore.interp <<~CODE
+			    Thing {
+			        not_new_func {;
+			            self.member := 123
+			        }
+			    }
+			    Thing().not_new_func()
+			CODE
+		end
+	end
+
+	def test_Self_dot_declare_self_declares_new_static_during_type_body
+		out = Ore.interp <<~CODE
+		    Thing {
+		        Self.count := 0
+		    }
+		    Thing.count
+		CODE
+		assert_equal 0, out
+
+		assert_raises Ore::Cannot_Assign_Undeclared_Identifier do
+			Ore.interp <<~CODE
+			    Thing {
+			        bump_late {; Self.new_static := 1 }
+			    }
+			    Thing().bump_late()
+			CODE
+		end
+	end
+
+	def test_self_dot_func_declares_instance_method_like_dot_slash
+		out = Ore.interp <<~CODE
+		    Thing {
+		        self.greet {; 'hi' }
+		    }
+		    Thing().greet()
+		CODE
+		assert_equal 'hi', out
+	end
+
+	def test_Self_dot_func_declares_static_method_like_dot_dot_slash
+		out = Ore.interp <<~CODE
+		    Thing {
+		        ../count := 0
+		        Self.increment {; count += 1 }
+		    }
+		    Thing.increment()
+		    Thing.increment()
+		    Thing.count
+		CODE
+		assert_equal 2, out
+	end
+
+	def test_self_and_Self_produce_identical_results_to_dot_slash_and_dot_dot_slash
+		dot_slash_version = Ore.interp <<~CODE
+		    A {
+		        ../increment {; count += 1 }
+		        ../count := 0
+		    }
+		    A.increment()
+		    A.increment()
+		    A.increment()
+		    A.count
+		CODE
+
+		self_version = Ore.interp <<~CODE
+		    B {
+		        Self.increment {; count += 1 }
+		        ../count := 0
+		    }
+		    B.increment()
+		    B.increment()
+		    B.increment()
+		    B.count
+		CODE
+
+		assert_equal dot_slash_version, self_version
+	end
+
+	def test_Self_is_callable_like_the_type_name_with_and_without_args
+		out = Ore.interp <<~CODE
+		    Thing {
+		        value := 42
+		        make_bare {; Self() }
+		    }
+		    Thing().make_bare().value
+		CODE
+		assert_equal 42, out
+
+		out = Ore.interp <<~CODE
+		    Thing {
+		        value,
+		        new { v; ./value = v }
+		        make_with_arg {; Self(99) }
+		    }
+		    Thing(1).make_with_arg().value
+		CODE
+		assert_equal 99, out
+	end
 end

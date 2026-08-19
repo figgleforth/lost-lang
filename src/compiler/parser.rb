@@ -281,7 +281,9 @@ module Ore
 			func.expressions = [] # Expression
 			func.parameters  = [] # Param_Expr
 
-			if curr?(:identifier) || curr?(SCOPE_OPERATORS)
+			if curr?(SELF_KEYWORDS, '.')
+				func.name = parse_self_prefixed_func_name
+			elsif curr?(:identifier) || curr?(SCOPE_OPERATORS)
 				func.name = parse_identifier_expr
 			end
 
@@ -585,6 +587,15 @@ module Ore
 			copy_location expr, start
 		end
 
+		def parse_self_prefixed_func_name
+			keyword = eat
+			eat '.'
+
+			expr                = parse_identifier_expr
+			expr.scope_operator = Ore::Lexeme.new(:operator, keyword.value == 'Self' ? '../' : './')
+			expr
+		end
+
 		def parse_scope_operator
 			scope = eat
 
@@ -760,7 +771,7 @@ module Ore
 			elsif curr?(ANY_IDENTIFIER, Ore::NIL_INIT_POSTFIX) || curr?(SCOPE_OPERATORS, ANY_IDENTIFIER, Ore::NIL_INIT_POSTFIX)
 				parse_nil_init_expr
 
-			elsif peek_contains?(Ore::FUNCTION_DELIMITER, '}') && (curr?('{') || curr?(:identifier, '{') || curr?(:identifier, ':', '{') || curr?(SCOPE_OPERATORS, :identifier, '{') || curr?(SCOPE_OPERATORS, :identifier, ':', '{'))
+			elsif peek_contains?(Ore::FUNCTION_DELIMITER, '}') && (curr?('{') || curr?(:identifier, '{') || curr?(:identifier, ':', '{') || curr?(SCOPE_OPERATORS, :identifier, '{') || curr?(SCOPE_OPERATORS, :identifier, ':', '{') || curr?(SELF_KEYWORDS, '.', :identifier, '{') || curr?(SELF_KEYWORDS, '.', :identifier, ':', '{'))
 				parse_func precedence
 
 			elsif curr?('<') && curr_lexeme.type == :operator && !@custom_prefix.include?('<')

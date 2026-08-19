@@ -66,3 +66,24 @@ sc := <name: String, age: Number>('Alice', 99)
 @assert (sa === sb) == true, '=== should be true for the same structure of members'
 @assert (sa == sc) == false, '== should be false when age differs (30 vs 99)'
 @assert (sa === sc) == true, '=== should still be true -- still the same structure of members'
+
+
+``` Bare named structs
+
+Putting an identifier right in front of `<...>` (`Ident<...>`) isn't an error, as long as nothing is already declared under that name -- it builds a plain Struct, exactly like `<...>` alone, except with `.name` set from the identifier. A struct built with no name in front has a `nil` `.name`, only reachable through whatever variable holds it:
+```
+Anonymous := <String, Number>
+@assert Anonymous.name == nil, 'a struct built with no name in front has no .name of its own'
+
+Named <String, Number>
+n := Named<String, Number>
+@assert n.name == 'Named', 'Ident<...> builds a real struct with .name taken from Ident'
+
+
+``` Type lookup always wins
+
+This only kicks in when the identifier is genuinely undeclared -- a name that collides with something real still behaves exactly as it always did:
+```
+Abc<Number> {}
+# Abc<String> would raise Ore::Undeclared_Type_Structure, same as before this feature existed --
+# Abc is declared, just not with that structure, so it's never treated as a bare named struct.
