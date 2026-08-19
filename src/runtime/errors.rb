@@ -96,6 +96,19 @@ module Ore
 	class Missing_Argument < Error
 	end
 
+	class Invalid_Parameter_Name < Error
+		attr_accessor :param_type
+
+		def initialize expression, param_type
+			@param_type = param_type
+			super expression
+		end
+
+		def detail_message
+			"A function parameter must start with a lowercase letter -- #{Ascii.bold param_type} reads as a bare type (like a signature literal's param list, e.g. `{Number -> String;}`), not a name"
+		end
+	end
+
 	class Assert_Triggered < Error
 		attr_accessor :assertion_message
 

@@ -14,6 +14,8 @@ module Ore
 			@type_names = type_names
 			@values     = values
 
+			# Only ever set for a bare named struct (`Named <Struct>`, see #interp_type) -- nil for every other construction path, including the plain `<...>`/`ANY_IDENT := <struct>` forms, which stay anonymous (reachable only through whatever variable holds them).
+			declare 'name', nil
 			declare 'names', Ore::Array.new(names), 'Array'
 			declare 'values', Ore::Array.new(values), 'Array'
 			declare 'type_names', Ore::Array.new(type_names), 'Array'

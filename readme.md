@@ -1058,6 +1058,7 @@ lying(5)   # raises Ore::Type_Contract_Violation — declared Number, actually r
 2. Each declared structure is its own type — `Abc<Number> {}` and `Abc<String> {}` don't share `new`/methods
 3. A reference matches a declared structure by type (like overload resolution), including types it composes and not just its own name — no match raises `Ore::Undeclared_Type_Structure`
 4. Reachable through `.structure` (`.structure.types`, or `.structure.some_name` for named members) — bound before `new{;}` runs, never forwarded as constructor args
+5. Naming an *undeclared* identifier this way (`Named<...>`) builds a plain, named struct instead of raising — a name that's already taken by a real Type still takes priority and behaves as above
 
 ```ore
 String<dict: Dictionary> {
@@ -1069,6 +1070,10 @@ String<num: Number> {
 
 String<{x=1}>().to_s()   # "dict: {x: 1}"
 String<5>().to_s()       # "number: 5"
+
+Thing := <String, Number>   # anonymous struct -- .name is nil
+n := Named<String, Number>
+n.name                      # 'Named'
 ```
 
 ## Shorthand Nil-Initialization

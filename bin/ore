@@ -67,7 +67,7 @@ begin
 		pp result if print_output
 	when 'interp'
 		interpreter, result = interp_and_print_output ARGV[1]
-		pp interpreter.stringify_for_display(result) if print_output
+		puts interpreter.stringify_for_display(result) if print_output
 	when 'lexf'
 		result = Ore.lex_file ARGV[1]
 		pp result if print_output
@@ -76,20 +76,20 @@ begin
 		pp result if print_output
 	when 'interpf'
 		interpreter, result = interp_and_print_output File.read(ARGV[1]), file: ARGV[1]
-		pp interpreter.stringify_for_display(result) if print_output
+		puts interpreter.stringify_for_display(result) if print_output
 	when 'interp-nostd'
 		interpreter, result = interp_and_print_output ARGV[1], load_standard_library: false
-		pp interpreter.stringify_for_display(result) if print_output
+		puts interpreter.stringify_for_display(result) if print_output
 	when 'interpf-nostd'
 		interpreter, result = interp_and_print_output File.read(ARGV[1]), file: ARGV[1], load_standard_library: false
-		pp interpreter.stringify_for_display(result) if print_output
+		puts interpreter.stringify_for_display(result) if print_output
 	when 'run'
 		interpreter, result = interp_and_print_output File.read(ARGV[1]), file: ARGV[1]
-		pp interpreter.stringify_for_display(result) if print_output
+		puts interpreter.stringify_for_display(result) if print_output
 	else
 		if ARGV[0]
 			interpreter, result = interp_and_print_output File.read(ARGV[0]), file: ARGV[0]
-			pp interpreter.stringify_for_display(result) if print_output
+			puts interpreter.stringify_for_display(result) if print_output
 		else
 			puts "Error: No file specified.\n#{INSTRUCTIONS}"
 			exit 1

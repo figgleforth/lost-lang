@@ -10,8 +10,9 @@ Member {
 	}
 
 	to_s {;
+		# `.?pretty_print()` -- for an unnamed schema-only member (`<String, Number>`), `value` is the bare String Type object itself, not an actual instance, so a plain `.pretty_print()` would raise Cannot_Call_Instance_Member_On_Type. Falls back to `value` itself (its own to_s -- the type's name) when that's the case.
 		displayed_value := if value and type.?name == 'String'
-			value.pretty_print()
+			value.?pretty_print() or value
 		else
 			value
 		end

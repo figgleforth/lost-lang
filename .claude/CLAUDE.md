@@ -402,6 +402,27 @@ b.to_s()   # "My dict: {x::0, y::1, z::2, }"
   - `.structure_declaration` — the type's own declared structure (`Abc<dict: Dictionary = {}> {}`): named/positional members, annotations, and defaults. A structured reference looks here to re-associate positional call-site values with names and fall back to defaults
   - Both live on `Type`, not `Scope`, because a structured reference is a `dup` of the type (same Ruby class as the type itself), so a `Type`-vs-`Instance` check can't stand in for the "declared" vs "supplied" distinction — see the comments on `Type#structure_instance`/`Type#structure_declaration` in `scopes.rb`
 
+### Bare Named Structs
+
+`Ident<...>` where `Ident` has nothing declared under it anywhere (no bare `Type`, no structured variant, no alias to one) isn't an error — it builds a plain `Struct`, same as `<...>` alone, except with `.name` set from the identifier:
+
+```ore
+Thing := <String, Number>   # anonymous -- .name is nil; only reachable via the variable Thing
+Named <String, Number>      # named -- .name == 'Named'
+
+n := Named<String, Number>
+n.name                      # 'Named'
+```
+
+**Type lookup always takes priority.** This only kicks in when `Ident` is genuinely undeclared — a name that collides with something real still behaves exactly as it always has:
+
+```ore
+Abc<Number> {}
+Abc<String>          # raises Ore::Undeclared_Type_Structure -- Abc IS declared, just not with this structure
+```
+
+Implemented in `#interp_type` (`interpreter.rb`): the existing bare-reference branch (`Abc<Number>`, no `{}` body) already raised `Ore::Undeclared_Type_Structure` whenever nothing matched — it just never distinguished "nothing declared under this name at all" from "something's declared, this structure doesn't match it". Now it checks both `find_in_stack(expr.name)` (a bare Type or a local alias) and `structured_variants_for(lookup_name)` (any structured variant, matching or not) before falling through to a named struct — either one being non-empty means something real is declared under that name, so the original error still applies.
+
 ## Destructuring
 
 `(a, b) := <tuple-or-struct-valued expr>` extracts a Tuple's or Struct's values positionally into fresh locals or existing members:

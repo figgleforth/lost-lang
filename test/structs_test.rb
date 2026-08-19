@@ -256,10 +256,19 @@ class Structs_Test < Base_Test
 		assert_equal 'dict-named', out
 	end
 
-	def test_reference_to_never_declared_structure_raises
-		assert_raises Ore::Undeclared_Type_Structure do
-			Ore.interp 'Abc<Number>'
-		end
+	def test_reference_to_never_declared_type_name_builds_a_bare_named_struct
+		# `Ident<...>` with a base name that's never been declared as anything at all (no bare Type, no structured variant, no alias) isn't an error -- it's a bare named struct, same shape as `<...>` but with `.name` set from the identifier. Only collides with something else declared -- a real Type with a mismatched structure, or an alias to a non-Type value -- does it still raise (see test_reference_to_mismatched_declared_structure_raises).
+		out = Ore.interp <<~CODE
+		    n := Named<Number>
+		    n.name
+		CODE
+		assert_equal 'Named', out
+
+		out = Ore.interp <<~CODE
+		    n := Named<Number>
+		    n.types.values.map({it; it.name}).join(', ')
+		CODE
+		assert_equal 'Number', out
 	end
 
 	def test_reference_to_mismatched_declared_structure_raises

@@ -136,11 +136,8 @@ module Ore
 				depth += 1 if it.value == '{'
 				depth -= 1 if it.value == '}'
 
-				stop = if lexeme.is_a? Ore::Lexeme
-					it.is lexeme
-				else
-					it.value == lexeme
-				end
+				# `Lexeme#is` already dispatches correctly on `lexeme`'s own class (Symbol -> type match, String -> value match, Array -> any-match, a full Lexeme -> #== by value) -- the old inline check only ever handled a full Lexeme or a raw value, silently never matching a bare type Symbol (`:delimiter`) passed as a stop marker.
+				stop = it.is lexeme
 
 				!(stop && depth <= 0)
 			end
@@ -150,6 +147,15 @@ module Ore
 			peek_until(stop_at_lexeme).any? do |t|
 				t.is contains
 			end
+		end
+
+		# `Abc<Number>` and an ordinary `<` comparison that just happens to start with a capitalized identifier (`X < Y`) are indistinguishable by lookahead alone -- rather than trying to enumerate every legitimate statement-ending token a struct's own member values could contain (`,` inside a member list is fine, but so is a `(`/`)`/`[`/`{}` nested inside one member's own default value), just attempt the real parse and see what happens. Saves the token position first; a syntax error anywhere in the attempt (ran out of tokens hunting for a `>` that was never coming, or any other `Parser#eat` mismatch) rewinds back to it and reports "not a structured type reference" instead, so the caller falls through to ordinary expression parsing (`X < Y` as a comparison).
+		def try_parse_type_decl
+			saved_i = @i
+			parse_type_decl
+		rescue StandardError
+			@i = saved_i
+			nil
 		end
 
 		# idea: support sequence of elements where an element can be one of many, like the sequence [IdentifierToken, [:=, =]]
@@ -763,8 +769,12 @@ module Ore
 				# String_Expr exclusion a bit further down in this method).
 				parse_struct
 
-			elsif curr?(:Identifier, '{') || curr?(:Identifier, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, '{') || curr?(TYPE_IDENTIFIER, '<')
+			elsif curr?(:Identifier, '{') || curr?(:Identifier, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, '{')
 				parse_type_decl
+
+			elsif curr?(TYPE_IDENTIFIER, '<') && (structured = try_parse_type_decl)
+				# `X < Y` (X/Y capitalized variables holding comparable values, not types) looks identical up to this point to `Abc<Number>` -- #try_parse_type_decl actually attempts the real parse and rewinds on any syntax error, so a comparison that never finds a real closing `>` falls through to ordinary expression parsing below instead of running #parse_struct out of tokens hunting for one (Ore::Out_Of_Tokens).
+				structured
 
 			elsif curr?(TYPE_COMPOSITION_OPERATORS) && peek.is(:Identifier)
 				parse_composition_expr

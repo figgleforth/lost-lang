@@ -1699,6 +1699,11 @@ module Ore
 
 					existing = find_structured_type_variant lookup_name, supplied
 					unless existing.is_a? Ore::Type
+						# `expr.name` has nothing declared under it at all -- no bare Type, no structured variant (checked separately from `existing` above, which only tells us no *matching* variant was found, not that none exist), no alias. Rather than raise, treat this as a bare named struct (`Named <Struct>`), reusing the already-interpreted `supplied` Struct instance and just naming it. A name that *does* have something declared -- a real Type with a mismatched structure, or an alias to a non-Type value -- still raises, unchanged.
+						if aliased.nil? && structured_variants_for(lookup_name).empty?
+							supplied.declare 'name', expr.name
+							return supplied
+						end
 						raise Ore::Undeclared_Type_Structure.new(expr)
 					end
 				else
@@ -2031,6 +2036,10 @@ module Ore
 		end
 
 		def interp_func_body func, expr, arg_values: nil
+			# A bare Capitalized/UPPERCASE param (`f { ABC; ABC }`) parses as a signature-literal-style bare type (`param.type` set, `param.name` left nil, see #parse_func) rather than a named param -- real function params always start lowercase. Every other param-binding path below assumes `.name` is always present, so this is checked once, up front, with a real error instead of a raw NoMethodError the first time something reads `param.name.value`.
+			nameless_param = func.parameters.find { |param| param.name.nil? }
+			raise Ore::Invalid_Parameter_Name.new(expr, nameless_param.type.value) if nameless_param
+
 			# note; Evaluate arguments in caller's scope (before pushing function scopes). A labeled argument (`to: someone`) parses as a plain `:` Infix_Expr, and a named argument (`to := someone`) as a plain `:=` Infix_Expr (same production named struct members use) -- #classify_argument unwraps either rather than letting #interpret try to resolve `to` as an identifier and raise Undeclared_Identifier.
 			# A caller that already evaluated the operands (operator-overload dispatch in #interp_infix) passes them via arg_values so their side effects don't run a second time; labels/named args only exist in real call syntax, so neither applies there.
 			arg_labels = []

@@ -981,4 +981,57 @@ class Regression_Test < Base_Test
 		assert_equal [:x, :y], Ore.interp("{x: 1, y: 2}.keys()").values
 		assert_equal({ x: 1, y: 2 }, Ore.interp("{x: 1}.merge({y: 2})").hash)
 	end
+
+	def test_member_to_s_on_unnamed_type_only_member_does_not_crash_regression
+		# `<String, Number>` (a schema-only struct with bare, unnamed type members) has `value == type` for its String member -- the bare String Type object itself, not an actual instance. `Member#to_s` unconditionally called `.pretty_print()` on it whenever `type.?name == 'String'`, assuming `value` was a real String instance -- raised `Cannot_Call_Instance_Member_On_Type` instead, since `pretty_print` is an instance-only method. `.?pretty_print()` (nil-safe) fixes it.
+		refute_raises Ore::Cannot_Call_Instance_Member_On_Type do
+			Ore.interp("<String, Number>.members.0.to_s()")
+		end
+	end
+
+	def test_capitalized_identifier_comparison_does_not_get_parsed_as_a_structured_type_reference_regression
+		# `X < Y` (X/Y capitalized variables, not types) looks identical up to `TYPE_IDENTIFIER '<'` to `Abc<Number>` -- #begin_expression always committed to #parse_type_decl/#parse_struct on sight of that shape, which then ran out of tokens hunting for a `>` that was never coming (Ore::Out_Of_Tokens) instead of falling through to an ordinary `<` comparison. #try_parse_type_decl now actually attempts the real parse and rewinds on any syntax error instead of guessing via lookahead.
+		assert_equal true, Ore.interp(<<~CODE)
+		    X := 1
+		    Y := 2
+		    X < Y
+		CODE
+
+		# A capitalized comparison as the last expression in a block, with no trailing newline before the closing `}`, took the same wrong path for a different reason (a naive lookahead bounded only by newline would've kept scanning past `}` too).
+		assert_equal true, Ore.interp(<<~CODE)
+		    compute { x, y; x < y}
+		    compute(1, 2)
+		CODE
+
+		# A real structured-type declaration/reference on one line still works, comma-separated members included -- confirms the fix didn't just move the false negative onto legitimate `Abc<Number>` usage.
+		assert_equal true, Ore.interp(<<~CODE)
+		    Dictionary_Like<String, Number> {}
+		    z := Dictionary_Like<String, Number>()
+		    z.structure.types.length() == 2
+		CODE
+
+		# A struct member's own default value can legitimately contain delimiters (`(`/`)`, `[`/`]`, nested `{`/`}`) before the real closing `>` -- must not be mistaken for the statement's own boundary.
+		assert_equal true, Ore.interp(<<~CODE)
+		    mk {; 5 }
+		    Abc<id := mk(), items := [1,2], dict := {x: 1}> {}
+		    z := Abc<mk(), [1,2], {x:1}>()
+		    z =/= nil
+		CODE
+	end
+
+	def test_capitalized_function_param_raises_a_real_error_instead_of_crashing_regression
+		# A bare Capitalized/UPPERCASE param (`f { ABC; ABC }`) parses like a signature-literal's bare type (`param.type` set, `param.name` left nil, see #parse_func -- a real function param always starts lowercase, so a bare Capitalized token there can only mean a signature literal, e.g. `{Number -> String;}`) rather than a named param. #interp_func_body assumed every param has `.name` set, raising a raw NoMethodError (`undefined method 'value' for nil`) the first time it read `param.name.value`, instead of a real Ore error.
+		assert_raises Ore::Invalid_Parameter_Name do
+			Ore.interp <<~CODE
+			    f { ABC; ABC }
+			    x := 1
+			    f(x)
+			CODE
+		end
+
+		# A genuine signature literal (never called, just described/assigned) is unaffected.
+		refute_raises Ore::Invalid_Parameter_Name do
+			Ore.interp '{Number -> String;}'
+		end
+	end
 end
