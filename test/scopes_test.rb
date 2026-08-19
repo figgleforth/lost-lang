@@ -476,7 +476,8 @@ class Scopes_Test < Base_Test
 			@add_readable_scope v
 			nil
 		CODE
-		instance = interpreter.stack.last.readable_scopes.keys.first
+		# `.keys.first` (not `v` directly) -- Global's readable_scopes also holds the stdlib's own Scope, which #Interpreter now deliberately keeps alive with a real strong reference of its own (see #run), so it's always present here too. Read `v`'s value straight out of `declarations` instead of trusting WeakMap key order to land on the right one.
+		instance = interpreter.stack.last.declarations['v']
 		ref      = WeakRef.new(instance)
 		interpreter.stack.last.declarations.delete('v')
 		instance = nil

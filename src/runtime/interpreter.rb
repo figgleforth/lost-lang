@@ -17,7 +17,7 @@ module Ore
 			attr_accessor :cached_source_by_filename, :cached_expressions_by_filepath, :type_checked_filepaths
 		end
 
-		attr_accessor :input, :lexer, :parser, :load_standard_library, :stack, :route_functions_by_route_name, :servers, :dom_onclick_function_handlers, :dom_input_elements, :last_output, :current_source_file
+		attr_accessor :input, :lexer, :parser, :load_standard_library, :stack, :route_functions_by_route_name, :servers, :dom_onclick_function_handlers, :dom_input_elements, :last_output, :current_source_file, :stdlib_scope
 
 		def initialize
 			@dom_input_elements            = {} # {element_hash: Ore::Instance} for inputs/textareas
@@ -42,9 +42,10 @@ module Ore
 				@stack << global
 				if load_standard_library
 					# Stdlib lives in its own Scope, reachable via Global's readable scope -- not Global's own declarations. Reassigning a builtin can't mutate it (readable_scopes never redirects writes), just shadows locally. Composing and deliberate @push_scope reopening still work. `global` is pushed before this load so `~/` still resolves to Global while the stdlib itself loads.
-					stdlib_scope = Ore::Scope.new('Standard_Library')
-					load_file_into_scope STANDARD_LIBRARY_PATH, stdlib_scope
-					global.add_readable_scope stdlib_scope
+					# Also held here as a real instance var, not just the WeakMap entry above -- readable/writable scope membership deliberately never keeps anything alive on its own (see CLAUDE.md), which is correct for things a caller adds and is expected to hold their own reference to elsewhere, but @stdlib_scope has no other holder anywhere. Without this, it's one GC pass away from being collected mid-program, taking the entire standard library (String, Array, everything) down with it.
+					@stdlib_scope = Ore::Scope.new('Standard_Library')
+					load_file_into_scope STANDARD_LIBRARY_PATH, @stdlib_scope
+					global.add_readable_scope @stdlib_scope
 				end
 			end
 			@lexer.source_file    = top_level_source_file
