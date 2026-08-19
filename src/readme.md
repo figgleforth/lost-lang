@@ -1,34 +1,21 @@
 ### What's here?
 
-This [`src`](/src) folder contains the implementation of Ore in Ruby. The codebase is organized into three phases:
+This [`src`](/src) folder contains the implementation of Ore in Ruby. Source code moves through five phases: **Lexer → Parser → Type Checker → Declarator → Interpreter.** `Interpreter` (`src/runtime/interpreter.rb`) is the entry point: it owns a `Lexer` and `Parser`, drives all five phases via `run(source)`, and holds all execution state.
 
-**Compile-time** (`src/compiler/`) Source code to AST
+Rather than listing individual files here (they move around; check the directory itself for the current contents), here's what each one is for:
 
-- [`lexeme.rb`](compiler/lexeme.rb) - Token representation
-- [`expressions.rb`](compiler/expressions.rb) - AST node definitions
-- [`lexer.rb`](compiler/lexer.rb) - Tokenizes source code into lexemes
-- [`parser.rb`](compiler/parser.rb) - Parses lexemes into an AST
-
-**Runtime** (`src/runtime/`) AST to Execution
-
-- [`interpreter.rb`](runtime/interpreter.rb) - The running program; owns a Lexer and Parser; `run(source)` is the entry point
-- [`scopes.rb`](runtime/scopes.rb) - All scope types (Global, Type, Instance, Func, Route, …) and built-in types (String, Array, Number, …)
-- [`errors.rb`](runtime/errors.rb) - Runtime error definitions
-
-**Shared** (`src/shared/`)
-
-- [`constants.rb`](shared/constants.rb) - Language constants and operator definitions
-- [`helpers.rb`](shared/helpers.rb) - Utility functions added to Ore module
-
-**Entry point**
-
-- [`ore.rb`](ore.rb) - Requires all components; exposes `Ore.lex`, `Ore.parse`, `Ore.interp` convenience methods
+- **`compiler/`**: turns Ore source into a type-checked AST (tokenizing, parsing, static type checking, and the forward-declaration pass that lets code reference a function or type before its own definition).
+- **`runtime/`**: executes that AST (the interpreter itself, the scope hierarchy: Global, Type, Instance, Func, Route, etc., and runtime error definitions).
+- **`external/ruby/`**: Ruby-backed implementations of Ore's built-in types (`String`, `Array`, `Number`, etc.) that Ore-level proxy methods delegate into.
+- **`systems/`**: larger subsystems layered on top of the interpreter, e.g. HTML rendering.
+- **`shared/`**: constants and helper functions used across every phase.
+- **`ore.rb`**: the entry point. Requires everything and exposes the `Ore` module's convenience methods (`Ore.lex`, `Ore.parse`, `Ore.interp`, and their `_file` counterparts).
 
 ---
 
 ### Running Your Own Programs With Ruby
 
-`Interpreter` is the entry point. Call `run` with source code and it handles lexing, parsing, and execution:
+Call `run` with source code and it handles lexing, parsing, and execution:
 
 ```ruby
 require './src/ore'
@@ -81,4 +68,10 @@ You can also use `bin/ore interp` for direct source as string evaluation:
 
 ```bash
 bundle exec bin/ore interp "4 + 8"
+```
+
+For the full list of subcommands (parsing/lexing/declaration inspection, the REPL, etc.), run:
+
+```bash
+bundle exec bin/ore --help
 ```

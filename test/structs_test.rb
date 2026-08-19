@@ -86,8 +86,8 @@ class Structs_Test < Base_Test
 		    Point {
 		    	x, y,
 		    	new { x, y;
-		    		./x = x
-		    		./y = y
+		    		self.x = x
+		    		self.y = y
 		    	}
 		    }
 		    p := Point(3, 4)
@@ -124,7 +124,7 @@ class Structs_Test < Base_Test
 		out = Ore.interp <<~CODE
 		    Abc {
 		    	val,
-		    	new { v; ./val = v }
+		    	new { v; self.val = v }
 		    }
 		    Abc<Number> {}
 		    Y := Abc<Number>
@@ -137,7 +137,7 @@ class Structs_Test < Base_Test
 		out = Ore.interp <<~CODE
 		    Abc {
 		    	val,
-		    	new { v; ./val = v }
+		    	new { v; self.val = v }
 		    }
 		    Abc<Number> {}
 		    y := Abc<Number>
@@ -163,7 +163,7 @@ class Structs_Test < Base_Test
 		out = Ore.interp <<~CODE
 		    Abc {
 		    	val,
-		    	new { v := -1; ./val = v }
+		    	new { v := -1; self.val = v }
 		    }
 		    Abc<Number> {}
 		    zz := Abc<4815>()
@@ -370,7 +370,7 @@ class Structs_Test < Base_Test
 	# check) where it should have read `supplied.values` for the actual result.
 	def test_named_reference_member_preserves_the_real_supplied_value_regression
 		out = Ore.interp <<~CODE
-		    Data_Conn { name, new { name; ./name = name } }
+		    Data_Conn { name, new { name; self.name = name } }
 		    Table<columns: Struct, database: Data_Conn> {}
 
 		    cols := <name: String, age: Number>

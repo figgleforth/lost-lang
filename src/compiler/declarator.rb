@@ -8,7 +8,7 @@ module Ore
 		end
 	end
 
-	class Forward_Declarator
+	class Declarator
 		# Caching like Interpreter does.
 		@cached_declarations_by_filepath = {} # {::String resolved_path => Hash{::String => Declaration}}
 		# Filepaths currently being resolved, guarding against a load cycle (A @loads B @loads A) recursing forever.
@@ -18,7 +18,7 @@ module Ore
 			attr_accessor :cached_declarations_by_filepath, :currently_loading_filepaths
 		end
 
-		# Mirrors Interpreter#load_file_into_scope's own path resolution exactly -- kept here too since Forward_Declarator has to resolve a load target itself, ahead of the real interpreter ever reaching that @load.
+		# Mirrors Interpreter#load_file_into_scope's own path resolution exactly -- kept here too since Declarator has to resolve a load target itself, ahead of the real interpreter ever reaching that @load.
 		def self.resolve_load_filepath filepath
 			filepath = filepath.dup
 			filepath << '.ore' unless filepath.end_with? '.ore'
@@ -112,7 +112,7 @@ module Ore
 			              Parser.new(Lexer.new(File.read(filepath)).output).output
 
 			self.class.currently_loading_filepaths << filepath
-			declared = Forward_Declarator.new(expressions).output
+			declared = Declarator.new(expressions).output
 			self.class.currently_loading_filepaths.delete filepath
 
 			self.class.cached_declarations_by_filepath[filepath] = declared

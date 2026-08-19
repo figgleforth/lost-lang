@@ -117,7 +117,7 @@ class Error_Test < Base_Test
 		    Server {
 		    	port,
 		    	new { port := 3099;
-		    		./port = port
+		    		self.port = port
 		    	}
 		    }
 

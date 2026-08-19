@@ -115,8 +115,8 @@ class ProxiesTest < Base_Test
 		    	y,
 
 		    	new { x, y;
-		    		./x = x
-		    		./y = y
+		    		self.x = x
+		    		self.y = y
 		    	}
 
 		    	@operator == @infix 500 { left, right;
@@ -139,8 +139,8 @@ class ProxiesTest < Base_Test
 		    	y,
 
 		    	new { x, y;
-		    		./x = x
-		    		./y = y
+		    		self.x = x
+		    		self.y = y
 		    	}
 
 		    	@operator == @infix 500 { left, right;

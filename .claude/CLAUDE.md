@@ -72,7 +72,7 @@ Source code is tokenized, parsed into an AST, and statically type checked:
 - `lexeme.rb` - Token representation
 - `expressions.rb` - AST node definitions
 - `type_checker.rb` - Static type checker; runs on the AST before interpretation
-- `forward_declarator.rb` - Builds `Interpreter#declarations`, the table `#resolve_forward_declaration` lazily interprets from — see Forward Declarations below
+- `declarator.rb` - Builds `Interpreter#declarations`, the table `#resolve_forward_declaration` lazily interprets from — see Forward Declarations below
 
 ### Runtime (src/runtime/)
 
@@ -188,7 +188,7 @@ result             # 42
 a := 123
 ```
 
-### `Forward_Declarator` (`src/compiler/forward_declarator.rb`)
+### `Declarator` (`src/compiler/declarator.rb`)
 
 Walks the whole top-level AST once, before interpretation (invoked from `Interpreter#output`, same spot `Type_Checker` runs from), building `Interpreter#declarations`: `Hash{::String => Ore::Declaration}`. `Ore::Declaration = Data.define(:key, :expr_or_decl, :expr)` — `expr` is always the *original* expression (what would need to be `interpret`ed to actually bring the declaration into being); `expr_or_decl` is a more inspectable rendering (a nested Hash for a `Type_Expr`/`Func_Expr`/`Route_Expr` body, the raw value expression for `:=`/`=`, etc.). Inspect either directly via `bin/ore declare <code>` / `declaref <file>`.
 
@@ -199,9 +199,9 @@ Walks the whole top-level AST once, before interpretation (invoked from `Interpr
 - **Deliberately excluded**: `For_Loop_Expr` (pushes its own scope per iteration in `#interp_for_loop` — loop-local, not forward-referenceable from outside), `Call_Expr` (its arguments can themselves use `:=` for named-argument passing, which looks identical to a declaration but isn't one — see Named Function Arguments above), and a bare `Identifier_Expr` (reads a value, doesn't declare one — registering one used to be a real bug: it silently clobbered a same-named real declaration reached later in the same Hash, since both share a key)
 - **Literals** (`String_Expr`/`Number_Expr`/`Symbol_Expr`) aren't declarations on their own, but are preserved (not dropped to `nil`) as the *value* on the right of a `:=`/`=` via `#resolve_value` — a separate helper from `#declare`, used only for RHS resolution, so a literal or plain identifier RHS is stored as-is instead of wrapped in another `Declaration`
 
-### `@load` (`Forward_Declarator#declarations_for_load`)
+### `@load` (`Declarator#declarations_for_load`)
 
-A bare `@load 'file'` also participates: `#declare`'s `Directive_Expr` branch hands `declarations_for_load` off to compute the *other* file's own Forward_Declarator output (parsed + declared once, cached class-level in `cached_declarations_by_filepath`, keyed by resolved path — mirrors `Interpreter.cached_expressions_by_filepath`; `currently_loading_filepaths` guards a load cycle, A `@load`ing B `@load`ing A, from recursing forever), then **rebinds every entry's `.expr` to the `@load` directive itself**, not the isolated node it was found on in the other file. This matters twice over: a loaded file's declarations aren't independent of each other (`Div | Dom {}` needs `Dom` too — forcing `Div` alone and leaving `Dom` unhoisted would break), and forcing any single name has to mark the *whole* `@load` as forced, or `#output`'s own walk redundantly re-runs the entire file a second time once it reaches that line for real. Returns nil (declines) when the path isn't a plain string literal (`@load some_var`) — nothing statically known to walk. The rebound Hash flattens into the current level the same way `Conditional_Expr`/`Circumfix_Expr` already do.
+A bare `@load 'file'` also participates: `#declare`'s `Directive_Expr` branch hands `declarations_for_load` off to compute the *other* file's own Declarator output (parsed + declared once, cached class-level in `cached_declarations_by_filepath`, keyed by resolved path — mirrors `Interpreter.cached_expressions_by_filepath`; `currently_loading_filepaths` guards a load cycle, A `@load`ing B `@load`ing A, from recursing forever), then **rebinds every entry's `.expr` to the `@load` directive itself**, not the isolated node it was found on in the other file. This matters twice over: a loaded file's declarations aren't independent of each other (`Div | Dom {}` needs `Dom` too — forcing `Div` alone and leaving `Dom` unhoisted would break), and forcing any single name has to mark the *whole* `@load` as forced, or `#output`'s own walk redundantly re-runs the entire file a second time once it reaches that line for real. Returns nil (declines) when the path isn't a plain string literal (`@load some_var`) — nothing statically known to walk. The rebound Hash flattens into the current level the same way `Conditional_Expr`/`Circumfix_Expr` already do.
 
 `Ident := @load 'file'` / `IDENT := @load 'file'` (a *named*, namespace-isolating load — see File Loading below) doesn't need any of the above: it's handled entirely by the existing `Infix_Expr` branch plus `#hoistable_declaration_expr?`'s casing check (next section) — forcing the whole `Infix_Expr` re-runs the real assignment, which builds the isolated scope correctly on its own.
 

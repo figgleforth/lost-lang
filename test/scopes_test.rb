@@ -4,7 +4,7 @@ require_relative '../src/ore'
 require_relative 'base_test'
 
 class Scopes_Test < Base_Test
-	SHARED_VEC2 = "Vec2 { x:=0, y:=0, new { x,y; ./x=x, ./y=y } }".freeze
+	SHARED_VEC2 = "Vec2 { x:=0, y:=0, new { x,y; self.x=x, self.y=y } }".freeze
 
 	def test_declaring_new_inside_pushed_scope
 		out = Ore.interp <<-CODE
@@ -13,7 +13,7 @@ class Scopes_Test < Base_Test
 
 			@push_scope Vec2
 			new { x := 0, y := 0;
-				./x=x, ./y=y
+				self.x=x, self.y=y
 			}
 			@pop_scope Vec2
 

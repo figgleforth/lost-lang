@@ -561,13 +561,13 @@ class Interpreter_Test < Base_Test
 		out = Ore.interp 'Thing {
 			x,
 			new {;
-				./x = 123
+				self.x = 123
 			}
 		}, Thing.new.x'
 		assert_equal 123, out
 
 		assert_raises Ore::Missing_Argument do
-			Ore.interp 'Thing { x, new { x; ./x = x } }, Thing.new'
+			Ore.interp 'Thing { x, new { x; self.x = x } }, Thing.new'
 		end
 	end
 
@@ -707,8 +707,8 @@ class Interpreter_Test < Base_Test
 		    	x,
 		    	y,
 		    	new { x, y;
-		    		./x = x
-		    		./y = y
+		    		self.x = x
+		    		self.y = y
 		    	}
 		    }
 		    p := Point(y := 4, x := 3)
@@ -993,20 +993,20 @@ class Interpreter_Test < Base_Test
 			x := 0, y := 0
 
 			new { x, y;
-				./x = x
-				./y = y
+				self.x = x
+				self.y = y
 			}
 
 			multiply! { times;
-				./x *= times
-				./y *= times
+				self.x *= times
+				self.y *= times
 			}
 
 		}
 
 		Transform | Vec2 {
 			new { position := Vec2();
-				./x = position.x
+				self.x = position.x
 				y = position.y
 			}
 
@@ -1046,15 +1046,15 @@ class Interpreter_Test < Base_Test
 				x := 0, y := 0
 
 				new { x, y;
-					./x = x
-					./y = y
+					self.x = x
+					self.y = y
 				}
 			}
 			v := Vec2(4, 8)
 
 			Transform | Vec2 {
 				new { position := Vec2();
-					./x = position.x
+					self.x = position.x
 					y = position.y
 				}
 			}
@@ -1336,12 +1336,12 @@ class Interpreter_Test < Base_Test
 		    	numbers := []
 
 				new { numbers;
-					./numbers = numbers
+					self.numbers = numbers
 				}
 
 		    	multiply { by;
 					result := []
-		    		for ./numbers
+		    		for self.numbers
 		    			result.push(it * by)
 		    		end
 		    		result
@@ -1678,8 +1678,8 @@ class Interpreter_Test < Base_Test
 			y := 0
 
 			new { x, y;
-				./x = x
-				./y = y
+				self.x = x
+				self.y = y
 			}
 		}
 
@@ -1700,8 +1700,8 @@ class Interpreter_Test < Base_Test
 
 
 			new { a, b;
-				./a = a
-				./b = b
+				self.a = a
+				self.b = b
 			}
 		}
 
@@ -1722,8 +1722,8 @@ class Interpreter_Test < Base_Test
 			b := 0
 
 			new { a, b;
-				./a = a
-				./b = b
+				self.a = a
+				self.b = b
 			}
 		}
 
@@ -1744,8 +1744,8 @@ class Interpreter_Test < Base_Test
 			b := 0
 
 			new { a, b;
-				./a = a
-				./b = b
+				self.a = a
+				self.b = b
 			}
 		}
 
@@ -1771,16 +1771,16 @@ class Interpreter_Test < Base_Test
 		    	_private := 8
 
 				# Static declarations
-				../nilled,
-		    	../static := 15
-		    	../_static_private := 16
+				Self.nilled,
+		    	Self.static := 15
+		    	Self._static_private := 16
 
 				calling_private_through_instance {; _private }
 		    	calling_static_through_instance {; static }
 		    	calling_static_private_through_instance {; _static_private }
 
-		    	../calling_static_through_static {; static }
-		    	../calling_static_private_through_static {; _static_private }
+		    	Self.calling_static_through_static {; static }
+		    	Self.calling_static_private_through_static {; _static_private }
 		    }
 		CODE
 
@@ -1913,16 +1913,16 @@ class Interpreter_Test < Base_Test
 		    	base_instance_public := 1
 		    	_base_instance_private := 2
 
-		    	../base_static_public := 10
-		    	../_base_static_private := 20
+		    	Self.base_static_public := 10
+		    	Self._base_static_private := 20
 		    }
 
 		    Other {
 		    	other_instance := 3
 		    	_other_private := 4
 
-		    	../other_static_public := 30
-		    	../_other_static_private := 40
+		    	Self.other_static_public := 30
+		    	Self._other_static_private := 40
 		    }
 		CODE
 
@@ -2020,9 +2020,9 @@ class Interpreter_Test < Base_Test
 		    	_shared_private := 2
 		    	left_only := 3
 
-		    	../shared_static := 10
-		    	../_shared_static_private := 20
-		    	../left_static_only := 30
+		    	Self.shared_static := 10
+		    	Self._shared_static_private := 20
+		    	Self.left_static_only := 30
 		    }
 
 		    Right {
@@ -2030,9 +2030,9 @@ class Interpreter_Test < Base_Test
 		    	_shared_private := 5
 		    	right_only := 6
 
-		    	../shared_static := 40
-		    	../_shared_static_private := 50
-		    	../right_static_only := 60
+		    	Self.shared_static := 40
+		    	Self._shared_static_private := 50
+		    	Self.right_static_only := 60
 		    }
 		CODE
 
@@ -2168,8 +2168,8 @@ class Interpreter_Test < Base_Test
 		    	b := 0
 
 		    	new { a, b;
-		    		./a = a
-		    		./b = b
+		    		self.a = a
+		    		self.b = b
 		    	}
 		    }
 		ORE
@@ -2891,7 +2891,7 @@ class Interpreter_Test < Base_Test
 	def test_member_destructuring_targets
 		# `thing.member` reassigns an existing member, same as plain `thing.member = value`.
 		out = Ore.interp <<~CODE
-		    Thing { member, new {; ./member = 0 } }
+		    Thing { member, new {; self.member = 0 } }
 		    thing := Thing()
 		    (thing.member, local) := <Number, Number>(1, 1)
 		    (thing.member, local)
@@ -2901,7 +2901,7 @@ class Interpreter_Test < Base_Test
 		# The member must already exist -- destructuring can't silently create one.
 		assert_raises Ore::Cannot_Assign_Undeclared_Identifier do
 			Ore.interp <<~CODE
-			    Thing { member, new {; ./member = 0 } }
+			    Thing { member, new {; self.member = 0 } }
 			    thing := Thing()
 			    (thing.missing, local) := <Number, Number>(1, 1)
 			CODE
@@ -2910,7 +2910,7 @@ class Interpreter_Test < Base_Test
 		# A constant member can't be reassigned this way either.
 		assert_raises Ore::Cannot_Reassign_Constant do
 			Ore.interp <<~CODE
-			    Thing { MEMBER, new {; ./MEMBER = 0 } }
+			    Thing { MEMBER, new {; self.MEMBER = 0 } }
 			    thing := Thing()
 			    (thing.MEMBER, local) := <Number, Number>(1, 1)
 			CODE
@@ -2921,7 +2921,7 @@ class Interpreter_Test < Base_Test
 			Ore.interp <<~CODE
 			    Thing {
 					new {;
-						./member := 0
+						self.member := 0
 					}
 				}
 			    thing := Thing()
@@ -2958,11 +2958,11 @@ class Interpreter_Test < Base_Test
 		assert out
 	end
 
-	def test_self_declaration_via_scope_operator_works_but_external_dot_does_not_regression
+	def test_self_declaration_during_construction_works_but_external_dot_does_not_regression
 		out = Ore.interp <<~CODE
 		    Thing {
 		        new {;
-		            ./member := 123
+		            self.member := 123
 		        }
 		    }
 		    t := Thing()
@@ -2975,7 +2975,7 @@ class Interpreter_Test < Base_Test
 			Ore.interp <<~CODE
 			    Thing {
 			        not_new_func {;
-			            ./member := 123
+			            self.member := 123
 			        }
 			    }
 			    t := Thing()
@@ -2993,7 +2993,7 @@ class Interpreter_Test < Base_Test
 
 		assert_raises Ore::Cannot_Assign_Undeclared_Identifier do
 			Ore.interp <<~CODE
-			    Thing { member, new {; ./member = 0 } }
+			    Thing { member, new {; self.member = 0 } }
 			    thing := Thing()
 			    thing.missing = 5
 			CODE
@@ -3279,7 +3279,7 @@ class Interpreter_Test < Base_Test
 	def test_Self_dot_access_identical_to_class_name_dot_access
 		out = Ore.interp <<~CODE
 		    Thing {
-		        ../count := 5
+		        Self.count := 5
 		        get_via_Self {; Self.count }
 		        get_via_name {; Thing.count }
 		    }
@@ -3289,13 +3289,13 @@ class Interpreter_Test < Base_Test
 		assert_equal [5, 5], out.values
 	end
 
-	def test_self_outside_instance_raises_same_error_as_dot_slash
+	def test_self_raises_outside_instance_context
 		assert_raises Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance do
 			Ore.interp 'self'
 		end
 	end
 
-	def test_Self_outside_type_raises_same_error_as_dot_dot_slash
+	def test_Self_raises_outside_type_context
 		assert_raises Ore::Cannot_Use_Type_Scope_Operator_Outside_Type do
 			Ore.interp 'Self'
 		end
@@ -3343,7 +3343,7 @@ class Interpreter_Test < Base_Test
 		end
 	end
 
-	def test_self_dot_func_declares_instance_method_like_dot_slash
+	def test_self_dot_func_declares_instance_method
 		out = Ore.interp <<~CODE
 		    Thing {
 		        self.greet {; 'hi' }
@@ -3353,10 +3353,10 @@ class Interpreter_Test < Base_Test
 		assert_equal 'hi', out
 	end
 
-	def test_Self_dot_func_declares_static_method_like_dot_dot_slash
+	def test_Self_dot_func_declares_static_method
 		out = Ore.interp <<~CODE
 		    Thing {
-		        ../count := 0
+		        Self.count := 0
 		        Self.increment {; count += 1 }
 		    }
 		    Thing.increment()
@@ -3364,32 +3364,6 @@ class Interpreter_Test < Base_Test
 		    Thing.count
 		CODE
 		assert_equal 2, out
-	end
-
-	def test_self_and_Self_produce_identical_results_to_dot_slash_and_dot_dot_slash
-		dot_slash_version = Ore.interp <<~CODE
-		    A {
-		        ../increment {; count += 1 }
-		        ../count := 0
-		    }
-		    A.increment()
-		    A.increment()
-		    A.increment()
-		    A.count
-		CODE
-
-		self_version = Ore.interp <<~CODE
-		    B {
-		        Self.increment {; count += 1 }
-		        ../count := 0
-		    }
-		    B.increment()
-		    B.increment()
-		    B.increment()
-		    B.count
-		CODE
-
-		assert_equal dot_slash_version, self_version
 	end
 
 	def test_Self_is_callable_like_the_type_name_with_and_without_args
@@ -3405,7 +3379,7 @@ class Interpreter_Test < Base_Test
 		out = Ore.interp <<~CODE
 		    Thing {
 		        value,
-		        new { v; ./value = v }
+		        new { v; self.value = v }
 		        make_with_arg {; Self(99) }
 		    }
 		    Thing(1).make_with_arg().value

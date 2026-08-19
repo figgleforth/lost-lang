@@ -29,9 +29,9 @@ module Ore
 			@stack                 = [] # [Ore::Scope]
 			@servers               = [] # [Ore::Server]
 
-			@lexer               = Lexer.new
-			@parser              = Parser.new
-			@declarations        = {} # {::String => Ore::Declaration}, see Forward_Declarator
+			@lexer        = Lexer.new
+			@parser       = Parser.new
+			@declarations = {} # {::String => Ore::Declaration}, see Declarator
 			@forced_declarations = Set.new # identity-tracked Ore::Expression, see #resolve_forward_declaration
 		end
 
@@ -73,7 +73,7 @@ module Ore
 			end
 
 			unless skip_forward_declarations
-				declarator    = Forward_Declarator.new input
+				declarator    = Declarator.new input
 				@declarations = declarator.output
 			end
 

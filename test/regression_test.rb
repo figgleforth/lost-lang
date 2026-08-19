@@ -34,9 +34,11 @@ class Regression_Test < Base_Test
 		assert_equal 'abc', ds.last.value
 	end
 
-	def test_dot_slash_regression
-		out = Ore.interp './x := 123'
-		assert_equal 123, out
+	def test_dot_slash_outside_instance_raises_regression
+		# Was silently shadowed by a second, unrelated method also named test_dot_slash_regression (see further down) -- Ruby just keeps the later definition, so this one never actually ran, and its assertion (`123`) was stale/wrong even before that: `./x := 123` at top level has always raised, not returned 123.
+		assert_raises Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance do
+			Ore.interp './x := 123'
+		end
 	end
 
 	def test_look_up_tilde_slash_without_dot_slash_regression
@@ -98,7 +100,7 @@ class Regression_Test < Base_Test
 			numerator := 8
 
 			new { num;
-				./numerator = num
+				self.numerator = num
 			}
 		}
 		x := Number.new(15)
@@ -112,7 +114,7 @@ class Regression_Test < Base_Test
 			numerator := -100
 
 			new { num;
-				./numerator = num
+				self.numerator = num
 			}
 		}
 		x := Number(4)
@@ -126,7 +128,7 @@ class Regression_Test < Base_Test
 			kind := "NONE"
 
 			new { new_kind;
-				./kind = new_kind
+				self.kind = new_kind
 			}
 
 			to_s {;
@@ -178,8 +180,8 @@ class Regression_Test < Base_Test
 				name := 'Thingy'
 
 				new { new_name := '', id := 123;
-					./name = new_name
-					./id = id
+					self.name = new_name
+					self.id = id
 				}
 			}
 
@@ -197,8 +199,8 @@ class Regression_Test < Base_Test
 				name := 'Thingy',
 
 				new { new_name, id;
-					./name = new_name
-					./id = id
+					self.name = new_name
+					self.id = id
 				}
 			}
 
@@ -288,7 +290,7 @@ class Regression_Test < Base_Test
 		    	name,
 
 		    	new { name;
-		    		./name = name
+		    		self.name = name
 		    	}
 
 		    	make_inner {;
@@ -300,7 +302,7 @@ class Regression_Test < Base_Test
 		    	name,
 
 		    	new { name;
-		    		./name = name
+		    		self.name = name
 		    	}
 
 		    	get_name {;
@@ -316,7 +318,7 @@ class Regression_Test < Base_Test
 		assert_equal "inner_value", out.values[1]
 	end
 
-	def test_dot_slash_inside_for_loop
+	def test_self_inside_for_loop
 		# note: Composing Array with itself allows extending or overriding behavior of Array. Notice how `values` is accessible despite being declared on the original Array type.
 		without_prefix = <<~CODE
 		    Array | Array {
@@ -331,7 +333,7 @@ class Regression_Test < Base_Test
 		with_prefix = <<~CODE
 		    Array | Array {
 		        each { func;
-		        	for ./values
+		        	for self.values
 		        		func(it)
 		        	end
 		        }
@@ -365,8 +367,8 @@ class Regression_Test < Base_Test
 		refute_raises Ore::Missing_Ruby_Proxy_Declaration do
 			Ore.interp <<~ORE
 			    Thing {
-			    	../abc,
-			    	../def {;}
+			    	Self.abc,
+			    	Self.def {;}
 			    }
 
 			    Thing.abc
@@ -496,7 +498,7 @@ class Regression_Test < Base_Test
 		        n,
 
 		        new { n;
-					./n = n
+					self.n = n
 				}
 
 		        fib {;
@@ -609,8 +611,8 @@ class Regression_Test < Base_Test
 		    	y,
 
 		    	new { x, y;
-		    		./x = x
-		    		./y = y
+		    		self.x = x
+		    		self.y = y
 		    	}
 
 		    	@operator == @infix 500 { left, right;
@@ -650,7 +652,7 @@ class Regression_Test < Base_Test
 		out = Ore.interp <<~CODE
 		    Thing {
 		    	x,
-		    	new { x; ./x = x }
+		    	new { x; self.x = x }
 		    	to_s {; "Thing(`x`)" }
 		    }
 		    t := Thing(5)
@@ -660,7 +662,7 @@ class Regression_Test < Base_Test
 
 		# A type with no to_s still falls back to the raw dump -- no change there.
 		out = Ore.interp <<~CODE
-		    Bare { x, new { x; ./x = x } }
+		    Bare { x, new { x; self.x = x } }
 		    b := Bare(5)
 		    "value: `b`"
 		CODE
@@ -796,8 +798,8 @@ class Regression_Test < Base_Test
 		    	x,
 		    	y,
 		    	new { at x, at y;
-		    		./x = x
-		    		./y = y
+		    		self.x = x
+		    		self.y = y
 		    	}
 		    }
 		    p := Point(at: 3, at: 4)
@@ -894,8 +896,8 @@ class Regression_Test < Base_Test
 		        x,
 		        y,
 		        new { x, y;
-		            ./x = x
-		            ./y = y
+		            self.x = x
+		            self.y = y
 		        }
 		    }
 		    v := Vec2(0, 0)
@@ -925,7 +927,7 @@ class Regression_Test < Base_Test
 		# `<=>` on a custom Instance with no @operator overload used to fall through to Ruby's own Kernel#<=> (every Object gets a trivial, identity-based default), silently returning nil instead of raising -- respond_to?(:<=>) can't tell the trivial default apart from a real one.
 		assert_raises Ore::Undeclared_Infix_Operator do
 			Ore.interp <<~CODE
-			    Point { x, new { x; ./x = x } }
+			    Point { x, new { x; self.x = x } }
 			    Point(1) <=> Point(2)
 			CODE
 		end
@@ -934,7 +936,7 @@ class Regression_Test < Base_Test
 		assert_equal 1, Ore.interp('5 <=> 3')
 
 		out = Ore.interp <<~CODE
-		    Point { x, new { x; ./x = x }
+		    Point { x, new { x; self.x = x }
 		        @operator <=> @infix { left, right; left.x <=> right.x }
 		    }
 		    Point(1) <=> Point(2)

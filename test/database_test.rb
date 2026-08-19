@@ -116,7 +116,7 @@ class Database_Test < Base_Test
 			db.create_table('users' { id: 'primary_key', name: 'String' })
 
 			User | Table {
-				../database := db
+				Self.database := db
 				table_name := 'users'
 			}
 
@@ -163,7 +163,7 @@ class Database_Test < Base_Test
 			db.create_table('users', { id: 'primary_key', name: 'String' })
 
 			User | Table {
-				../database := db
+				Self.database := db
 				table_name := 'users'
 			}
 
@@ -182,7 +182,7 @@ class Database_Test < Base_Test
 			db.create_table('users', { id: 'primary_key', name: 'String' })
 
 			User | Table {
-				../database := db
+				Self.database := db
 				table_name := 'users'
 			}
 
@@ -201,7 +201,7 @@ class Database_Test < Base_Test
 			db.create_table('users', { id: 'primary_key', name: 'String' })
 
 			User | Table {
-				../database := db
+				Self.database := db
 				table_name := 'users'
 			}
 
@@ -218,7 +218,7 @@ class Database_Test < Base_Test
 			db.create_table('items', { id: 'primary_key', name: 'String', kind: 'String' })
 
 			Item | Table {
-				../database := db
+				Self.database := db
 				table_name := 'items'
 			}
 

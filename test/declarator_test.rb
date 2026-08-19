@@ -2,7 +2,7 @@ require 'minitest/autorun'
 require_relative '../src/ore'
 require_relative 'base_test'
 
-class Forward_Declarator_Test < Base_Test
+class Declarator_Test < Base_Test
 	def test_top_level_func_is_declared
 		decls = Ore.declare "add { a, b; a + b }"
 		assert decls.key? 'add'
@@ -63,7 +63,7 @@ class Forward_Declarator_Test < Base_Test
 		ORE
 		assert_instance_of Ore::Number_Expr, decls['x'].expr_or_decl
 	end
-	
+
 	def test_calling_a_function_before_its_definition_works
 		out = Ore.interp <<~ORE
 		    result := main()
@@ -81,7 +81,7 @@ class Forward_Declarator_Test < Base_Test
 		    Point {
 		    	x,
 		    	y,
-		    	new { x, y; ./x = x, ./y = y }
+		    	new { x, y; self.x = x, self.y = y }
 		    }
 
 		    make_point {;
@@ -140,12 +140,12 @@ class Forward_Declarator_Test < Base_Test
 	# whole file, not just that one isolated declaration, since Div | Dom {} needs Dom too.
 	def test_bare_load_directive_can_sit_below_code_that_uses_it
 		out = Ore.interp <<~ORE
-			sign := Div([P('hi')])
-			result := sign.to_s()
+		    sign := Div([P('hi')])
+		    result := sign.to_s()
 
-			@load 'ore/html.ore'
+		    @load 'ore/html.ore'
 
-			result
+		    result
 		ORE
 		assert_equal '<div><p>hi</p></div>', out
 	end
@@ -156,10 +156,10 @@ class Forward_Declarator_Test < Base_Test
 	# silently becomes whatever that file's own last declaration evaluates to instead.
 	def test_bare_load_directive_is_not_run_twice_when_reached_normally
 		out = Ore.interp <<~ORE
-			sign := Div([P('hi')])
-			result := sign.to_s()
+		    sign := Div([P('hi')])
+		    result := sign.to_s()
 
-			@load 'ore/html.ore'
+		    @load 'ore/html.ore'
 		ORE
 		assert_equal '<div><p>hi</p></div>', out
 	end
@@ -168,12 +168,12 @@ class Forward_Declarator_Test < Base_Test
 	# category as a class alias -- but only a Capitalized/UPPERCASE left-hand name opts in.
 	def test_capitalized_named_load_can_sit_below_code_that_uses_it
 		out = Ore.interp <<~ORE
-			sign := Html_Lib.Div([Html_Lib.P('hi')])
-			result := sign.to_s()
+		    sign := Html_Lib.Div([Html_Lib.P('hi')])
+		    result := sign.to_s()
 
-			Html_Lib := @load 'ore/html.ore'
+		    Html_Lib := @load 'ore/html.ore'
 
-			result
+		    result
 		ORE
 		assert_equal '<div><p>hi</p></div>', out
 	end
@@ -181,9 +181,9 @@ class Forward_Declarator_Test < Base_Test
 	def test_lowercase_named_load_is_not_forward_referenceable
 		assert_raises Ore::Undeclared_Identifier do
 			Ore.interp <<~ORE
-				sign := html_lib.Div([html_lib.P('hi')])
+			    sign := html_lib.Div([html_lib.P('hi')])
 
-				html_lib := @load 'ore/html.ore'
+			    html_lib := @load 'ore/html.ore'
 			ORE
 		end
 	end
