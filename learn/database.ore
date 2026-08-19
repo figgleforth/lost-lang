@@ -17,15 +17,15 @@ db.create_table('survivors', {
 	name: 'String'
 })
 
-@puts "survivors table exists? `db.table_exists?('survivors')`"   # survivors table exists? true
-@puts "rafts table exists? `db.table_exists?('rafts')`"           # rafts table exists? false
+@assert db.table_exists?('survivors') == true, 'create_table should make the table exist'
+@assert db.table_exists?('rafts') == false, 'a table that was never created should not exist'
 
 
 ``` tables
 
 Lists every table currently in the database.
 ```
-@puts "tables: `db.tables()`"   # tables: [survivors]
+@assert db.tables() == [:survivors], 'tables should list every table in the database'
 
 
 ``` delete_table
@@ -33,4 +33,4 @@ Lists every table currently in the database.
 Drops a table entirely.
 ```
 db.delete_table('survivors')
-@puts "survivors table exists after delete? `db.table_exists?('survivors')`"   # survivors table exists after delete? false
+@assert db.table_exists?('survivors') == false, 'delete_table should remove the table'

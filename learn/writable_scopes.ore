@@ -10,7 +10,7 @@ r := Raft()
 r.length = 12
 @add_writable_scope r
 length = 99   # writes straight through -- r already has a `length` member
-@puts "r.length: `r.length`"   # r.length: 99
+@assert r.length == 99, 'writing through a writable scope should land on the instance itself'
 @remove_writable_scope r
 
 
@@ -33,7 +33,7 @@ v := Vector()
 v.x = 3
 v.y = 4
 doubled := double(v)
-@puts "doubled.x: `doubled.x`, doubled.y: `doubled.y`"   # doubled.x: 6, doubled.y: 8
+@assert doubled.x == 6 && doubled.y == 8, '@writable should unpack the argument so writes land on it directly'
 
 
 ``` Manual scope control, outside a function's own params
@@ -49,7 +49,7 @@ island.name = 'The Island'
 
 @add_writable_scope island
 name = 'Renamed Island'   # writes straight through -- island already has a `name` member
-@puts "island.name: `island.name`"   # island.name: Renamed Island
+@assert island.name == 'Renamed Island', 'manually adding a writable scope should redirect writes the same way'
 @remove_writable_scope island
 
 
@@ -59,7 +59,7 @@ name = 'Renamed Island'   # writes straight through -- island already has a `nam
 ```
 @add_writable island
 name = 'Renamed Again'   # still writes straight through
-@puts "island.name: `island.name`"   # island.name: Renamed Again
+@assert island.name == 'Renamed Again', 'the medium alias should behave identically to the full name'
 @remove_writable island
 
 
@@ -78,9 +78,9 @@ r.x = 2
 @add_writable_scope w
 @add_readable_scope r
 
-@puts "x: `x`"   # x: 100 -- the own declaration wins, not w's or r's
+@assert x == 100, "the own declaration should win, not w's or r's"
 x = 999
-@puts "x: `x`, w.x: `w.x`"   # x: 999, w.x: 1 -- the write lands on the own declaration too, never redirects through w
+@assert x == 999 && w.x == 1, 'the write should land on the own declaration too, never redirect through w'
 
 
 ``` Writable beats readable, when there's no own declaration in the way
@@ -99,7 +99,7 @@ r2.y = 20
 @add_writable_scope w2
 @add_readable_scope r2
 
-@puts "y: `y`"   # y: 10 -- with no own declaration to shadow anything, writable wins over readable
+@assert y == 10, 'with no own declaration to shadow anything, writable should win over readable'
 
 
 ``` When a scope's own [self, writable, readable] chain comes up empty
@@ -120,17 +120,18 @@ outer {;
 		val                     # falls through inner's whole chain, finds it on outer's
 	}
 
-	@puts "inner(): `inner()`"   # inner(): 5
+	inner()
 }
-outer()
+
+@assert outer() == 5, "a nested scope's empty chain should fall through to the enclosing scope's"
 
 
 ``` Weak references, not strong ones
 
 Adding something to a writable scope doesn't keep it alive either -- same as readable scopes (see learn/readable_scopes.ore). It's a *weak* reference: once nothing else in your program refers to it, it's free to be garbage collected, even though it's technically still "added". `@remove_writable_scope` is only for explicitly cutting something off early, not for avoiding a leak. This matters most for long-lived scopes -- the top level of a program, or anything a running `@start_server` keeps reusing across requests -- where, without weak references, anything ever unpacked there and never removed would sit in memory for the life of the program.
 ```
-w := Vector()
-w.x = 5
-w.y = 6
-doubled_w := double(w)
-@puts "doubled_w.x: `doubled_w.x`, doubled_w.y: `doubled_w.y`"   # doubled_w.x: 10, doubled_w.y: 12 -- no cleanup needed afterward, even though w was never @remove_writable_scope'd
+w3 := Vector()
+w3.x = 5
+w3.y = 6
+doubled_w := double(w3)
+@assert doubled_w.x == 10 && doubled_w.y == 12, 'no cleanup should be needed afterward, even though w3 was never @remove_writable_scope\'d'

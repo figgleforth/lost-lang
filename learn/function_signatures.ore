@@ -3,7 +3,7 @@
 `{Param -> Type;}` is a signature -- a value describing a function's shape (its param types and return type) with no implementation at all, just the same `-> Type` a real function's own declaration uses.
 ```
 distress_formatter := {Number -> String;} # This is a function signature literal
-@puts "distress_formatter's shape: `distress_formatter`"   # distress_formatter's shape: {Number -> String;}
+@assert "`distress_formatter`" == '{Number -> String;}', 'a signature should describe its own shape'
 
 
 ``` Self-declaring form
@@ -19,10 +19,10 @@ send_flare { strength: Number -> String;
 }
 
 radio: {Number -> String;} = send_sos
-@puts "radio(5): `radio(5)`"   # radio(5): SOS at strength 5
+@assert radio(5) == 'SOS at strength 5', 'radio should dispatch to whichever function it currently holds'
 
 radio = send_flare   # ok -- same shape: (Number) -> String
-@puts "radio(5): `radio(5)`"   # radio(5): Flare at strength 5
+@assert radio(5) == 'Flare at strength 5', 'reassigning to a same-shaped function should work'
 
 
 ``` Assigning checks the shape, not the name

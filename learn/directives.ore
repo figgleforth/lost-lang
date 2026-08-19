@@ -29,12 +29,13 @@ survivors := 12
 
 # flare_count                         # raises Ore::Undeclared_Identifier since it isn't declared yt
 @declare 'flare_count'            # name only -- declares nil
-@puts "flare_count: `flare_count`"    # flare_count: nil
+@assert flare_count == nil, '@declare with just a name should declare nil'
 
 @declare 'flare_count', 3          # name, value
-@puts "flare_count: `flare_count`"    # flare_count: 3
+@assert flare_count == 3, '@declare with a value should overwrite the declaration'
 
 @declare 'ration', 2, Number       # name, value, type -- same as `ration: Number = 2`
+@assert ration == 2, '@declare with a type should still declare the value'
 
 
 ``` @declare with a Struct
@@ -43,7 +44,8 @@ Passed a Struct instead of a name, `@declare` spreads every *named* member onto 
 ```
 supplies := <water: Number = 40, wood := 12>
 @declare supplies
-@puts "water: `water`, wood: `wood`"   # water: 40, wood: 12
+@assert water == 40, '@declare with a Struct should spread each named member'
+@assert wood == 12, '@declare with a Struct should spread each named member'
 
 
 ``` @push_scope / @pop_scope
@@ -60,7 +62,7 @@ camp := Camp()
 # @pop_scope Other  -- would raise: Other was never pushed, camp was
 survivors += 3   # no camp. prefix needed -- camp IS the current scope now
 @pop_scope camp
-@puts "camp.survivors: `camp.survivors`"   # camp.survivors: 15
+@assert camp.survivors == 15, '@push_scope should make members reachable without a prefix'
 
 
 ``` @sleep

@@ -5,7 +5,7 @@
 survivors := 48   # locks survivors to Number
 survivors = 47     # ok -- still a Number
 
-@puts "survivors: `survivors`"   # survivors: 47
+@assert survivors == 47, 'a same-type reassignment should be allowed'
 
 # survivors = 'forty-seven'  -- raises Ore::Type_Contract_Violation
 
@@ -17,7 +17,7 @@ Declaring the same identifier again with `:=`, instead of `=`, re-infers its typ
 status := 48
 status := 'stranded'   # fine -- := re-infers and re-locks
 
-@puts "status: `status`"   # status: stranded
+@assert status == 'stranded', 're-declaring with := should relock the type to the new value'
 
 
 ``` = requires a prior declaration
@@ -39,4 +39,4 @@ increment {;
 }
 
 increment()
-@puts "counter: `counter`"   # counter: 0 -- the outer counter was never touched
+@assert counter == 0, ':= inside a function should shadow, never touch the outer counter'

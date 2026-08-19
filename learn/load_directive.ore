@@ -7,7 +7,7 @@ You may omit .ore from filenames, they're added automatically upon file lookup.
 @load 'ore/string'
 
 s := String('shipwrecked')
-@puts "shouted: `s.upcase()`"   # shouted: SHIPWRECKED
+@assert s.upcase() == 'SHIPWRECKED', 'a bare @load should merge declarations straight into the current scope'
 
 
 ``` Scoping a load into its own namespace
@@ -17,7 +17,7 @@ s := String('shipwrecked')
 strings := @load 'ore/string.ore'
 
 t := strings.String('the island')
-@puts "shouted: `t.upcase()`"   # shouted: THE ISLAND
+@assert t.upcase() == 'THE ISLAND', 'a namespaced @load should still work, reached through its own scope'
 
 # String() (unscoped) still refers to whatever was already global before this --
 # strings.String is a separate, isolated reference to the same file's declarations

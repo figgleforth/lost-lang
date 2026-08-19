@@ -3,7 +3,7 @@
 A trailing comma after a bare identifier declares it as `nil` -- shorthand for writing `identifier := nil` in full.
 ```
 rescue_boat,
-@puts "rescue_boat: `rescue_boat`"   # rescue_boat: nil
+@assert rescue_boat == nil, 'a trailing comma should declare the identifier as nil'
 
 
 ``` Same idiom inside a type body
@@ -16,8 +16,8 @@ Raft {
 }
 
 r := Raft()
-@puts "r.captain: `r.captain`"   # r.captain: nil
-@puts "r.crew: `r.crew`"         # r.crew: nil
+@assert r.captain == nil, 'an uninitialized member should default to nil'
+@assert r.crew == nil, 'an uninitialized member should default to nil'
 
 
 ``` A bare annotation self-declares too
@@ -25,7 +25,7 @@ r := Raft()
 `x: Number` with no `=` at all behaves the same way -- it's already self-declaring by virtue of the annotation, so it doesn't need `= nil` tacked on just to actually declare something. A bare struct annotation (`<...>`) works the same way.
 ```
 altitude: Number
-@puts "altitude: `altitude`"   # altitude: nil
+@assert altitude == nil, 'a bare type annotation with no value should self-declare to nil'
 
 cargo: <String, Number>
-@puts "cargo: `cargo`"   # cargo: nil
+@assert cargo == nil, 'a bare struct annotation with no value should self-declare to nil'

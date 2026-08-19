@@ -885,7 +885,7 @@ else
 end
 ```
 
-**Truthiness** (`#truthy?` in `interpreter.rb`) is uniform across all four conditional forms (`if`/`unless`/`while`/`until`): `nil`/`false`/`0`/`0.0` are falsy, everything else — Arrays, Strings, Instances, whatever — is truthy.
+**Truthiness** (`#truthy?` in `interpreter.rb`) is uniform across all four conditional forms (`if`/`unless`/`while`/`until`) and just delegates to Ruby's own rules (`!!value`): only `nil`/`false` are falsy, everything else — `0`/`0.0` included — is truthy.
 
 ### Return Statement
 

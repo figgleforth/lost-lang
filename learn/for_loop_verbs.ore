@@ -6,7 +6,7 @@ supplies := [1, 2, 3, 4, 5]
 doubled := for supplies map
 	it * 2
 end
-@puts "doubled: `doubled.values`"   # doubled: [2, 4, 6, 8, 10]
+@assert doubled == [2, 4, 6, 8, 10], 'map should collect each transformed element'
 
 
 ``` select and reject
@@ -16,12 +16,12 @@ end
 group_a := for supplies select
 	it % 2 == 0
 end
-@puts "evens: `group_a.values`"   # evens: [2, 4]
+@assert group_a == [2, 4], 'select should keep only the truthy elements'
 
 group_b := for supplies reject
 	it % 2 == 0
 end
-@puts "odds: `group_b.values`"   # odds: [1, 3, 5]
+@assert group_b == [1, 3, 5], 'reject should keep only the falsy elements'
 
 
 ``` count
@@ -31,7 +31,7 @@ end
 even_count := for supplies count
 	it % 2 == 0
 end
-@puts "even count: `even_count`"   # even count: 2
+@assert even_count == 2, 'count should tally the truthy elements'
 
 
 ``` Verbs combine with stride
@@ -41,7 +41,7 @@ end
 paired_sums := for [1, 2, 3, 4, 5, 6] map by 2
 	it.0 + it.1
 end
-@puts "paired sums: `paired_sums.values`"   # paired sums: [3, 7, 11]
+@assert paired_sums == [3, 7, 11], 'map with stride should run once per chunk'
 
 
 ``` stop returns partial results
@@ -52,4 +52,4 @@ driftwood := for [1, 2, 3, 4, 5] map
 	stop if it == 4
 	it * 2
 end
-@puts "driftwood counted before stopping: `driftwood.values`"   # driftwood counted before stopping: [2, 4, 6]
+@assert driftwood == [2, 4, 6], 'stop should keep the partial results collected so far'

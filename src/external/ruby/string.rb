@@ -18,12 +18,10 @@ module Ore
 		proxy :ord
 		proxy :upcase
 		proxy :downcase
-		proxy :split
 		proxy :slice!, as: :slice
 		proxy :strip, as: :trim
 		proxy :lstrip, as: :trim_left
 		proxy :rstrip, as: :trim_right
-		proxy :chars
 		proxy :index
 		proxy :to_i
 		proxy :to_f
@@ -37,6 +35,14 @@ module Ore
 
 		def proxy_to_md5_hash
 			Digest::MD5.hexdigest value
+		end
+
+		def proxy_split *args
+			Ore::Array.new value.split(*args)
+		end
+
+		def proxy_chars
+			Ore::Array.new value.chars
 		end
 
 		def + other

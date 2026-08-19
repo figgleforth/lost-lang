@@ -109,6 +109,19 @@ module Ore
 		end
 	end
 
+	class Refute_Triggered < Error
+		attr_accessor :refutation_message
+
+		def initialize expression = nil, refutation_message = nil
+			@refutation_message = refutation_message
+			super expression
+		end
+
+		def detail_message
+			refutation_message
+		end
+	end
+
 	class Invalid_Http_Directive_Handler < Error
 	end
 

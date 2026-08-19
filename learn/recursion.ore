@@ -10,7 +10,7 @@ factorial { n;
 	end
 }
 
-@puts "factorial(5): `factorial(5)`"   # factorial(5): 120
+@assert factorial(5) == 120, 'a named function should be able to call itself'
 
 
 ``` Two functions can call each other
@@ -33,5 +33,5 @@ is_odd { n;
 	end
 }
 
-@puts "is_even(10): `is_even(10)`"   # is_even(10): true
-@puts "is_odd(7): `is_odd(7)`"       # is_odd(7): true
+@assert is_even(10) == true, 'mutually recursive functions should be able to call each other'
+@assert is_odd(7) == true, 'mutually recursive functions should be able to call each other'

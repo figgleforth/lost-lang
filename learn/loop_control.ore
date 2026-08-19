@@ -8,7 +8,7 @@ for wreckage
 	skip if it != 'suitcase'
 	suitcases.push(it)
 end
-@puts "suitcases found: `suitcases`"   # suitcases found: [suitcase, suitcase, suitcase]
+@assert suitcases == ['suitcase', 'suitcase', 'suitcase'], 'skip should abandon the rest of the body for non-matching iterations'
 
 
 ``` stop: exit the loop entirely
@@ -21,7 +21,7 @@ for firewood
 	stop if logs_used == 4
 	logs_used += 1
 end
-@puts "logs used: `logs_used`"   # logs used: 4
+@assert logs_used == 4, 'stop should exit the loop as soon as the condition is met'
 
 
 ``` return propagates through loops
@@ -35,8 +35,8 @@ find_vincent { survivors;
 	nil
 }
 
-@puts "found: `find_vincent(['Jack', 'Kate', 'Vincent', 'Sawyer'])`"  # found: Vincent
-@puts "found: `find_vincent(['Jack', 'Kate'])`"                       # found: nil
+@assert find_vincent(['Jack', 'Kate', 'Vincent', 'Sawyer']) == 'Vincent', 'return inside a for loop should exit the enclosing function'
+@assert find_vincent(['Jack', 'Kate']) == nil, 'falling through the loop without a match should return the trailing nil'
 
 
 ``` ...but not through a callback passed to another function
@@ -50,4 +50,4 @@ find_vincent_via_each { survivors;
 	nil
 }
 
-@puts "found: `find_vincent_via_each(['Jack', 'Kate', 'Vincent', 'Sawyer'])`"   # found: nil -- not Vincent!
+@assert find_vincent_via_each(['Jack', 'Kate', 'Vincent', 'Sawyer']) == nil, "return inside a callback shouldn't reach past it -- not Vincent!"

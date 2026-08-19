@@ -25,7 +25,7 @@ Instead of writing `table_name` out by hand, an instance can derive it from its 
 ```
 s := Survivor()
 s.infer_table_name_from_class!()
-@puts "table_name: `s.table_name`"   # table_name: survivors
+@assert s.table_name == 'survivors', 'infer_table_name_from_class! should derive the table name from the composed type name'
 
 
 ``` create and all
@@ -35,23 +35,23 @@ s.infer_table_name_from_class!()
 jack_id := Survivor.create({name: 'Jack'})
 Survivor.create({name: 'Kate'})
 
-@puts "all survivors: `Survivor.all()`"   # all survivors: [{id: 1, name: "Jack"}, {id: 2, name: "Kate"}]
+@assert Survivor.all() == [{id: 1, name: 'Jack'}, {id: 2, name: 'Kate'}], 'all should fetch every row as an Array of Dictionaries'
 
 
 ``` find, find_by, where
 
 `find` looks up by id. `find_by` returns the first row matching a Dictionary of conditions, or nil. `where` returns every matching row.
 ```
-@puts "found by id: `Survivor.find(jack_id)`"           # found by id: {id: 1, name: Jack}
-@puts "found by name: `Survivor.find_by({name: 'Kate'})`"   # found by name: {id: 2, name: Kate}
-@puts "where name is Jack: `Survivor.where({name: 'Jack'})`"   # where name is Jack: [{id: 1, name: "Jack"}]
+@assert Survivor.find(jack_id) == {id: 1, name: 'Jack'}, 'find should look up a row by id'
+@assert Survivor.find_by({name: 'Kate'}) == {id: 2, name: 'Kate'}, 'find_by should return the first row matching the conditions'
+@assert Survivor.where({name: 'Jack'}) == [{id: 1, name: 'Jack'}], 'where should return every matching row'
 
 
 ``` update and delete
 
 ```
 Survivor.update(jack_id, {name: 'Jack Shephard'})
-@puts "after update: `Survivor.find(jack_id)`"   # after update: {id: 1, name: Jack Shephard}
+@assert Survivor.find(jack_id) == {id: 1, name: 'Jack Shephard'}, 'update should change the row in place'
 
 Survivor.delete(jack_id)
-@puts "after delete: `Survivor.all()`"   # after delete: [{id: 2, name: "Kate"}]
+@assert Survivor.all() == [{id: 2, name: 'Kate'}], 'delete should remove the row'

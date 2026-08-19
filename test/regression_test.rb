@@ -275,10 +275,10 @@ class Regression_Test < Base_Test
 		# #lex_operator was consuming quotes as symbols, creating invalid operators like ="
 		# This caused { b="two" } to fail lexing when = was immediately followed by "
 		out = Ore.interp '{ a=1, b="two", c: :three }.values()'
-		assert_equal [1, "two", :three], out
+		assert_equal [1, "two", :three], out.values
 
 		out = Ore.interp '{ a=1, b:"two", c: :three }.values()'
-		assert_equal [1, "two", :three], out
+		assert_equal [1, "two", :three], out.values
 	end
 
 	def test_nested_type_declaration_shadowing_regression
@@ -946,5 +946,39 @@ class Regression_Test < Base_Test
 		# `Struct#include?` called `Array#include?` (equality-only, `it == item`) with a predicate function instead of `Array#any?` (which actually invokes it) -- always silently returned false. No test exercised it until now.
 		assert_equal true, Ore.interp("<name: String, age: Number>.include?('name')")
 		assert_equal false, Ore.interp("<name: String, age: Number>.include?('missing')")
+	end
+
+	def test_for_loop_closures_capture_own_iteration_regression
+		# `for` used to allocate one Scope for the whole loop and mutate it in place each iteration -- a closure built inside the body (e.g. a Statement literal capturing `it`) saw whatever the final iteration left behind, not its own value, once called later. Repro: all three Statements below used to return 3 instead of 1, 2, 3.
+		out = Ore.interp <<~CODE
+		    stmts := []
+		    for [1, 2, 3]
+		        stmts.push(`it`)
+		    end
+		    results := []
+		    for stmts
+		        results.push(it())
+		    end
+		    results
+		CODE
+		assert_equal [1, 2, 3], out.values
+	end
+
+	def test_array_string_dictionary_proxies_wrap_their_results_regression
+		# `Array#first`/`#last`/`#slice`/`#reverse`/`#sort`/`#uniq`, `String#split`/`#chars`, `Dictionary#keys`/`#values`/`#merge`, and `for x by n` stride chunks all returned a raw Ruby Array/Hash instead of Ore::Array/Ore::Dictionary -- dot-index access (`it.0`) worked by accident via #maybe_instance, but `==` against a literal silently failed. No test exercised any of these at the value level until now.
+		out = Ore.interp <<~CODE
+		    pairs := []
+		    for ['red', 'blue', 'green', 'yellow'] by 2
+		        pairs.push(it)
+		    end
+		    pairs
+		CODE
+		assert_equal [['red', 'blue'], ['green', 'yellow']], out.values.map(&:values)
+
+		assert_equal [1, 2], Ore.interp("[1, 2, 3, 4].first(2)").values
+		assert_equal [3, 2, 1], Ore.interp("[1, 2, 3].reverse()").values
+		assert_equal ['he', '', 'o'], Ore.interp("'hello'.split('l')").values
+		assert_equal [:x, :y], Ore.interp("{x: 1, y: 2}.keys()").values
+		assert_equal({ x: 1, y: 2 }, Ore.interp("{x: 1}.merge({y: 2})").hash)
 	end
 end

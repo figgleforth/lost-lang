@@ -6,7 +6,7 @@ add { a, b;
 	a + b
 }
 
-@puts "add(4, 8): `add(4, 8)`"   # add(4, 8): 12
+@assert add(4, 8) == 12, 'the last expression evaluated should be the return value'
 
 
 ``` No parameters
@@ -17,7 +17,7 @@ greet_camp {;
 	'Good morning, castaways!'
 }
 
-@puts greet_camp()   # Good morning, castaways!
+@assert greet_camp() == 'Good morning, castaways!', 'a param-less function still needs the leading ;'
 
 
 ``` Default parameter values
@@ -28,8 +28,8 @@ gather_water { liters := 1;
 	"Gathered `liters` liter(s) of water"
 }
 
-@puts gather_water()    # Gathered 1 liter(s) of water
-@puts gather_water(5)   # Gathered 5 liter(s) of water
+@assert gather_water() == 'Gathered 1 liter(s) of water', 'an omitted argument should fall back to its default'
+@assert gather_water(5) == 'Gathered 5 liter(s) of water', 'a supplied argument should override the default'
 
 
 ``` Early return
@@ -43,5 +43,5 @@ check_supplies { count;
 	"`count` supplies remaining"
 }
 
-@puts check_supplies(0)   # out of supplies
-@puts check_supplies(3)   # 3 supplies remaining
+@assert check_supplies(0) == 'out of supplies', 'return should exit before the last expression runs'
+@assert check_supplies(3) == '3 supplies remaining', 'without return, the last expression is the value'

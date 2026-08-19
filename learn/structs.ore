@@ -8,7 +8,7 @@ pair := <String, Number>
 type_names := pair.types.values.map({it;
 	it.name
 }).join(', ')
-@puts "pair's member types: `type_names`"   # pair's member types: String, Number
+@assert type_names == 'String, Number', "a struct's member types should list each declared type"
 
 
 ``` Two layers, don't confuse them
@@ -26,8 +26,8 @@ A Member just remembers a name, a value, and a type, and knows how to describe i
 f1 := Member('age', 42, Number)
 f2 := Member('name', nil, String)
 
-@puts "f1: `f1.to_s()`"   # f1: age: Number = 42
-@puts "f2: `f2.to_s()`"   # f2: name: String -- no value supplied
+@assert f1.to_s() == 'age: Number = 42', "a Member's to_s should describe its name, type, and value"
+@assert f2.to_s() == 'name: String', "a Member with no value supplied should omit the value"
 
 
 ``` Instantiating a struct directly
@@ -35,9 +35,9 @@ f2 := Member('name', nil, String)
 `<name: String, age: Number>` alone is schema-only -- as shown in the Introduction, each member's "value" there is its declared type, not real data. Calling `()` on a struct literal is how you turn that schema into an actual instance: the arguments become each member's real value, positionally, same order as declared:
 ```
 s := <name: String, age: Number>('Alice', 30)
-@puts "s: `s.to_s()`"                       # s: <name: String = 'Alice', age: Number = 30>
-@puts "s.members.0: `s.members.0.to_s()`"   # s.members.0: name: String = 'Alice'
-@puts "s.members.1: `s.members.1.to_s()`"   # s.members.1: age: Number = 30
+@assert s.to_s() == "<name: String = 'Alice', age: Number = 30>", "instantiating a struct should fill in each member's real value"
+@assert s.members.0.to_s() == "name: String = 'Alice'", '.members should hold each real Member instance'
+@assert s.members.1.to_s() == 'age: Number = 30', '.members should hold each real Member instance'
 
 
 ``` Equality
@@ -48,10 +48,10 @@ a := Member('id', nil, Number)
 b := Member('id', nil, Number)
 c := Member('id', 5, Number)
 
-@puts "a == b: `a == b`"     # a == b: true  -- same name, type, and value (both nil)
-@puts "a === b: `a === b`"   # a === b: true  -- same name and type
-@puts "a == c: `a == c`"     # a == c: false -- different value (nil vs 5)
-@puts "a === c: `a === c`"   # a === c: true  -- still the same name and type
+@assert (a == b) == true, '== should be true for the same name, type, and value (both nil)'
+@assert (a === b) == true, '=== should be true for the same name and type'
+@assert (a == c) == false, '== should be false when the value differs (nil vs 5)'
+@assert (a === c) == true, '=== should still be true -- name and type match regardless of value'
 
 
 ``` Struct equality
@@ -62,7 +62,7 @@ sa := <name: String, age: Number>('Alice', 30)
 sb := <name: String, age: Number>('Alice', 30)
 sc := <name: String, age: Number>('Alice', 99)
 
-@puts "sa == sb: `sa == sb`"     # sa == sb: true  -- identical values
-@puts "sa === sb: `sa === sb`"   # sa === sb: true
-@puts "sa == sc: `sa == sc`"     # sa == sc: false -- age differs (30 vs 99)
-@puts "sa === sc: `sa === sc`"   # sa === sc: true  -- still the same structure of members
+@assert (sa == sb) == true, '== should be true for identical values'
+@assert (sa === sb) == true, '=== should be true for the same structure of members'
+@assert (sa == sc) == false, '== should be false when age differs (30 vs 99)'
+@assert (sa === sc) == true, '=== should still be true -- still the same structure of members'

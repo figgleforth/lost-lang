@@ -17,7 +17,7 @@ Survivor {
 }
 
 jack := Survivor('Jack Shephard', 23)
-@puts "jack: `jack.to_s()`"   # jack: Jack Shephard (23)
+@assert jack.to_s() == 'Jack Shephard (23)', 'a type declaration should build real instances'
 
 
 ``` Static declarations: the hatch
@@ -39,7 +39,7 @@ Hatch {
 Hatch().enter()
 Hatch().enter()
 Hatch().enter()
-@puts "Hatch.presses: `Hatch.presses`"   # Hatch.presses: 3 -- every Hatch() shares the same counter
+@assert Hatch.presses == 3, 'every Hatch() should share the same static counter'
 
 
 ``` Scope operators
@@ -64,8 +64,8 @@ Dharma_Station {
 
 swan   := Dharma_Station('The Swan')
 orchid := Dharma_Station('The Orchid')
-@puts "swan.describe(): `swan.describe()`"       # swan.describe(): The Swan on The Island (station #2) -- ../station_count is shared, not per-instance
-@puts "orchid.describe(): `orchid.describe()`"   # orchid.describe(): The Orchid on The Island (station #2), same shared counter
+@assert swan.describe() == 'The Swan on The Island (station #2)', '../station_count should be shared, not per-instance'
+@assert orchid.describe() == 'The Orchid on The Island (station #2)', 'both instances should see the same shared counter'
 
 
 ``` Privacy convention
@@ -87,8 +87,8 @@ Smoke_Monster {
 }
 
 monster := Smoke_Monster('Smoke Monster', 'control the Island')
-@puts "confess('control the Island'): `monster.confess('control the Island')`"   # confess('control the Island'): true
-@puts "confess('help the survivors'): `monster.confess('help the survivors')`"   # confess('help the survivors'): false
+@assert monster.confess('control the Island') == true, 'confess should compare the claim against the private member from inside the type'
+@assert monster.confess('help the survivors') == false, 'a mismatched claim should be false'
 # monster._true_agenda would raise Cannot_Call_Private_Instance_Member -- outsiders don't get to ask directly
 
 
@@ -117,8 +117,8 @@ Steve | Castaway | Other {
 }
 
 s := Steve()
-@puts "s.survived_815: `s.survived_815`"   # s.survived_815: true, from Castaway
-@puts "s.survivor: `s.survivor`"           # s.survivor: false, from Other
+@assert s.survived_815 == true, 'a union should merge in declarations from every composed type -- from Castaway'
+@assert s.survivor == false, 'a union should merge in declarations from every composed type -- from Other'
 
 
 ``` Composition: & intersection, ~ difference, ^ symmetric difference
@@ -146,14 +146,14 @@ Other {
 }
 
 both := (Castaway & Other)()
-@puts "both.faction(): `both.faction()`"   # both.faction(): Survivors -- the only shared name, left side's version wins
+@assert both.faction() == 'Survivors', '& should keep only the shared name, left side wins'
 
 just_theirs := (Castaway ~ Other)()
-@puts "just_theirs.survived_815: `just_theirs.survived_815`"   # just_theirs.survived_815: true -- Castaway's own, un-shared member survives
+@assert just_theirs.survived_815 == true, "~ should drop the shared name but keep Castaway's own, un-shared member"
 
 unique := (Castaway ^ Other)()
-@puts "unique.survived_815: `unique.survived_815`"   # unique.survived_815: true -- unique to Castaway
-@puts "unique.survivor: `unique.survivor`"   # unique.survivor: false -- unique to Other
+@assert unique.survived_815 == true, '^ should keep what is unique to Castaway'
+@assert unique.survivor == false, '^ should keep what is unique to Other'
 
 
 ``` A composition chain needs no name at all
@@ -162,7 +162,7 @@ Any of the four operators can stand alone with no `{ }` body and no name -- `(Ca
 ```
 Survivors_And_Others := Castaway & Other   # a Type value, just like any named one -- not an instance yet
 survivor             := Survivors_And_Others()
-@puts "survivor.faction(): `survivor.faction()`"   # survivor.faction(): Survivors
+@assert survivor.faction() == 'Survivors', 'an anonymous composition chain should be usable immediately, just like a named type'
 
 
 ``` Type comparison operators
@@ -177,11 +177,11 @@ Five operators compare the composed-type SET two types or instances carry -- eve
 
 Only `=>=` carries genuinely new information; the rest are readability sugar built on it, the same reason most languages ship both `<=`/`>=` alongside `==`/`!=`.
 ```
-@puts "Jack === Jack: `Jack === Jack`"             # Jack === Jack: true  -- identical composed-type sets
-@puts "Jack === Richard: `Jack === Richard`"       # Jack === Richard: false -- Jack composes Castaway, Richard composes Other
-@puts "Jack =!= Richard: `Jack =!= Richard`"       # Jack =!= Richard: true
-@puts "Steve =>= Castaway: `Steve =>= Castaway`"   # Steve =>= Castaway: true  -- Steve composes with at least everything Castaway does
-@puts "Castaway =>= Steve: `Castaway =>= Steve`"   # Castaway =>= Steve: false -- Castaway doesn't compose Steve's extra (Other) side
-@puts "Castaway =<= Steve: `Castaway =<= Steve`"   # Castaway =<= Steve: true  -- mirror of the line above
-@puts "Jack =/= Richard: `Jack =/= Richard`"       # Jack =/= Richard: true  -- share nothing (Castaway vs Other, no overlap)
-@puts "Castaway =/= Other: `Castaway =/= Other`"   # Castaway =/= Other: true  -- the two traits themselves share nothing either
+@assert (Jack === Jack) == true, '=== should be true for identical composed-type sets'
+@assert (Jack === Richard) == false, '=== should be false -- Jack composes Castaway, Richard composes Other'
+@assert (Jack =!= Richard) == true, '=!= should be the negation of ==='
+@assert (Steve =>= Castaway) == true, '=>= should be true -- Steve composes with at least everything Castaway does'
+@assert (Castaway =>= Steve) == false, "=>= should be false -- Castaway doesn't compose Steve's extra (Other) side"
+@assert (Castaway =<= Steve) == true, '=<= should be the mirror of the line above'
+@assert (Jack =/= Richard) == true, '=/= should be true -- Castaway vs Other share no overlap'
+@assert (Castaway =/= Other) == true, '=/= should be true -- the two traits themselves share nothing either'

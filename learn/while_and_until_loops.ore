@@ -6,7 +6,7 @@ water := 5
 while water > 0
 	water -= 1
 end
-@puts "water: `water`"   # water: 0
+@assert water == 0, 'while should keep looping until the condition goes false'
 
 
 ``` until: the inverse
@@ -17,7 +17,7 @@ flares_fired := 0
 until flares_fired == 3
 	flares_fired += 1
 end
-@puts "flares_fired: `flares_fired`"   # flares_fired: 3
+@assert flares_fired == 3, 'until should keep looping until the condition becomes true'
 
 
 ``` Both are expressions
@@ -28,12 +28,12 @@ x := 0
 last_seen := while x < 3
 	x += 1
 end
-@puts "last_seen: `last_seen`"   # last_seen: 3
+@assert last_seen == 3, "a loop's value should be whatever its body last evaluated to"
 
 never_ran := while false
 	1
 end
-@puts "never_ran: `never_ran`"   # never_ran: nil
+@assert never_ran == nil, 'a loop that never runs should evaluate to nil'
 
 
 ``` Chaining with elwhile
@@ -47,8 +47,8 @@ while hurley_count < 4
 elwhile charlie_count > -8
 	charlie_count -= 1
 end
-@puts "hurley_count: `hurley_count`"     # hurley_count: 4
-@puts "charlie_count: `charlie_count`"   # charlie_count: -8
+@assert hurley_count == 4, 'the first loop in the chain should run to completion'
+@assert charlie_count == -8, 'elwhile should pick up once the prior condition goes false'
 
 
 ``` else always runs last
@@ -61,10 +61,10 @@ result := while x2 < 4
 else
 	'done rationing'
 end
-@puts "result: `result`"   # result: done rationing -- not 4, even though the while loop ran to completion
+@assert result == 'done rationing', "else's value should override the loop body's, even though the while loop ran to completion"
 
 x2 := 0
 result := while x2 < 4
 	x2 += 1
 end
-@puts "Without else: `result`"   # Without else: 4
+@assert result == 4, "without else, the loop's own last value should be the result"

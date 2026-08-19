@@ -282,7 +282,7 @@ doubled  # [2, 4, 6]
 1. `if`/`elif`/`else`/`end`
 2. `unless` is the negation of `if`
 3. Can be used as inline modifiers
-4. Any value works as a condition (`nil`/`false`/`0`/`0.0` are falsy, everything else is truthy)
+4. Any value works as a condition -- truthiness follows Ruby's own rules: only `nil`/`false` are falsy, everything else (`0`/`0.0` included) is truthy
 
 ```ore
 if x > 10

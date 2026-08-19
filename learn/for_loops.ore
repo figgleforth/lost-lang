@@ -2,13 +2,12 @@
 
 `for` iterates a collection. Inside the body, `it` is the current element and `at` is its index -- no loop variable to name and declare yourself. The castaways take inventory of what washed ashore from the plane:
 ```
-cargo := ['water', 'fruit', 'blankets']
+cargo   := ['water', 'fruit', 'blankets']
+manifest := []
 for cargo
-	@puts "`at`: `it`"
+	manifest.push("`at`: `it`")
 end
-# 0: water
-# 1: fruit
-# 2: blankets
+@assert manifest == ['0: water', '1: fruit', '2: blankets'], 'it/at should pair each element with its index'
 
 
 ``` Ranges iterate too
@@ -19,7 +18,7 @@ days_stranded := 0
 for 1...5
 	days_stranded = it
 end
-@puts "days stranded: `days_stranded`"   # days stranded: 5
+@assert days_stranded == 5, 'range iteration should end on the last value'
 
 
 ``` Stride: chunks of N
@@ -31,4 +30,4 @@ pairs := []
 for fish by 2
 	pairs.push(it)
 end
-@puts "paired fish: `pairs`"   # paired fish: [[red, blue], [green, yellow], [orange, purple]]
+@assert pairs == [['red', 'blue'], ['green', 'yellow'], ['orange', 'purple']], 'stride 2 should chunk into pairs'

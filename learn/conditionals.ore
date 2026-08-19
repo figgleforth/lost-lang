@@ -12,7 +12,7 @@ else
 	'desperate'
 end
 
-@puts "mood: `mood`"   # mood: rationing
+@assert mood == 'rationing', 'the elif branch should win when water is between 0 and 5'
 
 
 ``` unless is negated if
@@ -27,7 +27,7 @@ else
 	'get the shelter up now'
 end
 
-@puts "shelter_note: `shelter_note`"   # shelter_note: no rush building the shelter
+@assert shelter_note == 'no rush building the shelter', 'unless should run its body when the condition is falsy'
 
 
 ``` Inline modifier form
@@ -35,10 +35,12 @@ end
 `if` can trail a single statement instead of wrapping it in a block -- reads like a plain sentence.
 ```
 rescued := true
-@puts 'someone is coming' if rescued   # someone is coming
+warning := 'someone is coming' if rescued
+@assert warning == 'someone is coming', 'inline if should run when the condition is truthy'
 
 found_water := true
-@puts 'fill the bottles' if found_water   # fill the bottles
+note := 'fill the bottles' if found_water
+@assert note == 'fill the bottles', 'inline if should run when the condition is truthy'
 
 
 ``` Truthiness
@@ -53,9 +55,9 @@ describe { value;
 	end
 }
 
-@puts "nil is `describe(nil)`"       # nil is falsy
-@puts "false is `describe(false)`"   # false is falsy
-@puts "0 is `describe(0)`"           # 0 is falsy
-@puts "0.0 is `describe(0.0)`"       # 0.0 is falsy
-@puts "'' is `describe('')`"         # '' is truthy
-@puts "[] is `describe([])`"         # [] is truthy
+@assert describe(nil) == 'falsy', 'nil should be falsy'
+@assert describe(false) == 'falsy', 'false should be falsy'
+@assert describe(0) == 'truthy', '0 should be truthy like in Ruby'
+@assert describe(0.0) == 'truthy', '0.0 should be truthy'
+@assert describe('') == 'truthy', 'an empty string should be truthy'
+@assert describe([]) == 'truthy', 'an empty array should be truthy'

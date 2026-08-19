@@ -5,7 +5,7 @@
 Row<id: Statement> {}
 
 r := Row<`1+2`>()
-@puts "r.structure.id(): `r.structure.id()`"   # r.structure.id(): 3
+@assert r.structure.id() == 3, 'a structured Statement member should be callable'
 
 
 ``` Not idempotent — every call re-runs the wrapped expression
@@ -18,9 +18,9 @@ next_seq := `seq += 1`
 row_a := Row<next_seq>()
 row_b := Row<next_seq>()
 
-@puts "row_a.structure.id(): `row_a.structure.id()`"         # row_a.structure.id(): 1
-@puts "row_b.structure.id(): `row_b.structure.id()`"         # row_b.structure.id(): 2
-@puts "row_a.structure.id() again: `row_a.structure.id()`"   # row_a.structure.id() again: 3 — rereading row_a still advances it
+@assert row_a.structure.id() == 1, 'the first call should advance the shared counter to 1'
+@assert row_b.structure.id() == 2, 'a second reference sharing the same Statement should advance the same counter'
+@assert row_a.structure.id() == 3, 'rereading row_a should still advance it, not return a cached value'
 
 
 ``` Captured by default
@@ -30,7 +30,7 @@ A Statement remembers the scope it was *built* in, not wherever it later happens
 some_local_var := 0
 expensive       := `some_local_var += 1`
 
-@puts "expensive(): `expensive()`"   # expensive(): 1
+@assert expensive() == 1, 'the first call should resolve some_local_var against its captured scope'
 
 
 ``` Caching a Statement's result with .memoize
@@ -39,9 +39,9 @@ Set `.memoize = true` and the first `()` call's result is cached and returned by
 ```
 expensive.memoize = true
 
-@puts "expensive(): `expensive()`"   # expensive(): 2 — one real run past the previous section
-@puts "expensive(): `expensive()`"   # expensive(): 2 — cached, didn't run again
-@puts "some_local_var: `some_local_var`"   # some_local_var: 2
+@assert expensive() == 2, 'the first call after memoize is set should still run for real'
+@assert expensive() == 2, 'every call after that should return the cached result instead of running again'
+@assert some_local_var == 2, 'the memoized calls after the first should not have mutated some_local_var again'
 
 
 ``` Opting into the caller's scope
@@ -68,8 +68,8 @@ demo_predictable := {;
 	captured    := `count += 4`
 	predictable := Slacker(captured)
 
-	@puts "predictable.live_count(): `predictable.live_count()`"   # predictable.live_count(): 6
-	@puts "count: `count`"                                         # count: 6 -- the outer count, mutated
+	@assert predictable.live_count() == 6, 'a captured Statement should resolve the outer count it closed over'
+	@assert count == 6, "the outer count should be mutated since the Statement resolved it, not Slacker's own"
 }
 
 demo_caller_scope := {;
@@ -78,8 +78,8 @@ demo_caller_scope := {;
 	dynamic.use_caller_scope = true
 	scope_agnostic := Slacker(dynamic)
 
-	@puts "scope_agnostic.live_count(): `scope_agnostic.live_count()`"   # scope_agnostic.live_count(): 4
-	@puts "count: `count`"                                               # count: 2 -- untouched; Slacker's own count was mutated instead
+	@assert scope_agnostic.live_count() == 4, "use_caller_scope should resolve Slacker's own count instead of the outer one"
+	@assert count == 2, "the outer count should be untouched since Slacker's own count was mutated instead"
 }
 
 demo_predictable()
@@ -94,4 +94,4 @@ x := 1
 s := `x + 1`
 wrapped := Statement(s)
 
-@puts "wrapped(): `wrapped()`"   # wrapped(): 2
+@assert wrapped() == 2, 'Statement(other) should adopt the wrapped expression and captured scope, not re-capture its own call site'

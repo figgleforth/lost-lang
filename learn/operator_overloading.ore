@@ -9,8 +9,8 @@ scoped := compute {;
 	3 + 4
 }
 
-@puts "3 + 4: `3 + 4`"       # 3 + 4: 7 -- + still means addition everywhere else
-@puts "scoped(): `scoped()`"    # scoped(): 12 -- + means multiplication only inside compute
+@assert 3 + 4 == 7, '+ should still mean addition everywhere else'
+@assert scoped() == 12, '+ should mean multiplication only inside compute'
 
 
 ``` Building a pipeline operator
@@ -25,7 +25,7 @@ double { n; n * 2 }
 add_fifteen { n; n + 15 }
 
 piped := 4 -> double -> add_fifteen
-@puts "4 -> double -> add_fifteen: `piped`"   # 4 -> double -> add_fifteen: 23
+@assert piped == 23, 'the pipeline operator should chain left to right'
 
 
 ``` Inventing new literal-like syntax
@@ -47,7 +47,7 @@ Time { hour, minute, period, }
 }
 
 t := 11:22pm
-@puts "`t.hour`:`t.minute` `t.period`"   # 11:22 pm
+@assert t.hour == 11 && t.minute == 22 && t.period == 'pm', 'the combined infix/postfix operators should build a Time and tag it'
 
 
 ``` Prefix operators
@@ -65,7 +65,7 @@ Currency { amount, name, code, }
 }
 
 price := $42
-@puts "`price.name`: `price.code` `price.amount`"   # US Dollar: USD 42
+@assert price.name == 'US Dollar' && price.code == 'USD' && price.amount == 42, '$ should build a Currency straight from a bare number'
 
 
 ``` A type's own overload wins over a global one
@@ -83,5 +83,5 @@ Wrapped {
 a := Wrapped(42)
 wrapped_result := a ~> 1
 global_result  := 5 ~> 1
-@puts "a ~> 1: `wrapped_result`"   # a ~> 1: 42 -- Wrapped's own ~> wins
-@puts "5 ~> 1: `global_result`"    # 5 ~> 1: 999 -- everything else still gets the global ~>
+@assert wrapped_result == 42, "Wrapped's own ~> should win over the global one"
+@assert global_result == 999, 'everything else should still get the global ~>'

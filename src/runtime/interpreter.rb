@@ -274,9 +274,16 @@ module Ore
 		end
 
 		def truthy? value
-			return false if value.nil? || false == value
-			return false if (value.is_a?(::Integer) || value.is_a?(::Float)) && value.zero?
-			true
+			!!value
+			# note; I originally thought a model mixing Ruby and systems languages would be neat but that's tabled for later when I port this to a systems language. I'm just gonna let Ruby dictate truthiness for now. My idea was to make 0 falsy but that means a function that returns an index 0, may be considered false as a conditional.
+			# case value
+			# when nil, false
+			# 	false
+			# when Numeric
+			# 	!value.zero?
+			# else
+			# 	true
+			# end
 		end
 
 		def type_name_to_string value
@@ -2430,93 +2437,108 @@ module Ore
 			loop_type = for_loop_expr.type&.value || 'each' # one of Ore::FOR_VERBS
 			result    = nil
 
-			push_then_pop Scope.new('for_loop') do |scope|
-				values = case collection
+			values = case collection
 
-				when Ore::Dictionary
-					collection.hash
-				when Ore::Array
-					collection.values
+			when Ore::Dictionary
+				collection.hash
+			when Ore::Array
+				collection.values
 
-				when Ore::Range
-					collection
-				when Ore::String
-					collection.value.chars
+			when Ore::Range
+				collection
+			when Ore::String
+				collection.value.chars
 
-				when Ore::Struct
-					# `.members` (an `Ore::Array` of `Ore::Member`) is only populated when the opt-in `ore/struct.ore` layer is loaded (see #build_struct) -- a bare Struct with no matching declared `Struct` type has nothing to iterate.
-					collection.declarations['members']&.values || []
+			when Ore::Struct
+				# `.members` (an `Ore::Array` of `Ore::Member`) is only populated when the opt-in `ore/struct.ore` layer is loaded (see #build_struct) -- a bare Struct with no matching declared `Struct` type has nothing to iterate.
+				collection.declarations['members']&.values || []
 
-				else
-					collection # todo; This could be a number, and every other object in the language.
-				end
+			else
+				collection # todo; This could be a number, and every other object in the language.
+			end
 
-				# New for-loop verbs, to be handled with stride and without
-				#
-				#   for <collection> [verb: map/select/reject] [by <stride>]
-				#   end
-				#
-				iterate_body = -> (element, index) do
+			# New for-loop verbs, to be handled with stride and without
+			#
+			#   for <collection> [verb: map/select/reject] [by <stride>]
+			#   end
+			#
+			# Each iteration gets its own fresh Scope (rather than one shared/mutated `scope` for
+			# the whole loop, as this used to do) -- a closure built inside the body (e.g. a
+			# Statement literal capturing `it`) must keep that iteration's own value, not a scope
+			# later iterations go on to overwrite. See todos.md [BUGS] for the repro this fixes.
+			# note; Pushes/pops by hand (not #push_then_pop) because `return` inside a for-loop body
+			# throws :stop past this per-iteration scope on its way out to the outer `catch :stop`
+			# below -- #push_then_pop has no `ensure`, so its own pop_scope would never run once
+			# the scope moved from wrapping the whole loop (old behavior) to wrapping just one
+			# iteration (see the comment above). The `ensure` here keeps the stack balanced
+			# regardless of how this iteration's scope gets exited.
+			iterate_body = -> (element, index) do
+				body_result = nil
+				scope       = Scope.new('for_loop')
+				push_scope scope
+				begin
 					scope.declare 'it', element
 					scope.declare 'at', index
-					body_result = nil
+					if collection.is_a? Ore::Dictionary
+						scope.declare 'value', element
+						scope.declare 'key', index
+					end
 					catch :skip do
 						for_loop_expr.body.each do |e|
 							body_result = interpret e
 							throw(:stop, body_result) if body_result.is_a? Ore::Return
 						end
 					end
-					body_result
+				ensure
+					pop_scope
 				end
+				body_result
+			end
 
-				# Initialize collection variables outside catch block so they persist after stop
-				collected = []
-				count_val = 0
-				elements  = if stride && !collection.is_a?(Ore::Dictionary)
-					values.each_slice(stride).each_with_index
-				else
-					values.each_with_index
-				end
+			# Initialize collection variables outside catch block so they persist after stop
+			collected = []
+			count_val = 0
+			elements  = if stride && !collection.is_a?(Ore::Dictionary)
+				# `each_slice` yields raw Ruby Arrays -- wrap each chunk as a real Ore::Array so `it` behaves like any other Ore value (`==`, `.push`, etc.), not just dot-index access (`it.0`), which already worked because #interp_dot_infix calls #maybe_instance on its receiver regardless.
+				values.each_slice(stride).map { |chunk| Ore::Array.new(chunk) }.each_with_index
+			else
+				values.each_with_index
+			end
 
-				stop_value = catch :stop do
-					elements.each do |element, index|
-						if collection.is_a? Ore::Dictionary
-							new_it = element[1]
-							new_at = element[0]
-							scope.declare 'it', new_it
-							scope.declare 'value', new_it
-							scope.declare 'at', new_at
-							scope.declare 'key', new_at
-							element = new_it
-							index   = new_at
-						end
-
-						case loop_type
-						when 'each'
-							result = iterate_body.call element, index
-						when 'map'
-							collected << iterate_body.call(element, index)
-						when 'select'
-							collected << element if truthy? iterate_body.call(element, index)
-						when 'reject'
-							collected << element unless truthy? iterate_body.call(element, index)
-						when 'count'
-							count_val += 1 if truthy? iterate_body.call(element, index)
-						end
+			stop_value = catch :stop do
+				elements.each do |element, index|
+					if collection.is_a? Ore::Dictionary
+						new_it  = element[1]
+						new_at  = element[0]
+						element = new_it
+						index   = new_at
 					end
-					nil
-				end
 
-				# Assign results after catch block so partial results are preserved on stop
-				case loop_type
-				when 'map', 'select', 'reject'
-					result = Ore::Array.new(collected)
-				when 'count'
-					result = count_val
+					case loop_type
+					when 'each'
+						result = iterate_body.call element, index
+					when 'map'
+						collected << iterate_body.call(element, index)
+					when 'select'
+						collected << element if truthy? iterate_body.call(element, index)
+					when 'reject'
+						collected << element unless truthy? iterate_body.call(element, index)
+					when 'count'
+						count_val += 1 if truthy? iterate_body.call(element, index)
+					end
 				end
+				nil
+			end
 
-				result     = stop_value if stop_value.is_a? Ore::Return
-			end # of push_then_pop
+			# Assign results after catch block so partial results are preserved on stop
+			case loop_type
+			when 'map', 'select', 'reject'
+				result = Ore::Array.new(collected)
+			when 'count'
+				result = count_val
+			end
+
+			result     = stop_value if stop_value.is_a? Ore::Return
 
 			result
 		end
@@ -2619,10 +2641,20 @@ module Ore
 				value
 			when 'assert'
 				condition = interpret expr.expression
-				unless condition
+				unless truthy? condition
 					message = interpret expr.message if expr.message
 					raise Ore::Assert_Triggered.new(expr, message)
 				end
+				condition
+
+			when 'refute'
+				condition = interpret expr.expression
+				if truthy? condition
+					message = interpret expr.message if expr.message
+					raise Ore::Refute_Triggered.new(expr, message)
+				end
+				condition
+
 			when 'ruby'
 				# The @ruby directive evaluates to the result of calling the ruby Ruby method
 				func_scope = stack.last

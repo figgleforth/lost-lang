@@ -7,10 +7,10 @@ _headcount := 4
 rescued? := false
 signal_fire! := true
 
-@puts "survivors: `survivors`"       # survivors: 4
-@puts "_headcount: `_headcount`"     # _headcount: 4
-@puts "rescued?: `rescued?`"         # rescued?: false
-@puts "signal_fire!: `signal_fire!`"   # signal_fire!: true
+@assert survivors == 4
+@assert _headcount == 4
+@assert rescued? == false
+@assert signal_fire! == true
 
 
 ``` Inferred declaration: :=
@@ -20,8 +20,8 @@ signal_fire! := true
 castaways := 48
 island_name := 'The Island'
 
-@puts "castaways: `castaways`"       # castaways: 48
-@puts "island_name: `island_name`"   # island_name: The Island
+@assert castaways == 48
+@assert island_name == "The Island"
 
 
 ``` Annotated declaration: : Type =
@@ -31,5 +31,5 @@ island_name := 'The Island'
 days_stranded: Number = 1
 distress_code: String = 'mayday'
 
-@puts "days_stranded: `days_stranded`"   # days_stranded: 1
-@puts "distress_code: `distress_code`"   # distress_code: mayday
+@assert days_stranded == 1
+@assert distress_code == 'mayday'

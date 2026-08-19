@@ -16,14 +16,14 @@ class ProxiesTest < Base_Test
 		assert_equal "HELLO", Ore.interp("'hello'.upcase()")
 		assert_equal "world", Ore.interp("'WORLD'.downcase()")
 
-		assert_equal ['he', '', 'o'], Ore.interp("'hello'.split('l')")
+		assert_equal ['he', '', 'o'], Ore.interp("'hello'.split('l')").values
 		assert_equal "ORL", Ore.interp("'WORLD'.slice('ORL')")
 
 		assert_equal "Locke!", Ore.interp("'   Locke!    '.trim()")
 		assert_equal "Locke!    ", Ore.interp("'   Locke!    '.trim_left()")
 		assert_equal "   Locke!", Ore.interp("'   Locke!    '.trim_right()")
 
-		assert_equal %w(w a l t), Ore.interp("'walt'.chars()")
+		assert_equal %w(w a l t), Ore.interp("'walt'.chars()").values
 		assert_equal 6, Ore.interp("'Enter the numbers'.index('the')")
 
 		assert_equal 123, Ore.interp("'123'.to_i()")
@@ -74,12 +74,12 @@ class ProxiesTest < Base_Test
 		assert_equal 3, Ore.interp("[1, 2, 3].length()")
 		assert_equal 0, Ore.interp("[].length()")
 
-		assert_equal [1, 2], Ore.interp("[1, 2, 3, 4].first(2)")
-		assert_equal [3, 4], Ore.interp("[1, 2, 3, 4].last(2)")
+		assert_equal [1, 2], Ore.interp("[1, 2, 3, 4].first(2)").values
+		assert_equal [3, 4], Ore.interp("[1, 2, 3, 4].last(2)").values
 
-		assert_equal [2, 3], Ore.interp("[1, 2, 3, 4].slice(1, 2)")
+		assert_equal [2, 3], Ore.interp("[1, 2, 3, 4].slice(1, 2)").values
 
-		assert_equal [3, 2, 1], Ore.interp("[1, 2, 3].reverse()")
+		assert_equal [3, 2, 1], Ore.interp("[1, 2, 3].reverse()").values
 
 		assert_equal "1,2,3", Ore.interp("[1, 2, 3].join(',')")
 
@@ -89,8 +89,8 @@ class ProxiesTest < Base_Test
 
 		assert_equal [1, 2, 3, 4, 5], Ore.interp("[1, 2, 3].concat([4, 5])")
 		assert_equal [1, 2, 3, 4], Ore.interp("[[1, 2], [3, 4]].flatten()").values
-		assert_equal [1, 2, 3], Ore.interp("[3, 1, 2].sort()")
-		assert_equal [1, 2, 3], Ore.interp("[1, 2, 2, 3, 1].uniq()")
+		assert_equal [1, 2, 3], Ore.interp("[3, 1, 2].sort()").values
+		assert_equal [1, 2, 3], Ore.interp("[1, 2, 2, 3, 1].uniq()").values
 
 		assert Ore.interp("[1, 2, 3].include?(2)")
 		refute Ore.interp("[1, 2, 3].include?(5)")
@@ -169,8 +169,8 @@ class ProxiesTest < Base_Test
 		assert_equal 1, Ore.interp("{x: 1}.fetch(:x, 0)")
 		assert_equal 0, Ore.interp("{x: 1}.fetch(:y, 0)")
 
-		assert_equal [:x, :y, :z], Ore.interp("{x: 1, y: 2, z: 3}.keys()")
-		assert_equal [1, 2, 3], Ore.interp("{x: 1, y: 2, z: 3}.values()")
+		assert_equal [:x, :y, :z], Ore.interp("{x: 1, y: 2, z: 3}.keys()").values
+		assert_equal [1, 2, 3], Ore.interp("{x: 1, y: 2, z: 3}.values()").values
 
 		assert Ore.interp("{x: 1, y: 2}.has_key?(:x)")
 		refute Ore.interp("{x: 1, y: 2}.has_key?(:z)")
@@ -182,7 +182,7 @@ class ProxiesTest < Base_Test
 		assert_equal 0, Ore.interp("{}.count()")
 
 		out = Ore.interp "{x: 1}.merge({y: 2, z: 3})"
-		assert_equal({ x: 1, y: 2, z: 3 }, out)
+		assert_equal({ x: 1, y: 2, z: 3 }, out.hash)
 	end
 
 	def test_number_proxies

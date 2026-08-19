@@ -8,7 +8,7 @@ Castaway {
 
 survivor := Castaway()
 survivor.name = 'Jack'      # fine -- name already exists
-@puts "survivor.name: `survivor.name`"   # survivor.name: Jack
+@assert survivor.name == 'Jack', 'writing to an existing member should work'
 
 # survivor.number = 4       -- raises Ore::Cannot_Assign_Undeclared_Identifier, number was never declared
 
@@ -22,7 +22,7 @@ Raft {
 }
 
 r := Raft()
-@puts "r.planks: `r.planks`"   # r.planks: 6 -- ./planks was self-declared during construction
+@assert r.planks == 6, './planks should be self-declared during construction'
 
 
 ``` A later method can't grow the instance's shape
@@ -39,4 +39,4 @@ Raft2 {
 
 r2 := Raft2()
 # r2.add_sail() would raise Ore::Cannot_Assign_Undeclared_Identifier
-@puts "r2.planks: `r2.planks`"   # r2.planks: 6 -- the member declared during construction is still fine to use
+@assert r2.planks == 6, 'the member declared during construction is still fine to use'

@@ -2,6 +2,8 @@ require 'minitest/autorun'
 require_relative '../src/ore'
 require_relative 'base_test'
 
+# These tests are mostly in chronological order. I may have inserted some at times. It would be great to preserve this order.
+
 class Interpreter_Test < Base_Test
 	def test_preload_dot_air
 		refute_raises RuntimeError do
@@ -412,21 +414,21 @@ class Interpreter_Test < Base_Test
 
 	def test_dictionary_keys
 		out = Ore.interp '{ a b c }.keys()'
-		assert_equal [:a, :b, :c], out
+		assert_equal [:a, :b, :c], out.values
 	end
 
 	def test_dictionary_values
 		out = Ore.interp '{ a b c }.values()'
-		assert_equal [nil, nil, nil], out
+		assert_equal [nil, nil, nil], out.values
 
 		out = Ore.interp '{ a=1, b= "two", c: :three }.values()'
-		assert_equal [1, "two", :three], out
+		assert_equal [1, "two", :three], out.values
 
 		out = Ore.interp '{ a=1, b="two", c: :three }.values()'
-		assert_equal [1, "two", :three], out
+		assert_equal [1, "two", :three], out.values
 
 		out = Ore.interp '{ a=1, b:"two", c: :three }.values()'
-		assert_equal [1, "two", :three], out
+		assert_equal [1, "two", :three], out.values
 	end
 
 	def test_dictionary_subscript
@@ -797,7 +799,7 @@ class Interpreter_Test < Base_Test
 
 	def test_truthy_falsy_logic
 		assert_equal 1, Ore.interp('if true 1 else 0 end')
-		assert_equal 0, Ore.interp('if 0 1 else 0 end')
+		assert_equal 1, Ore.interp('if 0 1 else 0 end') # truthiness follows Ruby's own rules -- only nil/false are falsy, 0 is truthy
 		assert_equal 0, Ore.interp('if nil 1 else 0 end')
 	end
 
@@ -1361,7 +1363,7 @@ class Interpreter_Test < Base_Test
 		end
 
 		numbers"
-		assert_equal [[4, 8], [15, 16], [23, 42]], out.values
+		assert_equal [[4, 8], [15, 16], [23, 42]], out.values.map(&:values)
 	end
 
 	def test_for_loop_at_and_it_builtins
@@ -1530,7 +1532,7 @@ class Interpreter_Test < Base_Test
 		for [1, 2, 3, 4, 5, 6, 7, 8] select by 2
 			it.0 + it.1 > 5
 		end"
-		assert_equal [[3, 4], [5, 6], [7, 8]], out.values
+		assert_equal [[3, 4], [5, 6], [7, 8]], out.values.map(&:values)
 	end
 
 	def test_for_loop_reject
@@ -1554,7 +1556,7 @@ class Interpreter_Test < Base_Test
 		for [1, 2, 3, 4, 5, 6, 7, 8] reject by 2
 			it.0 + it.1 > 5
 		end"
-		assert_equal [[1, 2]], out.values
+		assert_equal [[1, 2]], out.values.map(&:values)
 	end
 
 	def test_for_loop_count

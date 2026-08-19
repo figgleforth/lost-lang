@@ -13,14 +13,20 @@ module Ore
 		proxy :has_key?
 		proxy :delete
 		proxy :count
-		proxy :keys
-		proxy :values
 		proxy :empty?
 		proxy :clear
 		proxy :fetch
 
+		def proxy_keys
+			Ore::Array.new hash.keys
+		end
+
+		def proxy_values
+			Ore::Array.new hash.values
+		end
+
 		def proxy_merge other_hash
-			hash.merge other_hash.hash
+			Ore::Dictionary.new hash.merge other_hash.hash
 		end
 
 		# note; To prevent Scope#[] or Scope#get from missing out on the actual location of the hash. Standard members still call through to [] and get. I'm manually calling these proxy methods in some places. @copypaste from array.rb

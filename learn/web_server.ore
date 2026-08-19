@@ -68,5 +68,4 @@ Camp | Server {
 ```
 camp := Camp()
 @start_server camp
-@puts 'Camp server is live on port 8080'   # printed right after @start_server -- proof it didn't block
 @stop_server camp

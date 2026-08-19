@@ -18,13 +18,7 @@ module Ore
 		proxy :unshift, as: :prepend # ore/array.ore's `unshift{;}` was renamed to `prepend{;}` (unshift is now just an alias, see #Interpreter#interp_directive's `@ruby` lookup, which resolves by the func's own declared name -- "prepend" -- not whatever alias it was called through)
 		proxy :length
 		proxy :length, as: :count
-		proxy :first
-		proxy :last
-		proxy :slice
-		proxy :reverse
 		proxy :join
-		proxy :sort
-		proxy :uniq
 		proxy :empty?
 
 		# note; To prevent Scope#[] or Scope#get from missing out on the actual location of the array elements. Standard members still call through to [] and get. I'm manually calling these proxy methods in some places.
@@ -49,6 +43,31 @@ module Ore
 			Ore::Array.new ruby_array.flatten depth
 		end
 
+		# first/last/slice can return either a single element or a raw Ruby Array (with a count/range argument) -- only wrap the latter, so `it.first` (no arg) still returns a scalar
+		def proxy_first *args
+			wrap_if_array values.first(*args)
+		end
+
+		def proxy_last *args
+			wrap_if_array values.last(*args)
+		end
+
+		def proxy_slice *args
+			wrap_if_array values.slice(*args)
+		end
+
+		def proxy_reverse
+			Ore::Array.new values.reverse
+		end
+
+		def proxy_sort
+			Ore::Array.new values.sort
+		end
+
+		def proxy_uniq
+			Ore::Array.new values.uniq
+		end
+
 		def == other
 			# I think there's more to this than a simple evaluation. Tbd...
 			values == other&.values
@@ -56,6 +75,12 @@ module Ore
 
 		def + other
 			Ore::Array.new(values + other.values)
+		end
+
+		private
+
+		def wrap_if_array result
+			result.is_a?(::Array) ? Ore::Array.new(result) : result
 		end
 	end
 

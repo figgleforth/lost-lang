@@ -11,7 +11,7 @@ r := Raft()
 r.length = 12
 r.crew = 4
 @add_readable_scope r
-@puts "length: `length`"   # length: 12 -- reached via the readable scope, no r. prefix needed
+@assert length == 12, 'length should be reached via the readable scope, no r. prefix needed'
 @remove_readable_scope r
 # @puts length would now raise Ore::Undeclared_Identifier -- r was removed from the readable scope
 
@@ -32,7 +32,7 @@ magnitude { @readable vec;
 v := Vector()
 v.x = 3
 v.y = 4
-@puts "magnitude(v): `magnitude(v)`"   # magnitude(v): 5.0
+@assert magnitude(v) == 5.0, '@readable should unpack the argument so x/y resolve directly'
 
 
 ``` Manual scope control, outside a function's own params
@@ -47,7 +47,7 @@ island := Island()
 island.name = 'The Island'
 
 @add_readable_scope island
-@puts "name: `name`"   # name: The Island
+@assert name == 'The Island', 'manually adding a readable scope should unpack it the same way'
 @remove_readable_scope island
 # @puts name would now raise Ore::Undeclared_Identifier -- island was removed from the readable scope
 
@@ -57,7 +57,7 @@ island.name = 'The Island'
 `@add_readable`/`@remove_readable` are the exact same thing as `@add_readable_scope`/`@remove_readable_scope`, just shorter -- for when the full name feels like a mouthful outside a function's param list, but `@readable` (the shortest form) feels too terse for the call site:
 ```
 @add_readable island
-@puts "name: `name`"   # name: The Island
+@assert name == 'The Island', 'the medium alias should behave identically to the full name'
 @remove_readable island
 
 
@@ -87,7 +87,7 @@ ration_report {;
 
 }
 
-@puts "ration_report(): `ration_report()`"   # ration_report(): 12 survivors, 40 units of water
+@assert ration_report() == '12 survivors, 40 units of water', 'a nested function should still see the readable scope'
 
 
 ``` Weak references, not strong ones
@@ -104,7 +104,7 @@ add_temporary_reading { @readable vec;
 w := Vector()
 w.x = 5
 w.y = 6
-@puts "add_temporary_reading(w): `add_temporary_reading(w)`"   # add_temporary_reading(w): 11 -- no cleanup needed afterward
+@assert add_temporary_reading(w) == 11, 'no cleanup should be needed afterward'
 
 
 ``` The standard library works this way too
@@ -114,5 +114,5 @@ w.y = 6
 Mine | Array { extra := true }
 Array = Mine
 
-@puts "[1,2,3].length(): `[1,2,3].length()`"   # [1,2,3].length(): 3 -- still works, Mine composes Array
-@puts "[1].extra: `[1].extra`"   # [1].extra: true -- and now every array literal has this too
+@assert [1,2,3].length() == 3, 'reassigning Array should not break literals -- Mine composes Array'
+@assert [1].extra == true, 'every array literal should now pick up what Mine added too'

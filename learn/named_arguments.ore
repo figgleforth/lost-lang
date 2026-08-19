@@ -6,15 +6,15 @@ sub { a, b;
 	a - b
 }
 
-@puts "sub(a := 1, b := 2): `sub(a := 1, b := 2)`"   # sub(a := 1, b := 2): -1
-@puts "sub(b := 2, a := 1): `sub(b := 2, a := 1)`"   # sub(b := 2, a := 1): -1 -- reordered, same result
+@assert sub(a := 1, b := 2) == -1, 'named arguments should bind by declared param name'
+@assert sub(b := 2, a := 1) == -1, 'named arguments should give the same result regardless of order'
 
 
 ``` Positional first, then named -- never the other way
 
 A call can start with positional arguments (bare or labeled) and switch to named arguments partway through, but not switch back. Positional args still fill params left-to-right by position; named args fill by name, so the two never fight over the same param as long as you don't supply one both ways.
 ```
-@puts "sub(1, b := 2): `sub(1, b := 2)`"   # sub(1, b := 2): -1
+@assert sub(1, b := 2) == -1, 'positional then named should be fine'
 
 # sub(a := 1, 2)  -- raises Ore::Positional_Argument_After_Named: a positional argument can't follow a named one
 
@@ -37,7 +37,7 @@ Point {
 }
 
 p := Point(y := 4, x := 3)
-@puts "p: `p.to_s()`"   # p: (3, 4)
+@assert p.to_s() == '(3, 4)', 'named arguments should bind to constructor params by name too'
 
 
 ``` Named arguments compose with defaults
@@ -48,8 +48,8 @@ greet { name := "World";
 	"Hello, `name`"
 }
 
-@puts "greet(): `greet()`"                     # greet(): Hello, World
-@puts "greet(name := 'Ore'): `greet(name := 'Ore')`"   # greet(name := 'Ore'): Hello, Ore
+@assert greet() == 'Hello, World', 'an omitted param should fall back to its default'
+@assert greet(name := 'Ore') == 'Hello, Ore', 'a named argument should override the default'
 
 
 ``` What goes wrong

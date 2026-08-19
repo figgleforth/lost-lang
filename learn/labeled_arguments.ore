@@ -6,16 +6,16 @@ send_message { to person, body text;
 	"To `person`: `text`"
 }
 
-@puts send_message(to: 'Jack', body: 'Found fresh water')   # To Jack: Found fresh water
-@puts send_message('Sayid', 'Meet at the caves')      # To Sayid: Meet at the caves
+@assert send_message(to: 'Jack', body: 'Found fresh water') == 'To Jack: Found fresh water', 'labeled arguments should match by position'
+@assert send_message('Sayid', 'Meet at the caves') == 'To Sayid: Meet at the caves', 'labels are opt-in -- a bare positional call should still work'
 
 
 ``` Labels are opt-in per call, per argument
 
 Nothing forces every call to use labels -- a labeled param can still be called positionally.
 ```
-@puts send_message('Kate', body: 'Watch the fire')   # To Kate: Watch the fire
-@puts send_message(to: 'Hurley', ':)')               # To Hurley: :)
+@assert send_message('Kate', body: 'Watch the fire') == 'To Kate: Watch the fire', 'positional and labeled arguments can mix in one call'
+@assert send_message(to: 'Hurley', ':)') == 'To Hurley: :)', 'either argument can be labeled independently of the other'
 
 
 ``` A wrong label raises
@@ -43,4 +43,4 @@ Point {
 }
 
 p := Point(at: 3, at: 4)
-@puts "p: `p.to_s()`"   # p: (3, 4)
+@assert p.to_s() == '(3, 4)', 'a repeated label should still bind to each declared param by position'

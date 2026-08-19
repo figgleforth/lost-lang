@@ -5,8 +5,8 @@ Put `<...>` right after a Type name, instead of on its own, and you get somethin
 String<Dictionary> { to_s {; "I'm a dict-structured string" } }
 String<Number>     { to_s {; "I'm a number-structured string" } }
 
-@puts "dict-structured: `String<{x=1}>().to_s()`"     # dict-structured: I'm a dict-structured string -- {x=1} is a Dictionary
-@puts "number-structured: `String<5>().to_s()`"       # number-structured: I'm a number-structured string -- 5 is a Number
+@assert String<{x=1}>().to_s() == "I'm a dict-structured string", '{x=1} is a Dictionary, so it should match the Dictionary-structured variant'
+@assert String<5>().to_s() == "I'm a number-structured string", '5 is a Number, so it should match the Number-structured variant'
 
 # Matching isn't exact-name-only: a value satisfies a member if its own type composes what's
 # declared, not just if it IS that type by name. No matching variant raises Undeclared_Type_Structure.
@@ -19,8 +19,8 @@ When two variants would otherwise match by type alone, name the member at the re
 Table_With_Opts<dict: Dictionary>  { to_s {; "dict-named" } }
 Table_With_Opts<other: Dictionary> { to_s {; "other-named" } }
 
-@puts "referencing dict: `Table_With_Opts<dict := {x=1}>().to_s()`"    # referencing dict: dict-named -- picks the "dict" variant by name
-@puts "referencing other: `Table_With_Opts<other := {x=1}>().to_s()`"  # referencing other: other-named -- picks the "other" variant by name
+@assert Table_With_Opts<dict := {x=1}>().to_s() == 'dict-named', 'naming the member at the reference site should pick the "dict" variant'
+@assert Table_With_Opts<other := {x=1}>().to_s() == 'other-named', 'naming the member at the reference site should pick the "other" variant'
 
 
 ``` Reference vs. declaration
@@ -38,7 +38,7 @@ Abc<Number> {
 }
 z  := Abc<4815>
 zz := z()
-@puts "zz.structure.types.first(): `zz.structure.types.first()`"   # zz.structure.types.first(): 4815
+@assert zz.structure.types.first() == 4815, '.structure should carry the value the reference was structured with'
 
 
 ``` Reusing a struct: the spread rule
@@ -50,8 +50,8 @@ DEFAULT_COLUMNS := <id: Number, created_at: Number>
 Thing<DEFAULT_COLUMNS> {}   # same as writing: Thing<id: Number, created_at: Number> {}
 
 t := Thing<5, 1234>()
-@puts "t.structure.id: `t.structure.id`"                   # t.structure.id: 5
-@puts "t.structure.created_at: `t.structure.created_at`"   # t.structure.created_at: 1234
+@assert t.structure.id == 5, 'a spread member should land on the declaration by its own name'
+@assert t.structure.created_at == 1234, 'a spread member should land on the declaration by its own name'
 
 
 ``` References never spread
@@ -64,6 +64,7 @@ Widget<opts: Options> {
 	new {;}
 }
 
-Widget<opts: Options>()   # opts = Options, one named member -- works
-Widget<Options>()         # Options treated as one opaque value, NOT spread -- also works
-@puts "both Widget references constructed fine"
+widget_a := Widget<opts: Options>()   # named reference, matches the declared "opts: Options" variant -- works
+widget_b := Widget<Options>()         # bare reference -- Options treated as one opaque value, NOT spread -- also works
+@assert widget_a.structure.names == ['opts'], 'a named reference should still carry the member name from the matched variant'
+@assert widget_b.structure.types.first() == Options, 'a bare reference should hold Options as one opaque value, not spread'
