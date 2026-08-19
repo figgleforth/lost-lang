@@ -22,8 +22,8 @@ Struct {
 		})
 	}
 
-	to_s {;
-		formatted_members := members.map({it; it.to_s() }).join(', ')
+	to_s { compact := false;
+		formatted_members := members.map({it; it.to_s(compact) }).join(', ')
 		"<`formatted_members`>"
 	}
 

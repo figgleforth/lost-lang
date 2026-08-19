@@ -9,12 +9,22 @@ Member {
 		self.type  = type
 	}
 
-	to_s {;
+	to_s { compact := false;
 		# `.?pretty_print()` -- for an unnamed schema-only member (`<String, Number>`), `value` is the bare String Type object itself, not an actual instance, so a plain `.pretty_print()` would raise Cannot_Call_Instance_Member_On_Type. Falls back to `value` itself (its own to_s -- the type's name) when that's the case.
 		displayed_value := if value and type.?name == 'String'
 			value.?pretty_print() or value
 		else
 			value
+		end
+
+		if compact
+			return if name and value
+				"`name`=`displayed_value`"
+			elsif name and not value
+				name
+			elsif value
+				displayed_value
+			end
 		end
 
 		if name

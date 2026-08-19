@@ -3,26 +3,43 @@ Reads todos.md and reports how many lines are still open (`+`) vs done (`-`). Ru
 bin/ore examples/todo_stats.ore
 ```
 
-content := File_System.read('todos.md')
-lines := content.split("\n")
+Task_List_Stats <name: String, open: Array, done: Array, open_percent: Flt, done_percent: Flt>
 
-done_count := 0
-open_count := 0
+make_stats { filepath: String -> Task_List_Stats;
+	content := File_System.read(filepath)
+	lines := content.split("\n")
 
-for lines
-    trimmed := it.trim()
+	open := []
+	done := []
 
-    if trimmed.start_with?('-')
-        done_count += 1
-    elif trimmed.start_with?('+')
-        open_count += 1
-    end
+	for lines
+	    trimmed := it.trim()
+
+	    if trimmed.start_with?('-')
+			done.push(trimmed)
+	    elif trimmed.start_with?('+')
+	        open.push(trimmed)
+	    end
+	end
+
+	done_count   := done.length()
+	open_count   := open.length()
+	total_count  := done_count + open_count
+	done_percent := (done_count.to_f() / total_count.to_f() * 100.0).round()
+	open_percent := (open_count.to_f() / total_count.to_f() * 100.0).round()
+
+	# note; these arguments must be in this order, structs don't support named arguments
+	# note; also commas are optional in this case
+	Task_List_Stats.new(
+		filepath.split('.').0
+		open_count
+		done_count
+		open_percent
+		done_percent
+	)
+}
+
+files := ['todos.md' 'bugs.md' 'design.md'] # note; optional commas
+for files
+	@puts make_stats(filepath := it).to_s(compact := true)
 end
-
-total := done_count + open_count
-
-done_percent := (done_count.to_f() / total.to_f() * 100).round()
-open_percent := (open_count.to_f() / total.to_f() * 100).round()
-
-@puts "`done_count` done (`done_percent`%)"
-@puts "`open_count` open (`open_percent`%)"

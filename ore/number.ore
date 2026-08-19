@@ -46,4 +46,5 @@ Number {
 
 # todo; Int and Flt/Float
 Int | Number {}
-Flt := Float | Number {}
+Float | Number {}
+Flt | Number {}

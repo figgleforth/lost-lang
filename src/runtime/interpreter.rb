@@ -29,9 +29,9 @@ module Ore
 			@stack                 = [] # [Ore::Scope]
 			@servers               = [] # [Ore::Server]
 
-			@lexer        = Lexer.new
-			@parser       = Parser.new
-			@declarations = {} # {::String => Ore::Declaration}, see Declarator
+			@lexer               = Lexer.new
+			@parser              = Parser.new
+			@declarations        = {} # {::String => Ore::Declaration}, see Declarator
 			@forced_declarations = Set.new # identity-tracked Ore::Expression, see #resolve_forward_declaration
 		end
 
@@ -1681,6 +1681,11 @@ module Ore
 			if expr.receiver.is_a?(Ore::Infix_Expr) && expr.receiver.operator&.value == '.' && expr.receiver.right.is('new')
 				type = interpret expr.receiver.left
 
+				# Ore::Struct < Instance < Type (Ruby class hierarchy), so a bare struct schema value (`thing := <a: Number>`, or a persisted named struct -- see #interp_type) passes the `is_a? Ore::Type` check below too, but it has no `.expressions` for #interp_type_call's construction path to run -- route it through the same Ore::Struct call path #interp_call's own receiver-dispatch further down already uses for `thing(...)`.
+				if type.is_a? Ore::Struct
+					return interp_struct_call type, expr
+				end
+
 				unless type.is_a? Ore::Type
 					raise Ore::Cannot_Initialize_Non_Type_Identifier.new(expr.receiver.left)
 				end
@@ -1740,9 +1745,11 @@ module Ore
 
 					existing = find_structured_type_variant lookup_name, supplied
 					unless existing.is_a? Ore::Type
-						# `expr.name` has nothing declared under it at all -- no bare Type, no structured variant (checked separately from `existing` above, which only tells us no *matching* variant was found, not that none exist), no alias. Rather than raise, treat this as a bare named struct (`Named <Struct>`), reusing the already-interpreted `supplied` Struct instance and just naming it. A name that *does* have something declared -- a real Type with a mismatched structure, or an alias to a non-Type value -- still raises, unchanged.
+						# `expr.name` has nothing declared under it at all -- no bare Type, no structured variant (checked separately from `existing` above, which only tells us no *matching* variant was found, not that none exist), no alias. Rather than raise, treat this as a bare named struct (`Named <Struct>`), reusing the already-interpreted `supplied` Struct instance and naming it. When every member is named, this also declares `expr.name` in the current scope -- unlike an unnamed/mixed struct (`Named <String, Number>`), where multiple differently-shaped structures can share one base name (matched structurally at each reference, same as an ordinary structured-type variant) and persisting the first one seen would block the others, a fully-named struct only ever means one shape, so persisting it is safe and is what makes a bare statement form (`Named <Struct>`, no `:=`) actually reusable afterward -- `Named(...)`/`Named.new(...)` then go through the ordinary Ore::Struct call path (#interp_call's Ore::Struct branch), constructing a real, fully Struct-backed instance with real per-slot values. A name that *does* have something declared -- a real Type with a mismatched structure, or an alias to a non-Type value -- still raises, unchanged.
 						if aliased.nil? && structured_variants_for(lookup_name).empty?
 							supplied.declare 'name', expr.name
+							supplied.types = Set[expr.name] + supplied.types # `.types` inherited `Set['Struct']` alone from Struct#initialize's `super 'Struct'`; put the struct's own declared name first (own-name-before-composed, same order an ordinary `Ident | Struct {}` composition would produce) so type-identity checks (===, a `-> Ident` return-type contract, `type_name_to_string`'s `.types.first`, ...) see it as `Ident`-shaped, not just generically Struct-shaped.
+							stack.last.declare expr.name, supplied if supplied.names.all?
 							return supplied
 						end
 						raise Ore::Undeclared_Type_Structure.new(expr)
@@ -2219,8 +2226,17 @@ module Ore
 		# @param struct [Ore::Struct]
 		# @param expr [Ore::Call_Expr]
 		def interp_struct_call struct, expr
-			values = expr.arguments.map { |arg| wrap_string_literal_value(arg, interpret(arg)) }
-			build_struct struct.names, struct.type_names, struct.type_objects, values
+			values   = expr.arguments.map { |arg| wrap_string_literal_value(arg, interpret(arg)) }
+			instance = build_struct struct.names, struct.type_names, struct.type_objects, values
+
+			# #build_struct always links a fresh instance's `.types` to the shared, declared `Struct` type alone (`struct_type.types`, generically `['Struct']`) -- if `struct` (the schema being called) is itself named (see #interp_type's bare named struct handling), carry that name over too, own-name-first, so the constructed instance is `Ident | Struct`-shaped, not just generically Struct-shaped: === and a `-> Ident` return-type contract both key off `.types`.
+			schema_name = struct.get 'name'
+			if schema_name
+				instance.declarations['name'] = schema_name
+				instance.types                = Set[schema_name] + instance.types
+			end
+
+			instance
 		end
 
 		# @param expr [Ore::Route_Expr]
