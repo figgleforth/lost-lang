@@ -1,5 +1,5 @@
 require 'minitest/test_task'
-require_relative 'src/ore'
+require_relative 'src/lost'
 require 'pp'
 
 task :default => [:test, :cloc]
@@ -11,5 +11,5 @@ Minitest::TestTask.create(:test) do |t|
 end
 
 task :cloc do
-	sh "\ncloc --quiet --force-lang-def=ore.cloc ."
+	sh "\ncloc --quiet --force-lang-def=lost.cloc ."
 end

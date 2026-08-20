@@ -1,4 +1,4 @@
-module Ore
+module Lost
 	# A proof of concept to see what a documentation stage might look like
 	class Documenter
 		attr_accessor :input
@@ -10,7 +10,7 @@ module Ore
 		def output
 			input.map do |expr|
 				case expr
-				when Ore::Comment_Expr
+				when Lost::Comment_Expr
 					expr.value
 				else
 					nil

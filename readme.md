@@ -1,7 +1,7 @@
 ![Version](https://img.shields.io/badge/version-0.0.0-2B7FFF.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-2B7FFF.svg)
 [![justforfunnoreally.dev badge](https://img.shields.io/badge/justforfunnoreally-dev-2B7FFF)](https://justforfunnoreally.dev)
-![Status of project Ruby tests](https://github.com/figgleforth/ore-lang/actions/workflows/tests.yml/badge.svg)
+![Status of project Ruby tests](https://github.com/figgleforth/lost-lang/actions/workflows/tests.yml/badge.svg)
 
 Learn about the language below, or [in the learn section](learn/readme.md), or *[click here to get started using it](getting_started.md)*.
 
@@ -12,7 +12,7 @@ Learn about the language below, or [in the learn section](learn/readme.md), or *
 1. Must start with a lowercase letter or `_`.
 2. Can end with `!` or `?`
 
-```ore
+```lost
 nothing := nil
 something: Number = 123
 _private_thing := "Yes"
@@ -28,7 +28,7 @@ tested? := false
 5. The last expression is the return value
 6. Return early using `return` keyword
 
-```ore
+```lost
 # func_name { [args]; [body] }
 
 func_with_args { arg1, arg2 := 1, etc := true;
@@ -51,7 +51,7 @@ _privately_do { x, y, z; }
 
 **Labels** — a param declared as two identifiers in a row (`label name`) can be called `label: value`. Matches by position, never reorders. Opt-in per call; wrong label raises `Argument_Label_Mismatch`.
 
-```ore
+```lost
 send_message { to person, saying text;
     "To `person`: `text`"
 }
@@ -62,7 +62,7 @@ send_message('Sayid', 'Meet at the caves')
 
 **Named arguments** — `name := value` at a call site binds by the callee's declared param name, order-independent. Positional args (bare or labeled) must come first; once you name one, the rest must be named too.
 
-```ore
+```lost
 sub { a, b; a - b }
 
 sub(a := 1, b := 2)   # -1
@@ -77,7 +77,7 @@ sub(1, b := 2)        # -1 positional then named is fine
 
 **Struct-typed params** — `: <...>` instead of a plain type name checks *structurally*, not by name: any argument that has each listed member, with a compatible type, is accepted. `Any` matches any member type. Checked on every call, raising `Type_Contract_Violation` on a mismatch.
 
-```ore
+```lost
 f { right: <name: String, type: Any, value: Any>; right.name }
 
 m := Member('x', String, 4)
@@ -89,7 +89,7 @@ f(nil)   # raises Type_Contract_Violation
 
 A named function is registered in its enclosing scope as it's declared, so it can call itself.
 
-```ore
+```lost
 factorial { n;
     if n == 0 or n == 1
         1
@@ -129,7 +129,7 @@ end
 
 Calling a function, or referencing a type, works even before its own declaration is reached in the file — including mutual recursion between two functions declared in either order.
 
-```ore
+```lost
 result := main()   # `main` hasn't been declared yet, but this still works
 
 main {; helper() }
@@ -138,7 +138,7 @@ helper {; 42 }
 result  # 42
 ```
 
-```ore
+```lost
 is_even { n;
     if n == 0
         true
@@ -160,7 +160,7 @@ is_even(4)  # true
 
 A class-styled alias (`This := That {}`) hoists the same way, since it's declaring a type just spelled through an assignment:
 
-```ore
+```lost
 p := This()
 
 This := That {}
@@ -171,27 +171,27 @@ p.greet()  # 'hi'
 
 A bare `@load` hoists too, so imports can live at the bottom of the file instead of the top:
 
-```ore
+```lost
 sign := Div([P('hi')])
 sign.to_s()  # '<div><p>hi</p></div>'
 
-@load 'ore/html.ore'
+@load 'lost/html.tape'
 ```
 
 `Ident := @load 'file'` / `IDENT := @load 'file'` work the same way — only a Capitalized or UPPERCASE left-hand name opts in, since that's what marks it as a namespace rather than an ordinary variable:
 
-```ore
+```lost
 sign := Html_Lib.Div([Html_Lib.P('hi')])
 sign.to_s()  # '<div><p>hi</p></div>'
 
-Html_Lib := @load 'ore/html.ore'
+Html_Lib := @load 'lost/html.tape'
 
-# html_lib := @load 'ore/html.ore'   -- lowercase stays a plain variable, not hoisted
+# html_lib := @load 'lost/html.tape'   -- lowercase stays a plain variable, not hoisted
 ```
 
 Plain variable assignments are never hoisted this way — reading one before its own line has actually run still raises `Undeclared_Identifier`, same as any language with top-to-bottom execution:
 
-```ore
+```lost
 @puts "`a`"   # raises Undeclared_Identifier
 a := 123
 ```
@@ -201,7 +201,7 @@ a := 123
 1. Must start with an uppercase character
 2. Can have an initializer `new`
 
-```ore
+```lost
 My_Class {
     input,
     
@@ -219,7 +219,7 @@ instance := My_Class('some input')  # Initted with "some input"
 1. Must be UPPERCASE
 2. Cannot be reassigned after initial declaration
 
-```ore
+```lost
 PI := 3.14159
 MAX_SIZE := 100
 APP_NAME := 'My App'
@@ -227,7 +227,7 @@ APP_NAME := 'My App'
 
 ## Comments
 
-```ore
+```lost
 # This is a single-line comment
 # It's now a multi-line comment
 ```
@@ -237,7 +237,7 @@ APP_NAME := 'My App'
 1. Use backticks inside strings to interpolate expressions
 2. Escape with backslash to prevent interpolation
 
-```ore
+```lost
 name := 'World'
 greeting := "Hello, `name`!"  # "Hello, World!"
 math := "2 + 2 = `2 + 2`"    # "2 + 2 = 4"
@@ -250,7 +250,7 @@ escaped := "Literal \`backticks\`"
 2. `Self` accesses current type/class scope only
 3. `~/` accesses global scope
 
-```ore
+```lost
 My_Class {
     Self.count := 0   # Type-level (static) variable
     value,
@@ -272,7 +272,7 @@ My_Class {
 2. Shared across all instances
 3. Accessed on the type itself: `Type.member`
 
-```ore
+```lost
 Counter {
     Self.count := 0
 
@@ -297,7 +297,7 @@ Counter.count  # 2
 3. `~` removal: remove members of right type from left
 4. `^` symmetric difference: keep non-shared members
 
-```ore
+```lost
 Movable {
     x := 0
     y := 0
@@ -324,7 +324,7 @@ s.draw()
 
 Composition chains, so `~` can remove a trait that was mixed in earlier in the same chain:
 
-```ore
+```lost
 Flying { can_fly := true }
 Swimming { can_swim := true }
 
@@ -336,12 +336,12 @@ d.can_swim    # true
 Ostrich | Duck ~ Flying { name := 'ostrich' }
 o := Ostrich()
 o.can_swim    # true
-o.can_fly     # raises Ore::Undeclared_Identifier
+o.can_fly     # raises Lost::Undeclared_Identifier
 ```
 
 A type can even compose with itself, to extend or override a built-in type's own behavior:
 
-```ore
+```lost
 Array | Array {
     each { func;
         for self.values   # self.values reaches the original Array's own values, despite `each` itself now being redefined
@@ -365,7 +365,7 @@ doubled  # [2, 4, 6]
 3. Can be used as inline modifiers
 4. Any value works as a condition -- truthiness follows Ruby's own rules: only `nil`/`false` are falsy, everything else (`0`/`0.0` included) is truthy
 
-```ore
+```lost
 if x > 10
     'big'
 elif x > 5
@@ -389,7 +389,7 @@ end
 2. `until` loops until condition becomes true
 3. `elwhile` chains another loop when prior condition becomes false
 
-```ore
+```lost
 i := 0
 while i < 5
     @puts i
@@ -420,7 +420,7 @@ end
 2. `it` is the current element
 3. `at` is the current index
 
-```ore
+```lost
 for [1, 2, 3]
     @puts it      # Current element
     @puts at      # Current index
@@ -443,7 +443,7 @@ end
 3. `reject` filters where body is falsy
 4. `count` counts where body is truthy
 
-```ore
+```lost
 doubled := for [1, 2, 3] map
     it * 2
 end  # [2, 4, 6]
@@ -467,7 +467,7 @@ end  # 3
 2. `stop` breaks out of loop
 3. `return` exits the function (propagates through loops)
 
-```ore
+```lost
 for items
     skip if it.this     # Continue to next
     stop if it.that     # Break out
@@ -490,7 +490,7 @@ Every scope keeps two extra fallback places identifier lookup checks, after its 
 3. Both are held *weakly* — adding an instance doesn't keep it alive. Once nothing else refers to it, it's free to be garbage collected on its own, even though it's technically still "added". You only need `@remove_readable_scope`/`@remove_writable_scope` for explicitly taking something out early, not to avoid a leak
 4. The standard library itself lives this way — `String`/`Array`/etc. are reachable through Global's own readable scope, not declared on Global directly. Reassigning a built-in name (`Array = Mine`) can never mutate the real one; it just shadows the name for the rest of your program
 
-```ore
+```lost
 Vector {
     x := 0
     y := 0
@@ -519,7 +519,7 @@ doubled := double(v)  # doubled.x: 6, doubled.y: 8
 @remove_readable_scope some_instance  # Remove from readable scope
 ```
 
-```ore
+```lost
 # The standard library works the same way -- Array is reachable through
 # Global's own readable scope, not declared on Global directly
 Mine | Array { extra := true }
@@ -530,7 +530,7 @@ Array = Mine          # shadows the name -- the real Array is untouched
 
 An unpacked instance stays visible to functions defined after the unpack, even nested ones:
 
-```ore
+```lost
 Point {
     a := 0
     b := 0
@@ -560,7 +560,7 @@ outer()  # 65
 2. `@pop_scope <same target>` pops back to the previous scope — it asserts (by identity) that you're popping what you actually pushed, raising instead of popping the wrong thing
 3. Unlike readable/writable scopes, `@push_scope` mutates its target — reopening a Type extends every instance of it, reopening a specific instance changes only that one
 
-```ore
+```lost
 Button {
     label := 'default'
 }
@@ -577,7 +577,7 @@ b.css_filter   # 'invert()' — every Button gets it, since Button itself was ex
 @pop_scope b
 
 c := Button()
-c.onclick   # raises Ore::Undeclared_Identifier — only b was modified
+c.onclick   # raises Lost::Undeclared_Identifier — only b was modified
 ```
 
 ## Arrays
@@ -585,7 +585,7 @@ c.onclick   # raises Ore::Undeclared_Identifier — only b was modified
 1. Created with `[]` brackets
 2. Access elements with subscript or dot notation
 
-```ore
+```lost
 arr := [1, 2, 3, 4, 5]
 arr[0]              # 1
 arr.0               # 1 (dot notation)
@@ -609,7 +609,7 @@ arr.filter({ x; x > 2 })
 2. Keys can be symbols, strings, or identifiers
 3. Access with subscript `dict[:key]`
 
-```ore
+```lost
 dict := {x: 10, y: 20}
 dict[:x]            # 10
 dict[:z] = 30       # Assignment
@@ -626,7 +626,7 @@ dict.fetch(:missing, 'default')
 
 ## Strings
 
-```ore
+```lost
 s := 'Hello, World!'
 s.length            # 13
 s.upcase()          # 'HELLO, WORLD!'
@@ -638,7 +638,7 @@ s.reverse()
 s.include?('World') # true
 s.start_with?('He') # true
 s.end_with?('!')    # true
-s.gsub('World', 'Ore')
+s.gsub('World', 'Lost')
 s.to_i()            # Convert to integer
 s.empty?()          # false
 ```
@@ -650,7 +650,7 @@ s.empty?()          # false
 3. Items can be identifiers, numbers, or operators, not just letters
 4. A `` `expr` `` item (see Statement Expressions below) is evaluated immediately, like string interpolation, and folded through the same casing treatment as everything else
 
-```ore
+```lost
 %string(boo Hoo COOL)      # [boo, Hoo, COOL]
 %symbol(BOO hoo Cool)      # [:BOO, :hoo, :Cool]
 
@@ -670,13 +670,13 @@ cool := 2342
 
 ## Statement Expressions
 
-1. `` `expr` `` wraps any expression without running it -- an `Ore::Statement`, callable later with `()`
+1. `` `expr` `` wraps any expression without running it -- an `Lost::Statement`, callable later with `()`
 2. Written straight at a call site, `` `expr`() `` just evaluates immediately
 3. Stored in a variable, it can be called any number of times -- each call re-evaluates the wrapped expression fresh, by default remembering the scope it was *built* in (a normal closure, no matter where `()` ends up being called from)
 4. `.memoize = true` caches the first call's result instead of re-running every time
 5. `.use_caller_scope = true` does the opposite of remembering -- resolves fresh against wherever `()` is actually called from
 
-```ore
+```lost
 `1+2`()                    # 3 -- evaluated right away
 
 x := `1+2`
@@ -696,11 +696,11 @@ cached()                   # 4
 cached()                   # 4 -- didn't run again
 ```
 
-See `learn/statement_expressions.ore`/`learn/advanced_statements.ore` for the full picture, including `.use_caller_scope`.
+See `learn/statement_expressions.tape`/`learn/advanced_statements.tape` for the full picture, including `.use_caller_scope`.
 
 ## Numbers
 
-```ore
+```lost
 n := 42
 n.abs()             # Absolute value
 n.floor()           # Round down
@@ -720,7 +720,7 @@ n.clamp(0, 100)     # Clamp to range
 3. `>..` exclusive start
 4. `>.<` exclusive both
 
-```ore
+```lost
 1...5   #   1, 2, 3, 4, 5    (inclusive)
 1..<5   #   1, 2, 3, 4       (exclusive end)
 1>..5   #      2, 3, 4, 5    (exclusive start)
@@ -733,8 +733,8 @@ end
 
 ## File I/O
 
-```ore
-@load 'ore/file_system.ore'
+```lost
+@load 'lost/file_system.tape'
 
 content := File_System.read('./file.txt')
 File_System.write_string_to_file('./out.txt', 'Hello!')
@@ -742,21 +742,21 @@ File_System.write_string_to_file('./out.txt', 'Hello!')
 
 ## @load Directive
 
-1. Imports another Ore file
+1. Imports another Lost file
 2. Files are only loaded once
 3. Imports may be scoped by assigning the @load to a variable
 
-```ore
-@load 'ore/string.ore'
-@load 'ore/array.ore'
-@load './my_module.ore'
-my_mod := @load './my_module.ore'
+```lost
+@load 'lost/string.tape'
+@load 'lost/array.tape'
+@load './my_module.tape'
+my_mod := @load './my_module.tape'
 my_mod.Some_Type()
 ```
 
 ## @puts Directive
 
-```ore
+```lost
 @puts 'Hello, World!'
 @puts variable
 @puts "Value: `expression`"
@@ -764,9 +764,9 @@ my_mod.Some_Type()
 
 ### Telling printed values apart
 
-Ore's built-in collection types each wrap their printed contents in a different bracket, so you can tell what you're looking at at a glance:
+Lost's built-in collection types each wrap their printed contents in a different bracket, so you can tell what you're looking at at a glance:
 
-```ore
+```lost
 @puts [1, 2, 3]      # [1, 2, 3]      -- Array
 @puts (1, 2, 3)      # (1, 2, 3)      -- Tuple
 @puts {x: 1, y: 2}   # {x: 1, y: 2}   -- Dictionary
@@ -775,12 +775,12 @@ Ore's built-in collection types each wrap their printed contents in a different 
 
 A custom type prints as raw internals until it defines its own `to_s{;}` — see [Classes](#classes):
 
-```ore
+```lost
 Point {
     x := 1
     greet {; 'hi' }
 }
-@puts Point()   # #<Ore::Instance name="Point" declarations=["name", "types", "x", "greet"]>
+@puts Point()   # #<Lost::Instance name="Point" declarations=["name", "types", "x", "greet"]>
 ```
 
 Nothing enforces a bracket convention for your own types, but picking one that doesn't collide with the built-ins above keeps output easy to scan.
@@ -791,7 +791,7 @@ Nothing enforces a bracket convention for your own types, but picking one that d
 2. `@declare name` declares `nil`; `@declare name, value` and `@declare name, value, type` add a value and, optionally, a type
 3. Passed a Struct instead of a name, spreads every *named* member onto the current scope in one go — each member's own name, value, and declared type carry over directly
 
-```ore
+```lost
 @declare 'flare_count'          # flare_count == nil
 @declare 'flare_count', 3       # flare_count == 3
 @declare 'ration', 2, Number    # same as `ration: Number = 2`
@@ -806,8 +806,8 @@ supplies := <water: Number = 40, wood: Number = 12>
 2. Define routes with HTTP method syntax
 3. Start with `@start` directive
 
-```ore
-@load 'ore/server.ore'
+```lost
+@load 'lost/server.tape'
 
 App | Server {
     new {;
@@ -832,7 +832,7 @@ App | Server {
 2. URL parameters with `:param` syntax
 3. Query params via `request.query`
 
-```ore
+```lost
 App | Server {
     # Static route
     get://users {;
@@ -859,7 +859,7 @@ App | Server {
 
 ## Request & Response
 
-```ore
+```lost
 post://login {;
     username := request.body[:username]
     password := request.body[:password]
@@ -883,8 +883,8 @@ get://api/data {;
 1. Use `Sqlite` for SQLite databases
 2. Connect with `@connect` directive
 
-```ore
-@load 'ore/database.ore'
+```lost
+@load 'lost/database.tape'
 
 db := Sqlite('./data/app.db')
 @connect db
@@ -905,8 +905,8 @@ db.delete_table('users')
 1. Compose with `Table` type
 2. Set static `Self.database` and instance `table_name` (or call `infer_table_name_from_class!()` to derive it, e.g. `User` → `'users'`)
 
-```ore
-@load 'ore/table.ore'
+```lost
+@load 'lost/table.tape'
 
 User | Table {
     Self.database := ~/db
@@ -927,13 +927,13 @@ Records come back as Dictionaries for this plain pattern. Compose `Table` with a
 
 ## HTML Elements
 
-1. Compose with HTML element types from `ore/html.ore`
+1. Compose with HTML element types from `lost/html.tape`
 2. `css_*` prefix sets inline CSS properties
 3. `html_*` prefix sets HTML attributes
 4. `.to_s()` renders an element and its children to string directly
 
-```ore
-@load 'ore/html.ore'
+```lost
+@load 'lost/html.tape'
 
 Card | Div {
     css_padding := '1rem'
@@ -966,7 +966,7 @@ page := Html([
 
 ### Arithmetic
 
-```ore
+```lost
 + - * / %     # Basic math
 **            # Exponentiation
 << >>         # Bitwise shift / Array append
@@ -974,7 +974,7 @@ page := Html([
 
 ### Comparison
 
-```ore
+```lost
 == !=             # Equality
 < <= > >=         # Relational
 <=>               # Spaceship (three-way)
@@ -986,7 +986,7 @@ page := Html([
 
 `===`, `=!=`, `=>=`, `=<=`, and `=/=` compare a type or instance's *composed types* — its own name plus everything it's picked up via `|`/`&`/`~`/`^` — rather than comparing values:
 
-```ore
+```lost
 Flying { can_fly := true }
 Swimming { can_swim := true }
 
@@ -1007,7 +1007,7 @@ Flying =/= Swimming    # true  (share nothing)
 
 All five comparison operators also take [Structs](#structs) into account. An unstructured type is treated as having no members, so plain comparisons like the ones above are unaffected:
 
-```ore
+```lost
 Abc<Number> {}
 Abc<Number> === Abc<String>   # false — same composed type, different structure
 Abc === Abc                   # true  — neither side structured
@@ -1015,7 +1015,7 @@ Abc === Abc                   # true  — neither side structured
 
 `Any` is a universal wildcard for `==`/`!=`/`===`/`=!=`: anything that isn't `nil` counts as equal to it, no composition needed.
 
-```ore
+```lost
 String === Any    # true
 4 == Any          # true
 nil == Any        # false — the one exception
@@ -1023,7 +1023,7 @@ nil == Any        # false — the one exception
 
 ### Logical
 
-```ore
+```lost
 && and        # Logical AND
 || or         # Logical OR
 ! not         # Logical NOT
@@ -1031,7 +1031,7 @@ nil == Any        # false — the one exception
 
 ### Assignment
 
-```ore
+```lost
 :=            # Declaration — introduces a new identifier, infers and locks its type
 =             # Assignment — requires the identifier to already be declared
 += -= *= /=   # Compound assignment
@@ -1046,7 +1046,7 @@ nil == Any        # false — the one exception
 3. Precedence controls how overloaded operators combine with each other and with built-ins
 4. If a type declares its own overload for an operator, that always wins over a same-named overload declared elsewhere — dispatch is by the left operand's type first, falling back to whatever's in scope only if the operand doesn't have its own
 
-```ore
+```lost
 # Redefine + only inside this function — everywhere else, + still adds
 scoped := compute {;
     @operator + @infix 700 { left, right;
@@ -1118,28 +1118,28 @@ a ~> 1          # 42 — Wrapped's own ~> wins
 
 1. `:=` infers a type from its right-hand side and locks the identifier to it
 2. Subsequent `=` assignments are checked against that locked type; `:=` again re-infers and re-locks
-3. A mismatch raises `Ore::Type_Contract_Violation`, not the static type checker's `Type_Mismatch`
+3. A mismatch raises `Lost::Type_Contract_Violation`, not the static type checker's `Type_Mismatch`
 
-```ore
+```lost
 x := 4        # declares x, infers Number, locks x to that type
 x = 8         # ok — same type
-x = 'hello'   # raises Ore::Type_Contract_Violation ("expected Number, got String")
+x = 'hello'   # raises Lost::Type_Contract_Violation ("expected Number, got String")
 
 x := 4
 x := 'hello'  # fine — re-declaring with := re-infers and re-locks the type
 x             # 'hello'
 
-y = 4         # raises Ore::Cannot_Assign_Undeclared_Identifier — y was never declared
+y = 4         # raises Lost::Cannot_Assign_Undeclared_Identifier — y was never declared
 ```
 
 ## Function Signatures
 
 1. `{Param, Param -> Type;}` is a signature — a value describing a function's shape (its param types and return type), with no implementation — same `-> Type` placement a real function uses, just with no body
 2. A real function always declares its own return type inside its body, with `-> Type` at the end of its param list before `;` — a self-declaring signature uses the same shape under its name (`double: {Number -> Number;}`)
-3. Assigning a function to a signature-typed identifier checks its actual shape, not just a name — mismatches raise `Ore::Type_Contract_Violation`, the same runtime type contract `:=` uses
+3. Assigning a function to a signature-typed identifier checks its actual shape, not just a name — mismatches raise `Lost::Type_Contract_Violation`, the same runtime type contract `:=` uses
 4. Any function with a declared return type is checked on every call — what it actually returns has to match, signature or not
 
-```ore
+```lost
 Currency_Formatter := {Number -> String;}    # takes a Number, returns a String
 
 format_usd { cents: Number -> String;
@@ -1156,25 +1156,25 @@ formatter(1050)               # "$10.5"
 formatter = format_eur        # ok — same shape: (Number) -> String
 formatter(1050)               # "€10.5"
 
-formatter = { cents; cents }  # raises Ore::Type_Contract_Violation — wrong shape
+formatter = { cents; cents }  # raises Lost::Type_Contract_Violation — wrong shape
 ```
 
 A declared return type is enforced on its own, with no signature involved:
 
-```ore
+```lost
 lying { a -> Number; 'not a number' }
-lying(5)   # raises Ore::Type_Contract_Violation — declared Number, actually returned String
+lying(5)   # raises Lost::Type_Contract_Violation — declared Number, actually returned String
 ```
 
 ## Structs
 
 1. `<...>` attaches runtime-inspectable metadata (a struct) to a type declaration, a value, or a reference to an existing type
 2. Each declared structure is its own type — `Abc<Number> {}` and `Abc<String> {}` don't share `new`/methods
-3. A reference matches a declared structure by type (like overload resolution), including types it composes and not just its own name — no match raises `Ore::Undeclared_Type_Structure`
+3. A reference matches a declared structure by type (like overload resolution), including types it composes and not just its own name — no match raises `Lost::Undeclared_Type_Structure`
 4. Reachable through `.structure` (`.structure.types`, or `.structure.some_name` for named members) — bound before `new{;}` runs, never forwarded as constructor args
 5. Naming an *undeclared* identifier this way (`Named<...>`) builds a plain, named struct instead of raising — a name that's already taken by a real Type still takes priority and behaves as above
 
-```ore
+```lost
 String<dict: Dictionary> {
     to_s {; "dict: `structure.dict`" }
 }
@@ -1192,7 +1192,7 @@ n.name                      # 'Named'
 
 ## Enums (not finalized — don't rely on yet)
 
-```ore
+```lost
 Task_Type :: {
 	TODO
 	BUG,
@@ -1212,7 +1212,7 @@ Enums are syntactically present but not finalized: the forced type (`Task_Type :
 
 Trailing comma declares variable as nil if undefined. 
 
-```ore
+```lost
 Type {
 	undefined_var,      # equivalent to `undefined_var := nil`	
 }
@@ -1222,7 +1222,7 @@ here_too,               # here_too := nil
 
 A bare annotated identifier with nothing assigned behaves the same way — no need to write `= nil` just to make an already-self-declaring annotation (`x: Number`, or a struct annotation) actually declare something:
 
-```ore
+```lost
 thing: <String, Number>   # same as thing: <String, Number> = nil
 thing                     # nil
 

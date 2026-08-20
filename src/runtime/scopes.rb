@@ -1,4 +1,4 @@
-module Ore
+module Lost
 	class Scope
 		attr_accessor :enclosing_scope, :readable_scopes, :writable_scopes, :declarations, :name, :type_by_identifier, :static_declarations, :structured_type_variants
 
@@ -122,7 +122,7 @@ module Ore
 
 	class Type < Scope
 		attr_accessor :expressions, :types, :routes
-		# Holds an Ore::Struct, exposed to Ore code as `.structure` (see #declare_structure) -- `structure_instance` is just the Ruby-side name.
+		# Holds an Lost::Struct, exposed to Lost code as `.structure` (see #declare_structure) -- `structure_instance` is just the Ruby-side name.
 		attr_accessor :structure_instance
 		# A type's own struct declaration (e.g. `Abc<dict: Dictionary = {}> {}`)'s named/positional members, annotations, and defaults -- kept separate from `.structure`, which is only ever set on an explicit `Abc<...>` reference, never the bare type (see #interp_type_call).
 		# Both live on Type, not Scope, since a structured reference is a dup of the type (same class), so Type/Instance can't stand in for this distinction.

@@ -1,4 +1,4 @@
-module Ore
+module Lost
 	class String < Instance
 		require 'digest/md5'
 		extend Ruby_Proxies
@@ -37,12 +37,12 @@ module Ore
 			Digest::MD5.hexdigest value
 		end
 
-		def proxy_split *args
-			Ore::Array.new value.split(*args)
+		def proxy_split * args
+			Lost::Array.new value.split(*args)
 		end
 
 		def proxy_chars
-			Ore::Array.new value.chars
+			Lost::Array.new value.chars
 		end
 
 		def + other
@@ -54,10 +54,10 @@ module Ore
 		end
 
 		def == other
-			value == (other.is_a?(Ore::String) ? other.value : other)
+			value == (other.is_a?(Lost::String) ? other.value : other)
 		end
 
-		# Closes the direction the `==` fix above couldn't reach on its own: a raw Ruby ::String on the *left* of `==`  invokes Ruby's own native String#==, not this class's, but Ruby's own implementation already special-cases exactly this: if the right-hand object isn't a String but responds to #to_str, it delegates the comparison to `object == self` instead, which lands right back on Ore::String#== above.
+		# Closes the direction the `==` fix above couldn't reach on its own: a raw Ruby ::String on the *left* of `==`  invokes Ruby's own native String#==, not this class's, but Ruby's own implementation already special-cases exactly this: if the right-hand object isn't a String but responds to #to_str, it delegates the comparison to `object == self` instead, which lands right back on Lost::String#== above.
 		def to_str
 			value
 		end

@@ -21,7 +21,7 @@ module Ruby_Proxies
 
 	def proxy method_name, as: method_name
 		@proxy_methods ||= []
-		@proxy_methods << { ore_name: as, ruby_method: method_name }
+		@proxy_methods << { lost_name: as, ruby_method: method_name }
 		define_method "proxy_#{as}" do |*args|
 			_proxy_delegate_.send method_name, *args
 		end

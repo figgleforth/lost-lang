@@ -2,13 +2,13 @@ require 'webrick'
 require 'cgi'
 require 'json'
 
-module Ore
+module Lost
 	class Interpreter
 		# Source lines by filepath, keyed the same way #register_source always has -- kept class-level (not per-instance) so Error_Formatter can read a snippet without holding a live Interpreter, which used to be the only reason errors.rb needed a `runtime` reference at all.
 		@cached_source_by_filename = {} # {filepath: [String]}
 
-		# Parsed ASTs by resolved filepath, kept class-level (not per-instance) for the same reason: `ore/preload.ore` (and everything it transitively @loads) is immutable source, identical for every Interpreter in the process, so re-lexing/re-parsing it fresh on every `Ore.interp` call was pure waste -- it used to be instance-level, meaning a brand-new Interpreter (which every `Ore.interp` call constructs) never saw a warm cache. Doesn't cache the *interpretation* of that AST (each Interpreter still builds its own fresh Standard_Library scope from it), only the lex+parse step, so per-instance isolation (mutating a builtin in one test can't leak into another) is unaffected.
-		@cached_expressions_by_filepath = {} # {filepath: [Ore::Expression]}
+		# Parsed ASTs by resolved filepath, kept class-level (not per-instance) for the same reason: `lost/preload.tape` (and everything it transitively @loads) is immutable source, identical for every Interpreter in the process, so re-lexing/re-parsing it fresh on every `Lost.interp` call was pure waste -- it used to be instance-level, meaning a brand-new Interpreter (which every `Lost.interp` call constructs) never saw a warm cache. Doesn't cache the *interpretation* of that AST (each Interpreter still builds its own fresh Standard_Library scope from it), only the lex+parse step, so per-instance isolation (mutating a builtin in one test can't leak into another) is unaffected.
+		@cached_expressions_by_filepath = {} # {filepath: [Lost::Expression]}
 
 		# Resolved filepaths whose AST has already passed type-checking at least once, kept class-level alongside the cache above. Type-checking is a pure function of the AST (no interpreter state involved) -- a cached, never-changing file that already passed once will always pass, so re-walking it on every subsequent load is pure waste, same as re-parsing was.
 		@type_checked_filepaths = {} # {filepath: true}
@@ -23,19 +23,19 @@ module Ore
 		attr_accessor :input, :lexer, :parser, :load_standard_library, :stack, :route_functions_by_route_name, :servers, :dom_onclick_function_handlers, :dom_input_elements, :last_output, :current_source_file, :stdlib_scope, :declarations, :global
 
 		def initialize
-			@dom_input_elements            = {} # {element_hash: Ore::Instance} for inputs/textareas
-			@dom_onclick_function_handlers = {} # {handler_hash: Ore::Func}
-			@route_functions_by_route_name = {} # {route: Ore::Route}
+			@dom_input_elements            = {} # {element_hash: Lost::Instance} for inputs/textareas
+			@dom_onclick_function_handlers = {} # {handler_hash: Lost::Func}
+			@route_functions_by_route_name = {} # {route: Lost::Route}
 
 			@load_standard_library = true
-			@input                 = [] # [Ore::Expression]
-			@stack                 = [] # [Ore::Scope]
-			@servers               = [] # [Ore::Server]
+			@input                 = [] # [Lost::Expression]
+			@stack                 = [] # [Lost::Scope]
+			@servers               = [] # [Lost::Server]
 
 			@lexer               = Lexer.new
 			@parser              = Parser.new
-			@declarations        = {} # {::String => Ore::Declaration}, see Declarator
-			@forced_declarations = Set.new # identity-tracked Ore::Expression, see #resolve_forward_declaration
+			@declarations        = {} # {::String => Lost::Declaration}, see Declarator
+			@forced_declarations = Set.new # identity-tracked Lost::Expression, see #resolve_forward_declaration
 
 			Interpreter.current = self
 		end
@@ -44,14 +44,14 @@ module Ore
 			top_level_source_file = current_source_file
 
 			if @stack.empty?
-				# todo; Global should be created by interping ore/global.ore, which is what I want to rename ore/preload.ore to
+				# todo; Global should be created by interping lost/global.tape, which is what I want to rename lost/preload.tape to
 				global  = Global.new
 				@global = global # kept separately from @stack -- #interp_member_access temporarily swaps @stack out for dot-access resolution, so `stack.first` isn't reliably Global the way this needs
 				@stack << global
 				if load_standard_library
 					# Stdlib lives in its own Scope, reachable via Global's readable scope -- not Global's own declarations. Reassigning a builtin can't mutate it (readable_scopes never redirects writes), just shadows locally. Composing and deliberate @push_scope reopening still work. `global` is pushed before this load so `~/` still resolves to Global while the stdlib itself loads.
 					# Also held here as a real instance var, not just the WeakMap entry above -- readable/writable scope membership deliberately never keeps anything alive on its own (see CLAUDE.md), which is correct for things a caller adds and is expected to hold their own reference to elsewhere, but @stdlib_scope has no other holder anywhere. Without this, it's one GC pass away from being collected mid-program, taking the entire standard library (String, Array, everything) down with it.
-					@stdlib_scope = Ore::Scope.new('Standard_Library')
+					@stdlib_scope = Lost::Scope.new('Standard_Library')
 					load_file_into_scope STANDARD_LIBRARY_PATH, @stdlib_scope
 					global.add_readable_scope @stdlib_scope
 				end
@@ -100,9 +100,9 @@ module Ore
 			return false unless expr.is_a?(Infix_Expr) && %w(:= =).include?(expr.operator.value)
 			return true if hoistable_declaration_expr? expr.right
 
-			# `Ident := @load 'file'` / `IDENT := @load 'file'` -- a named load builds a scope of its own, same declarative category as `This := That {}` above. Only a Capitalized/UPPERCASE left-hand name opts in, matching Ore's own casing convention for a namespace-like binding -- a lowercase `mod := @load 'file'` stays a plain variable, not hoisted
+			# `Ident := @load 'file'` / `IDENT := @load 'file'` -- a named load builds a scope of its own, same declarative category as `This := That {}` above. Only a Capitalized/UPPERCASE left-hand name opts in, matching Lost's own casing convention for a namespace-like binding -- a lowercase `mod := @load 'file'` stays a plain variable, not hoisted
 			expr.right.is_a?(Directive_Expr) && expr.right.name.value == 'load' &&
-				%i(Identifier IDENTIFIER).include?(Ore.type_of_identifier(expr.left.value))
+				%i(Identifier IDENTIFIER).include?(Lost.type_of_identifier(expr.left.value))
 		end
 
 		# A bare `@load 'file'` (no assignment) merges directly into the current scope -- always hoistable, no casing concept applies since there's no left-hand name to check. Kept separate from #hoistable_declaration_expr?'s recursive `:=`/`=` unwrap so this can't accidentally leak permissiveness into the *named* load case, which is deliberately restricted to a Capitalized/UPPERCASE left-hand name.
@@ -130,7 +130,7 @@ module Ore
 				keep_running = true
 
 				trap_fn = Proc.new do
-					puts Ore::Ascii.dim "Shutting down..."
+					puts Lost::Ascii.dim "Shutting down..."
 					keep_running = false
 					puts "\n\s\s(V) (;,,;) (V)"
 					Thread.main.exit
@@ -140,7 +140,7 @@ module Ore
 
 				while keep_running
 					@servers.each do |server|
-						puts "Ore Server `#{server.name}` started at http://localhost:#{server.port}"
+						puts "Lost Server `#{server.name}` started at http://localhost:#{server.port}"
 						server.server_thread&.join
 					end
 				end
@@ -152,9 +152,9 @@ module Ore
 		# Preserves its @input, interprets given file, then restores its @input.
 		# @return The output of the interpreted file
 		def load_file_into_scope filepath, into_scope
-			filepath.insert(-1, '.ore') unless filepath.end_with? '.ore'
+			filepath.insert(-1, '.tape') unless filepath.end_with? '.tape'
 
-			resolved_path = if filepath.start_with? 'ore/'
+			resolved_path = if filepath.start_with? 'lost/'
 				File.join ROOT_PATH, filepath
 			else
 				File.expand_path filepath
@@ -227,7 +227,7 @@ module Ore
 		end
 
 		def scope_for_identifier expr
-			unless expr.is_a? Ore::Identifier_Expr
+			unless expr.is_a? Lost::Identifier_Expr
 				return stack.last
 			end
 
@@ -236,7 +236,7 @@ module Ore
 				stack.first
 			when '../' # underlying type within context, aka accessing a static declaration
 				stack.reverse_each.find do |scope|
-					scope.instance_of? Ore::Type
+					scope.instance_of? Lost::Type
 				end
 			when './' # instance within context, aka self, this, etc
 				current_instance
@@ -247,7 +247,7 @@ module Ore
 					if scope.has?(expr.value) || scope.respond_to?("proxy_#{expr.value}")
 						found_scope = scope
 						break
-					elsif scope.is_a?(Ore::Instance) && scope.enclosing_scope&.has?(expr.value)
+					elsif scope.is_a?(Lost::Instance) && scope.enclosing_scope&.has?(expr.value)
 						# Method exists on the Type - return the instance as the scope so lookups happen in instance context
 						found_scope = scope
 						break
@@ -258,27 +258,27 @@ module Ore
 		end
 
 		def maybe_instance expr
-			# todo, when String and so on, because everything needs to be some type of scope to live inside the runtime. Every object in Ore::Scope.declarations{} is either a primitive like String, Integer, Float, or they're an instanced version like Ore::Number.
+			# todo, when String and so on, because everything needs to be some type of scope to live inside the runtime. Every object in Lost::Scope.declarations{} is either a primitive like String, Integer, Float, or they're an instanced version like Lost::Number.
 			case expr
 			when Integer, Float
-				# Ore::Number_Expr is already handled in #interpret but this is short-circuiting that for cases like 1.something where we have to make sure the 1 is no longer a numeric literal, but instead a runtime object version of the number 1.
-				number = Ore::Number.new expr, 1, Ore.type_of_number_expr(expr)
+				# Lost::Number_Expr is already handled in #interpret but this is short-circuiting that for cases like 1.something where we have to make sure the 1 is no longer a numeric literal, but instead a runtime object version of the number 1.
+				number = Lost::Number.new expr, 1, Lost.type_of_number_expr(expr)
 
 				finish_intrinsic_instance number, 'Number'
 			when ::String
-				finish_intrinsic_instance Ore::String.new(expr), 'String'
+				finish_intrinsic_instance Lost::String.new(expr), 'String'
 			when ::Array
-				finish_intrinsic_instance Ore::Array.new(expr), 'Array'
+				finish_intrinsic_instance Lost::Array.new(expr), 'Array'
 			when ::Hash
-				finish_intrinsic_instance Ore::Dictionary.new(expr), 'Dictionary'
+				finish_intrinsic_instance Lost::Dictionary.new(expr), 'Dictionary'
 			when nil
-				nil_instance = Ore::Nil.shared
+				nil_instance = Lost::Nil.shared
 				link_instance_to_type nil_instance, 'Nil'
 				nil_instance
 			when true
-				finish_intrinsic_instance Ore::Bool.truthy, 'Bool'
+				finish_intrinsic_instance Lost::Bool.truthy, 'Bool'
 			when false
-				finish_intrinsic_instance Ore::Bool.falsy, 'Bool'
+				finish_intrinsic_instance Lost::Bool.falsy, 'Bool'
 			else
 				expr
 			end
@@ -299,43 +299,43 @@ module Ore
 		end
 
 		def track_static_declaration scope, ident_expr
-			return unless ident_expr.is_a?(Ore::Identifier_Expr) && ident_expr.scope_operator&.value == '../'
+			return unless ident_expr.is_a?(Lost::Identifier_Expr) && ident_expr.scope_operator&.value == '../'
 			scope.static_declarations ||= Set.new
 			scope.static_declarations.add ident_expr.value.to_s
 		end
 
-		# The Instance the currently executing method body belongs to, if any -- searched by role (nearest Ore::Instance in the stack), not position. #interp_func_body always pushes a fresh per-call Func frame on top of the instance for every call, so `stack.last` is never the instance itself while a method runs -- shared by `self`/`./` resolution (#interp_identifier, #scope_for_identifier) and privacy enforcement (#check_dot_access_permissions!) below, all three needing "the instance I'm currently running as".
+		# The Instance the currently executing method body belongs to, if any -- searched by role (nearest Lost::Instance in the stack), not position. #interp_func_body always pushes a fresh per-call Func frame on top of the instance for every call, so `stack.last` is never the instance itself while a method runs -- shared by `self`/`./` resolution (#interp_identifier, #scope_for_identifier) and privacy enforcement (#check_dot_access_permissions!) below, all three needing "the instance I'm currently running as".
 		def current_instance
-			stack.reverse_each.find { |scope| scope.is_a? Ore::Instance }
+			stack.reverse_each.find { |scope| scope.is_a? Lost::Instance }
 		end
 
 		def check_dot_access_permissions! scope, ident, expr
-			binding = Ore.binding_of_ident scope, ident
-			privacy = Ore.privacy_of_ident ident
+			binding = Lost.binding_of_ident scope, ident
+			privacy = Lost.privacy_of_ident ident
 
 			case scope
-			when Ore::Instance
+			when Lost::Instance
 				if privacy == :private && !current_instance.equal?(scope)
-					raise Ore::Cannot_Call_Private_Instance_Member.new(expr)
+					raise Lost::Cannot_Call_Private_Instance_Member.new(expr)
 				end
-			when Ore::Type
+			when Lost::Type
 				if binding == :instance
 					# todo: This does not print the correct code location, here is a paste of the output:
 					#       Cannot_Call_Instance_Member_On_Type
 					#       :1:1
-					raise Ore::Cannot_Call_Instance_Member_On_Type.new(expr)
+					raise Lost::Cannot_Call_Instance_Member_On_Type.new(expr)
 				elsif privacy == :private
-					raise Ore::Cannot_Call_Private_Static_Member_On_Type.new(expr)
+					raise Lost::Cannot_Call_Private_Static_Member_On_Type.new(expr)
 				end
 			end
 		end
 
 		def find_ruby_class_for_type type
 			type.types.to_a.reverse.each do |type_name|
-				ore_name = "Ore::#{type_name}"
-				next unless Object.const_defined? ore_name
-				k = Object.const_get ore_name
-				return k if k.is_a?(Class) && k < Ore::Instance && k != Ore::Instance
+				lost_name = "Lost::#{type_name}"
+				next unless Object.const_defined? lost_name
+				k = Object.const_get lost_name
+				return k if k.is_a?(Class) && k < Lost::Instance && k != Lost::Instance
 			end
 			nil
 		end
@@ -355,14 +355,14 @@ module Ore
 
 		def type_name_to_string value
 			case value
-			when Ore::Number then 'Number'
+			when Lost::Number then 'Number'
 			when Integer, Float then 'Number'
-			when Ore::String then 'String'
-			when Ore::Array then 'Array'
-			when Ore::Dictionary then 'Dictionary'
-			when Ore::Bool then 'Bool'
-			when Ore::Instance then value.types.first
-			when Ore::Type then value.name
+			when Lost::String then 'String'
+			when Lost::Array then 'Array'
+			when Lost::Dictionary then 'Dictionary'
+			when Lost::Bool then 'Bool'
+			when Lost::Instance then value.types.first
+			when Lost::Type then value.name
 			# todo: Why are these here? Excluding the else clause
 			when true, false then 'Bool'
 			when ::String then 'String'
@@ -374,7 +374,7 @@ module Ore
 
 		def composed_types_for value
 			case value
-			when Ore::Type
+			when Lost::Type
 				value.types
 			else
 				# Covers intrinsics (Number/String/Array/Dictionary/Bool) and anything else -- neither needs special handling, both resolve by name.
@@ -395,18 +395,18 @@ module Ore
 			types_superset && members_superset
 		end
 
-		# If `name` is already an Ore::Func_Signature, return it as-is (an inline signature has no name to look up). Otherwise, if it's bound to one anywhere on the stack, return that. Otherwise nil — meaning `name` is an ordinary nominal type name (e.g. 'Number').
+		# If `name` is already an Lost::Func_Signature, return it as-is (an inline signature has no name to look up). Otherwise, if it's bound to one anywhere on the stack, return that. Otherwise nil — meaning `name` is an ordinary nominal type name (e.g. 'Number').
 		def resolve_func_signature name
-			return name if name.is_a? Ore::Func_Signature
+			return name if name.is_a? Lost::Func_Signature
 			return nil unless name
 			value = find_in_stack name
-			value.is_a?(Ore::Func_Signature) ? value : nil
+			value.is_a?(Lost::Func_Signature) ? value : nil
 		end
 
-		# @param expr [Ore::Func_Signature_Expr]
+		# @param expr [Lost::Func_Signature_Expr]
 		def build_func_signature expr
 			param_types = expr.params.map { |param| param.type&.value }
-			Ore::Func_Signature.new param_types, expr.type&.value
+			Lost::Func_Signature.new param_types, expr.type&.value
 		end
 
 		# Readable description of a value's shape for Type_Contract_Violation messages — a func-like value's param/return types if it has them, otherwise its plain type name.
@@ -427,7 +427,7 @@ module Ore
 			                                  StartCallback: -> { ready << true }
 
 			webrick.mount_proc '/onclick/' do |req, res|
-				puts Ore::Ascii.dim "#{'DOM'.rjust(7, ' ')} #{req.path}"
+				puts Lost::Ascii.dim "#{'DOM'.rjust(7, ' ')} #{req.path}"
 				handle_request server, req, res
 			end
 
@@ -488,28 +488,28 @@ module Ore
 							end
 						end
 
-						route             = Ore::Route.new
+						route             = Lost::Route.new
 						route.handler     = handler
 						route.param_names = []
 
-						req = build_ore_request path_string, http_method, body_hash, parse_query_string(query_string), {}, headers_hash
-						res = build_ore_response response
+						req = build_lost_request path_string, http_method, body_hash, parse_query_string(query_string), {}, headers_hash
+						res = build_lost_response response
 
 						interp_route_body route, req, res
 
 						component = handler.enclosing_scope
-						if component.is_a?(Ore::Instance) && component.declarations['render']
+						if component.is_a?(Lost::Instance) && component.declarations['render']
 							new_html = render_dom_to_html component
 							html_id  = component.declarations['html_id']
 
-							response.status             = 200
-							response['Content-Type']    = 'text/html'
-							response['X-Ore-Target-Id'] = html_id if html_id
-							response.body               = new_html
+							response.status              = 200
+							response['Content-Type']     = 'text/html'
+							response['X-Lost-Target-Id'] = html_id if html_id
+							response.body                = new_html
 							return
 						end
 					rescue => e
-						warn "\n[Ore Onclick Error] #{e.class}: #{e.message}"
+						warn "\n[Lost Onclick Error] #{e.class}: #{e.message}"
 						warn e.backtrace.first(10).map { |line| "  #{line}" }.join("\n")
 						warn ""
 
@@ -533,10 +533,10 @@ module Ore
 				url_params   = extract_url_params path_parts, route_function
 				query_params = parse_query_string query_string
 
-				req = build_ore_request path_string, http_method, body_hash, query_params, url_params, headers_hash
+				req = build_lost_request path_string, http_method, body_hash, query_params, url_params, headers_hash
 
 				begin
-					res    = build_ore_response response
+					res    = build_lost_response response
 					result = interp_route_body route_function, req, res, url_params, server_instance: server
 
 					response.status = res.declarations['status']
@@ -565,7 +565,7 @@ module Ore
 					raise e
 
 				rescue => e
-					warn "\n[Ore Server Error] #{e.class}: #{e.message}"
+					warn "\n[Lost Server Error] #{e.class}: #{e.message}"
 					warn e.backtrace.first(10).map { |line| "  #{line}" }.join("\n")
 					warn ""
 
@@ -632,12 +632,12 @@ module Ore
 			query_params
 		end
 
-		def build_ore_request path_string, http_method, body_hash, query_params, url_params, headers_hash
-			req          = Ore::Request.new
-			body_dict    = Ore::Dictionary.new body_hash
-			query_dict   = Ore::Dictionary.new query_params
-			params_dict  = Ore::Dictionary.new url_params
-			headers_dict = Ore::Dictionary.new headers_hash
+		def build_lost_request path_string, http_method, body_hash, query_params, url_params, headers_hash
+			req          = Lost::Request.new
+			body_dict    = Lost::Dictionary.new body_hash
+			query_dict   = Lost::Dictionary.new query_params
+			params_dict  = Lost::Dictionary.new url_params
+			headers_dict = Lost::Dictionary.new headers_hash
 			link_instance_to_type req, 'Request'
 			link_instance_to_type body_dict, 'Dictionary'
 			link_instance_to_type query_dict, 'Dictionary'
@@ -653,8 +653,8 @@ module Ore
 			req
 		end
 
-		def build_ore_response webrick_response
-			res                                  = Ore::Response.new
+		def build_lost_response webrick_response
+			res                                  = Lost::Response.new
 			res.webrick_response                 = webrick_response
 			res.declarations['webrick_response'] = webrick_response
 			res.declarations['status']           = 200
@@ -685,7 +685,7 @@ module Ore
 			render = dom_instance.declarations['render']
 
 			inner_html = if render
-				call_expr           = Ore::Call_Expr.new
+				call_expr           = Lost::Call_Expr.new
 				call_expr.receiver  = render
 				call_expr.arguments = []
 
@@ -695,23 +695,23 @@ module Ore
 					if render_result.is_a? ::String
 						html << render_result
 
-					elsif render_result.is_a? Ore::Array
+					elsif render_result.is_a? Lost::Array
 						render_result.values.each do |child|
 							if child.is_a? ::String
 								html << child
-							elsif child.is_a?(Ore::Instance) && child.types.include?('Dom')
+							elsif child.is_a?(Lost::Instance) && child.types.include?('Dom')
 								html << render_dom_to_html(child)
 							end
 						end
 
-					elsif render_result.is_a?(Ore::Instance) && render_result.types.include?('Dom')
+					elsif render_result.is_a?(Lost::Instance) && render_result.types.include?('Dom')
 						html << render_dom_to_html(render_result)
 
 					end
 				end
 			end
 
-			renderer = Ore::Dom_Renderer.new dom_instance, inner_html
+			renderer = Lost::Dom_Renderer.new dom_instance, inner_html
 
 			if renderer.onclick_expr
 				add_onclick_handler renderer.onclick_expr
@@ -728,17 +728,17 @@ module Ore
 		def raise_missing_scope_operator_target! expr, scope_operator_value
 			case scope_operator_value
 			when './'
-				raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr)
+				raise Lost::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr)
 			when '../'
-				raise Ore::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr)
+				raise Lost::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr)
 			else
-				raise Ore::Invalid_Scope_Syntax.new(expr)
+				raise Lost::Invalid_Scope_Syntax.new(expr)
 			end
 		end
 
 		# A function found via #interp_identifier needs to be duplicated and rebound to the resolving scope before use, so composed types (e.g. `Thing | Record`) call functions against the right receiver instead of whatever scope they happened to be declared on. Non-Func values pass through unchanged.
 		def rebind_func_to_scope value, scope
-			return value unless value.is_a? Ore::Func
+			return value unless value.is_a? Lost::Func
 			func                 = value.dup
 			func.enclosing_scope = scope
 			func
@@ -747,7 +747,7 @@ module Ore
 		def interp_identifier expr
 			if expr.directive
 				# todo: Why is this not handled by Parser#complete_expression?
-				dir_expr      = Ore::Directive_Expr.new
+				dir_expr      = Lost::Directive_Expr.new
 				dir_expr.name = expr
 				return interp_directive dir_expr
 			end
@@ -756,18 +756,18 @@ module Ore
 			when 'nil'
 				return nil
 			when 'true'
-				# todo; return Ore::Bool.truthy
+				# todo; return Lost::Bool.truthy
 				return true
 			when 'false'
-				# todo; return Ore::Bool.falsy
+				# todo; return Lost::Bool.falsy
 				return false
 			when 'Self'
-				found = stack.reverse_each.find { |scope| scope.instance_of? Ore::Type }
+				found = stack.reverse_each.find { |scope| scope.instance_of? Lost::Type }
 				return found if found
-				raise Ore::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr)
+				raise Lost::Cannot_Use_Type_Scope_Operator_Outside_Type.new(expr)
 			when 'self'
 				return current_instance if current_instance
-				raise Ore::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr)
+				raise Lost::Cannot_Use_Instance_Scope_Operator_Outside_Instance.new(expr)
 			else
 				scope_for_identifier expr
 			end
@@ -780,7 +780,7 @@ module Ore
 				if found && found.has?(expr.value)
 					found[expr.value]
 				else
-					raise Ore::Undeclared_Identifier.new(expr)
+					raise Lost::Undeclared_Identifier.new(expr)
 				end
 			elsif scope
 				# note: Delegate ruby calls automatically
@@ -788,11 +788,11 @@ module Ore
 				if scope.has?(expr.value) && !scope.respond_to?(proxy_method)
 					result = scope.get expr.value
 					# If the result is a function, duplicate it and set its enclosing_scope to the current scope. This ensures composed types (like `Thing | Record`) have functions that reference the correct type
-					return rebind_func_to_scope(result, scope) if result.is_a? Ore::Func
+					return rebind_func_to_scope(result, scope) if result.is_a? Lost::Func
 					result
 				elsif scope.respond_to? proxy_method
 					# Prefer the instance's own owning Type first -- for a structured variant (e.g. `Array<Web_Server>`) this is a distinct Type from the plain global one, and holds the actual override. Only fall back to a blind by-name search of the stack (which only ever finds the plain global type, e.g. plain "Array") when the instance isn't linked to a Type that declares this method itself.
-					type_def       = if scope.enclosing_scope.is_a?(Ore::Type) && scope.enclosing_scope.has?(expr.value)
+					type_def       = if scope.enclosing_scope.is_a?(Lost::Type) && scope.enclosing_scope.has?(expr.value)
 						scope.enclosing_scope
 					else
 						type_name  = scope.class.name.split('::').last
@@ -801,14 +801,14 @@ module Ore
 					end
 					declared_value = type_def[expr.value] if type_def
 
-					if declared_value.is_a? Ore::Func
+					if declared_value.is_a? Lost::Func
 						# Use the actual function from the Type, not an empty wrapper
 						return rebind_func_to_scope(declared_value, scope)
 					else
 						# It's a variable/property
 						return scope.send(proxy_method)
 					end
-				elsif scope.is_a?(Ore::Instance) && scope.enclosing_scope&.is_a?(Ore::Type) && scope.enclosing_scope&.has?(expr.value)
+				elsif scope.is_a?(Lost::Instance) && scope.enclosing_scope&.is_a?(Lost::Type) && scope.enclosing_scope&.has?(expr.value)
 					if expr.type || expr.type_struct
 						# A bare annotated identifier (`x: Number`) must self-declare its own per-instance copy, exactly like the nil-init idiom (`x,`) already does (see #interp_nil_init's identical shadowing fix) -- reading straight through to the enclosing Type's own nil placeholder instead would mean the instance never gets its own key, so a later `./x = value` would wrongly raise Cannot_Assign_Undeclared_Identifier.
 						self_declare_annotated_identifier expr
@@ -820,7 +820,7 @@ module Ore
 				elsif expr.type || expr.type_struct
 					self_declare_annotated_identifier expr
 				else
-					raise Ore::Undeclared_Identifier.new(expr)
+					raise Lost::Undeclared_Identifier.new(expr)
 				end
 			else
 				# When scope is nil, errors must be raised
@@ -829,17 +829,17 @@ module Ore
 				elsif expr.type || expr.type_struct
 					self_declare_annotated_identifier expr
 				elsif stack.any? { |s| s.equal? global } && resolve_forward_declaration(expr.value) && global.has?(expr.value)
-					# not reached yet in file order, but declared somewhere later on -- forced early. Identity check (not #include?, which is `==` and can hit an Ore type's own overload -- e.g. Ore::Array#== assumes its operand also has .values). Global being absent from the stack means we're deliberately excluding it (a plain `x.y` dot access, #interp_dot_scope's exclude_global_scope: true) -- a member missing on x should stay missing, not quietly resolve to an unrelated global
+					# not reached yet in file order, but declared somewhere later on -- forced early. Identity check (not #include?, which is `==` and can hit an Lost type's own overload -- e.g. Lost::Array#== assumes its operand also has .values). Global being absent from the stack means we're deliberately excluding it (a plain `x.y` dot access, #interp_dot_scope's exclude_global_scope: true) -- a member missing on x should stay missing, not quietly resolve to an unrelated global
 					global[expr.value]
 				elsif (variants = structured_variants_for(expr.value)).length == 1
 					# A structured declaration (`Task<Schema> {}`) never binds its bare name like a plain `Type {}` does -- unambiguous with one variant, so allow it (mirrors Bare Named Structs). 2+ variants stay unreachable except via `Name<Structure>`.
 					variants.first
 				else
-					raise Ore::Undeclared_Identifier.new(expr)
+					raise Lost::Undeclared_Identifier.new(expr)
 				end
 			end
 
-			if value.is_a?(Ore::Type)
+			if value.is_a?(Lost::Type)
 				if expr.respond_to?(:add_to_readable) && expr.add_to_readable
 					stack.last.add_readable_scope value
 				elsif expr.respond_to?(:add_to_writable) && expr.add_to_writable
@@ -876,7 +876,7 @@ module Ore
 				sub_exprs = result.scan(/(?<!\\)`(.*?)(?<!\\)`/).flatten
 
 				sub_exprs.each do |sub|
-					# Reuses the interpreter's own @parser (not a fresh Ore.parse) so it still knows about @operator declarations registered elsewhere in the program -- #input= resets the cursor but not @custom_infix/etc.
+					# Reuses the interpreter's own @parser (not a fresh Lost.parse) so it still knows about @operator declarations registered elsewhere in the program -- #input= resets the cursor but not @custom_infix/etc.
 					parser.input = Lexer.new(sub).output
 					value        = interpret parser.output.first
 					result       = result.gsub "`#{sub}`", "#{stringify_for_display(value)}"
@@ -898,38 +898,38 @@ module Ore
 				!interpret(expr.expression)
 			when 'return'
 				returned = expr.expression ? interpret(expr.expression) : nil
-				Ore::Return.new returned
+				Lost::Return.new returned
 			else
 				overload_func = find_in_stack expr.operator.value
-				if overload_func.is_a? Ore::Func
-					call           = Ore::Call_Expr.new
+				if overload_func.is_a? Lost::Func
+					call           = Lost::Call_Expr.new
 					call.arguments = [expr.expression]
 					interp_func_body overload_func, call
 				else
-					raise Ore::Unhandled_Prefix.new(expr)
+					raise Lost::Unhandled_Prefix.new(expr)
 				end
 			end
 		end
 
-		# @param expr [Ore::Infix_Expr]
+		# @param expr [Lost::Infix_Expr]
 		def interp_infix_assignment expr
 			assignment_scope = scope_for_identifier expr.left # Reminder; this returns a scope whether or not the identifier exists
 
 			# A type annotation (`x: Number = value`) is itself a declaration, so it's allowed to introduce a brand-new identifier just like `:=`, even though plain `=` otherwise requires the identifier to already exist. An inline signature (`x: Type{Param;} = value`) is the same idea — expr.left is a Func_Signature_Expr instead of a plain annotated Identifier_Expr, but it's just as self-declaring. A bare struct annotation (`thing: <String, Number> = value`) is self-declaring the same way, even with no `expr.left.type`.
-			has_type_annotation = (expr.left.is_a?(Ore::Identifier_Expr) && (expr.left.type || expr.left.type_struct)) ||
-			                      expr.left.is_a?(Ore::Func_Signature_Expr)
+			has_type_annotation = (expr.left.is_a?(Lost::Identifier_Expr) && (expr.left.type || expr.left.type_struct)) ||
+			                      expr.left.is_a?(Lost::Func_Signature_Expr)
 			assignment_scope    ||= stack.last if has_type_annotation
 
 			# If using a scope operator but the scope doesn't exist, raise an error
-			if expr.left.is_a?(Ore::Identifier_Expr) && expr.left.scope_operator && assignment_scope.nil?
+			if expr.left.is_a?(Lost::Identifier_Expr) && expr.left.scope_operator && assignment_scope.nil?
 				raise_missing_scope_operator_target! expr, expr.left.scope_operator.value
 			end
 
-			# For plain identifiers (no scope operator) inside an Instance/Type body, new declarations should go to that Instance/Type, not to an enclosing scope that happens to have the same identifier. This fixes a bug that prevented HTML Layout's `title` from capturing Title's `title` declaration in examples/basic_html_page.ore.
-			if expr.left.is_a?(Ore::Identifier_Expr) && !expr.left.scope_operator
+			# For plain identifiers (no scope operator) inside an Instance/Type body, new declarations should go to that Instance/Type, not to an enclosing scope that happens to have the same identifier. This fixes a bug that prevented HTML Layout's `title` from capturing Title's `title` declaration in examples/basic_html_page.tape.
+			if expr.left.is_a?(Lost::Identifier_Expr) && !expr.left.scope_operator
 				current_scope = stack.last
 
-				if (current_scope.is_a?(Ore::Instance) || current_scope.is_a?(Ore::Type)) &&
+				if (current_scope.is_a?(Lost::Instance) || current_scope.is_a?(Lost::Type)) &&
 				   assignment_scope != current_scope && !current_scope.has?(expr.left.value)
 					# The identifier exists in some enclosing scope but not in the current Instance/Type. Treat this as a new declaration on the current scope.
 					assignment_scope = current_scope
@@ -940,16 +940,16 @@ module Ore
 			# Special handling for load directive assignment, subscript, and maybe more later.
 			#
 
-			if expr.left.is_a? Ore::Subscript_Expr
+			if expr.left.is_a? Lost::Subscript_Expr
 				if expr.left.expression.expressions.count > 1
-					raise Ore::Too_Many_Subscript_Expressions.new(expr.left)
+					raise Lost::Too_Many_Subscript_Expressions.new(expr.left)
 				end
 				# note: I'm interpreting only the first expression of left.expression.expressions as the key because the brackets are a Circumfix_Expr which uses an array to store the values.
 				receiver = interpret expr.left.receiver
 				key      = interpret expr.left.expression.expressions.first
 				value    = interpret expr.right
 
-				if receiver.is_a? Ore::Dictionary
+				if receiver.is_a? Lost::Dictionary
 					receiver.proxy_set key, value
 					return receiver.proxy_get key
 				else
@@ -959,13 +959,13 @@ module Ore
 			end
 
 			# Handle dot assignment
-			if expr.left.is_a?(Ore::Infix_Expr) && expr.left.operator.value == '.'
+			if expr.left.is_a?(Lost::Infix_Expr) && expr.left.operator.value == '.'
 				return assign_dot_member expr, expr.left, interpret(expr.right)
 			end
 
-			if expr.right.is_a?(Ore::Directive_Expr) && expr.right.name.value == 'load'
+			if expr.right.is_a?(Lost::Directive_Expr) && expr.right.name.value == 'load'
 				filepath  = interpret expr.right.expression
-				new_scope = Ore::Scope.new expr.left.value
+				new_scope = Lost::Scope.new expr.left.value
 				load_file_into_scope filepath, new_scope
 				right_value = new_scope
 			else
@@ -973,41 +973,41 @@ module Ore
 			end
 
 			# A Class-styled identifier (`My_Type = Other {}`) assigning a Scope value is itself a declaration, same reasoning as has_type_annotation above: `=` onto a fresh Class-styled name is how types get named/aliased, so it's allowed to introduce the identifier rather than requiring `:=` first.
-			is_class_declaration = Ore.type_of_identifier(expr.left.value) == :Identifier && right_value.is_a?(Ore::Scope)
+			is_class_declaration = Lost.type_of_identifier(expr.left.value) == :Identifier && right_value.is_a?(Lost::Scope)
 			assignment_scope     ||= stack.last if is_class_declaration
 
 			# Before the actual assignment, the identifier is checked for specific behavior errors based on its expression type (class, constant, variable/function)
-			case Ore.type_of_identifier expr.left.value
+			case Lost.type_of_identifier expr.left.value
 			when :IDENTIFIER
 				# It can only be assigned once, so if the declaration exists, fail. An undeclared constant falls through to the Cannot_Reassign_Undeclared_Identifier check below.
 				if assignment_scope&.has? expr.left.value
-					raise Ore::Cannot_Reassign_Constant.new(expr.left)
+					raise Lost::Cannot_Reassign_Constant.new(expr.left)
 				end
 			when :Identifier
-				# It can only be assigned `value` of Ore::Scope, which includes Ore::Type
-				if !right_value.is_a?(Ore::Scope)
-					raise Ore::Cannot_Assign_Incompatible_Type.new(expr)
+				# It can only be assigned `value` of Lost::Scope, which includes Lost::Type
+				if !right_value.is_a?(Lost::Scope)
+					raise Lost::Cannot_Assign_Incompatible_Type.new(expr)
 				end
 			when :identifier
 				if assignment_scope
 					# If the left side of the expression was declared with a type annotation, the type of `right_value` is enforced here.
 					# `expr.left.type` covers the first, self-declaring assignment (the annotation is right here on this expression); the recorded type_by_identifier value covers every reassignment after that, once the annotation itself is gone. An inline signature (Func_Signature_Expr) supplies its own type directly, since it has no name to look up.
-					type      = if expr.left.is_a? Ore::Func_Signature_Expr
+					type      = if expr.left.is_a? Lost::Func_Signature_Expr
 						build_func_signature expr.left
 					else
 						expr.left.type&.value || assignment_scope.type_by_identifier[expr.left.value]
 					end
-					type      = type.name if type.is_a?(Ore::Type)
+					type      = type.name if type.is_a?(Lost::Type)
 					signature = resolve_func_signature type
 
 					if signature
 						unless signature.matches? right_value
-							raise Ore::Type_Contract_Violation.new(expr, signature.to_s, describe_value_shape(right_value))
+							raise Lost::Type_Contract_Violation.new(expr, signature.to_s, describe_value_shape(right_value))
 						end
 					else
 						name = type_name_to_string(right_value)
 						if type && name != type
-							raise Ore::Type_Contract_Violation.new(expr, type, name)
+							raise Lost::Type_Contract_Violation.new(expr, type, name)
 						end
 					end
 				end
@@ -1015,12 +1015,12 @@ module Ore
 
 			unless assignment_scope && (assignment_scope.has?(expr.left.value) || has_type_annotation || is_class_declaration)
 				# it may not be declared using =
-				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr)
+				raise Lost::Cannot_Assign_Undeclared_Identifier.new(expr)
 			end
 
-			if expr.left.is_a?(Ore::Identifier_Expr) && expr.left.type
+			if expr.left.is_a?(Lost::Identifier_Expr) && expr.left.type
 				assignment_scope.type_by_identifier[expr.left.value] = expr.left.type.value
-			elsif expr.left.is_a? Ore::Func_Signature_Expr
+			elsif expr.left.is_a? Lost::Func_Signature_Expr
 				# Recorded so future reassignments (which are plain Identifier_Exprs with no annotation of their own) still resolve back to this signature to check against.
 				assignment_scope.type_by_identifier[expr.left.value] = build_func_signature expr.left
 			end
@@ -1032,19 +1032,19 @@ module Ore
 		end
 
 		# todo; Types may be composed of multiple types, what happens in that case?
-		# @param expr [Ore::Infix_Expr]
+		# @param expr [Lost::Infix_Expr]
 		def interp_infix_declaration expr
 			# `(a, b) := <tuple-or-struct-valued expr>` -- destructuring, handled entirely separately from the single-identifier case below (no scope operators, no type-by-identifier locking against a bare `.value`, none of it applies to a target list).
-			if expr.left.is_a?(Ore::Circumfix_Expr) && expr.left.grouping == '()'
+			if expr.left.is_a?(Lost::Circumfix_Expr) && expr.left.grouping == '()'
 				return interp_destructuring_declaration expr
 			end
 
-			if expr.left.is_a?(Ore::Infix_Expr) && expr.left.operator&.value == '.'
+			if expr.left.is_a?(Lost::Infix_Expr) && expr.left.operator&.value == '.'
 				return assign_dot_member expr, expr.left, interpret(expr.right), declare: true
 			end
 
 			# Only scope-operator forms (`../x`, `./x`, `.x`) target a specific scope. A plain `:=` always declares on the current scope, shadowing any identically-named identifier in an enclosing scope rather than re-declaring on it.
-			has_scope_operator = expr.left.is_a?(Ore::Identifier_Expr) && expr.left.scope_operator
+			has_scope_operator = expr.left.is_a?(Lost::Identifier_Expr) && expr.left.scope_operator
 			assignment_scope   = scope_for_identifier expr.left if has_scope_operator
 
 			# If using a scope operator but the scope doesn't exist, raise an error (mirrors interp_infix_assignment).
@@ -1055,13 +1055,13 @@ module Ore
 			assignment_scope ||= stack.last
 
 			# note; `./`, `../` self-declaring a member that doesn't exist yet is valid but only while the type/instance is still under construction (see #still_under_construction?) -- calling a static method later and self-declaring a brand-new static from inside it isn't allowed.
-			if has_scope_operator && assignment_scope.is_a?(Ore::Type) && !assignment_scope.has?(expr.left.value)
-				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr) unless still_under_construction? assignment_scope
+			if has_scope_operator && assignment_scope.is_a?(Lost::Type) && !assignment_scope.has?(expr.left.value)
+				raise Lost::Cannot_Assign_Undeclared_Identifier.new(expr) unless still_under_construction? assignment_scope
 			end
 
-			right_value = if expr.right.is_a?(Ore::Directive_Expr) && expr.right.name.value == 'load'
+			right_value = if expr.right.is_a?(Lost::Directive_Expr) && expr.right.name.value == 'load'
 				filepath  = interpret expr.right.expression
-				new_scope = Ore::Scope.new expr.left.value
+				new_scope = Lost::Scope.new expr.left.value
 				load_file_into_scope filepath, new_scope
 				new_scope
 			else
@@ -1089,24 +1089,24 @@ module Ore
 			targets = expr.left.expressions
 
 			unless targets.all? { |target| destructuring_target? target }
-				raise Ore::Invalid_Destructuring_Target.new(expr)
+				raise Lost::Invalid_Destructuring_Target.new(expr)
 			end
 
 			right_value = interpret expr.right
 			values      = destructurable_values right_value
 
 			unless values
-				raise Ore::Invalid_Destructuring_Source.new(expr)
+				raise Lost::Invalid_Destructuring_Source.new(expr)
 			end
 
 			if targets.length > values.length
-				raise Ore::Destructuring_Arity_Mismatch.new(expr, targets.length, values.length)
+				raise Lost::Destructuring_Arity_Mismatch.new(expr, targets.length, values.length)
 			end
 
 			targets.each_with_index do |target, i|
 				value = values[i]
 
-				if target.is_a? Ore::Identifier_Expr
+				if target.is_a? Lost::Identifier_Expr
 					declare_destructuring_local expr, target, value
 				else
 					assign_dot_member expr, target, value
@@ -1117,8 +1117,8 @@ module Ore
 		end
 
 		def destructuring_target? target
-			target.is_a?(Ore::Identifier_Expr) ||
-				(target.is_a?(Ore::Infix_Expr) && target.operator&.value == '.' && target.right.is_a?(Ore::Identifier_Expr))
+			target.is_a?(Lost::Identifier_Expr) ||
+				(target.is_a?(Lost::Infix_Expr) && target.operator&.value == '.' && target.right.is_a?(Lost::Identifier_Expr))
 		end
 
 		def declare_destructuring_local expr, target, value
@@ -1126,7 +1126,7 @@ module Ore
 				expected = target.type.value
 				actual   = type_name_to_string value
 				if actual != expected
-					raise Ore::Type_Contract_Violation.new(expr, expected, actual)
+					raise Lost::Type_Contract_Violation.new(expr, expected, actual)
 				end
 			end
 
@@ -1137,18 +1137,18 @@ module Ore
 
 		# True for a top-level `../x := value` or `Self.x := value` static declaration -- both run once during the type's own body walk and must not be re-run for every constructed instance (see #run_type_body_on_instance). `Self.x := value` has a different AST shape than `../x := value` (a `.` dot-target on the left of `:=`, not a scope-operator-prefixed Identifier_Expr), so it needs its own check here rather than falling out of the same one.
 		def static_var_declaration_expr? expr
-			return false unless expr.is_a?(Ore::Infix_Expr) && expr.operator&.value == ':='
+			return false unless expr.is_a?(Lost::Infix_Expr) && expr.operator&.value == ':='
 
 			left = expr.left
-			return true if left.is_a?(Ore::Identifier_Expr) && left.scope_operator&.value == '../'
+			return true if left.is_a?(Lost::Identifier_Expr) && left.scope_operator&.value == '../'
 
-			left.is_a?(Ore::Infix_Expr) && left.operator&.value == '.' &&
-				left.left.is_a?(Ore::Identifier_Expr) && !left.left.scope_operator && left.left.value == 'Self'
+			left.is_a?(Lost::Infix_Expr) && left.operator&.value == '.' &&
+				left.left.is_a?(Lost::Identifier_Expr) && !left.left.scope_operator && left.left.value == 'Self'
 		end
 
 		# A scope that is "under construction" is still allowed to self-declare a brand-new member via `./`, `../`, `self`, or `Self`
 		def still_under_construction? scope
-			if scope.is_a? Ore::Instance
+			if scope.is_a? Lost::Instance
 				scope.has? 'new'
 			else
 				scope.declaration_in_progress
@@ -1161,12 +1161,12 @@ module Ore
 			property = target.right.value
 
 			# `self`/`Self` are keyword sugar for `./`/`../` (see #interp_identifier) but arrive here as an ordinary `.` dot-target. `./x`/`../x` writes (#interp_infix_declaration's scope-operator branch, #interp_infix_assignment's general flow) never run Cannot_Reassign_Constant or check_dot_access_permissions! at all -- only the external-`.`-write rules below do (see "Member Creation Is Strict") -- so self/Self route around both entirely here too, for both `=` and `:=`, matching `./`/`../` exactly rather than just the not-yet-declared case.
-			self_keyword = target.left.is_a?(Ore::Identifier_Expr) && !target.left.scope_operator &&
-			               Ore::SELF_KEYWORDS.include?(target.left.value)
+			self_keyword = target.left.is_a?(Lost::Identifier_Expr) && !target.left.scope_operator &&
+			               Lost::SELF_KEYWORDS.include?(target.left.value)
 
-			if self_keyword && receiver.is_a?(Ore::Scope)
+			if self_keyword && receiver.is_a?(Lost::Scope)
 				unless receiver.has?(property) || still_under_construction?(receiver)
-					raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr)
+					raise Lost::Cannot_Assign_Undeclared_Identifier.new(expr)
 				end
 
 				if declare
@@ -1176,18 +1176,18 @@ module Ore
 
 				expected = receiver.type_by_identifier[property]
 				actual   = type_name_to_string value
-				raise Ore::Type_Contract_Violation.new(expr, expected, actual) if expected && actual != expected
+				raise Lost::Type_Contract_Violation.new(expr, expected, actual) if expected && actual != expected
 
 				receiver[property] = value
 				return value
 			end
 
-			unless receiver.is_a?(Ore::Scope) && receiver.has?(property)
-				raise Ore::Cannot_Assign_Undeclared_Identifier.new(expr)
+			unless receiver.is_a?(Lost::Scope) && receiver.has?(property)
+				raise Lost::Cannot_Assign_Undeclared_Identifier.new(expr)
 			end
 
-			if Ore.type_of_identifier(property) == :IDENTIFIER
-				raise Ore::Cannot_Reassign_Constant.new(expr)
+			if Lost.type_of_identifier(property) == :IDENTIFIER
+				raise Lost::Cannot_Reassign_Constant.new(expr)
 			end
 
 			check_dot_access_permissions! receiver, property, expr
@@ -1198,7 +1198,7 @@ module Ore
 			else
 				expected = receiver.type_by_identifier[property]
 				if expected && actual != expected
-					raise Ore::Type_Contract_Violation.new(expr, expected, actual)
+					raise Lost::Type_Contract_Violation.new(expr, expected, actual)
 				end
 			end
 
@@ -1206,59 +1206,59 @@ module Ore
 			value
 		end
 
-		# Ore::Tuple/Ore::Struct both carry a plain Ruby-level `.values` reader holding the raw backing array (distinct from their Ore-level `.values` dot-access, which wraps the same data in an Ore::Array for Ore code to read).
+		# Lost::Tuple/Lost::Struct both carry a plain Ruby-level `.values` reader holding the raw backing array (distinct from their Lost-level `.values` dot-access, which wraps the same data in an Lost::Array for Lost code to read).
 		def destructurable_values value
 			case value
-			when Ore::Tuple, Ore::Struct
+			when Lost::Tuple, Lost::Struct
 				value.values
 			end
 		end
 
-		# @param expr [Ore::Infix_Expr]
+		# @param expr [Lost::Infix_Expr]
 		def interp_dot_infix expr
 			return interp_dot_new expr if expr.right.is 'new'
 
 			receiver = maybe_instance interpret expr.left
 
-			unless receiver.kind_of?(Ore::Scope) || receiver.kind_of?(Ore::Range)
-				raise Ore::Invalid_Dot_Infix_Left_Operand.new(expr)
+			unless receiver.kind_of?(Lost::Scope) || receiver.kind_of?(Lost::Range)
+				raise Lost::Invalid_Dot_Infix_Left_Operand.new(expr)
 			end
 
 			case receiver
-			when Ore::Array, Ore::Tuple
+			when Lost::Array, Lost::Tuple
 				interp_dot_array_or_tuple receiver, expr
-			when Ore::Range
+			when Lost::Range
 				interp_dot_range receiver, expr
-			when Ore::Dictionary
+			when Lost::Dictionary
 				interp_dot_dictionary receiver, expr
 			else
 				# A structured type reference on the right (`ns.Abc<Number>`) isn't an Identifier_Expr, so it bypasses #interp_dot_scope's right-operand validation.
-				if expr.right.instance_of? Ore::Type_Expr
+				if expr.right.instance_of? Lost::Type_Expr
 					return interp_member_access receiver, expr.right
 				end
 
 				interp_dot_scope receiver, expr
 			end
-		rescue Ore::Undeclared_Identifier, Ore::Cannot_Call_Instance_Member_On_Type
+		rescue Lost::Undeclared_Identifier, Lost::Cannot_Call_Instance_Member_On_Type
 			raise unless expr.operator.value == '.?'
 			nil
 		end
 
 		def stringify_for_display value, show_quotes: false
 			value = maybe_instance value
-			return value unless value.is_a? Ore::Scope
+			return value unless value.is_a? Lost::Scope
 
-			method_name       = show_quotes && value.is_a?(Ore::String) ? 'pretty_print' : 'to_s'
-			to_s_ident        = Ore::Identifier_Expr.new
-			to_s_ident.lexeme = Ore::Lexeme.new(:identifier, method_name)
+			method_name       = show_quotes && value.is_a?(Lost::String) ? 'pretty_print' : 'to_s'
+			to_s_ident        = Lost::Identifier_Expr.new
+			to_s_ident.lexeme = Lost::Lexeme.new(:identifier, method_name)
 			func              = begin
 				interp_member_access value, to_s_ident
-			rescue Ore::Undeclared_Identifier
+			rescue Lost::Undeclared_Identifier
 				nil
 			end
-			return value unless func.is_a? Ore::Func
+			return value unless func.is_a? Lost::Func
 
-			call           = Ore::Call_Expr.new
+			call           = Lost::Call_Expr.new
 			call.arguments = []
 			interp_func_body func, call
 		end
@@ -1280,15 +1280,15 @@ module Ore
 		end
 
 		# Bare `X.new` (no parens) is equivalent to `X()`: full construction including `new{;}`, so a constructor with required params raises Missing_Argument. `X.new(...)` with parens never lands here; #interp_call intercepts it and routes to #interp_type_call directly.
-		# @param expr [Ore::Infix_Expr]
+		# @param expr [Lost::Infix_Expr]
 		def interp_dot_new expr
 			receiver = interpret expr.left
 
-			unless receiver.is_a? Ore::Type
-				raise Ore::Cannot_Initialize_Non_Type_Identifier.new expr.left
+			unless receiver.is_a? Lost::Type
+				raise Lost::Cannot_Initialize_Non_Type_Identifier.new expr.left
 			end
 
-			call           = Ore::Call_Expr.new
+			call           = Lost::Call_Expr.new
 			call.receiver  = expr.left
 			call.arguments = []
 			interp_type_call receiver, call
@@ -1298,23 +1298,23 @@ module Ore
 		# Bounds/type-checked element access for `.N`/`.N.M...` dot-index syntax on an Array/Tuple -- plain `values[index]` (Ruby's own Array#[]) silently returns nil past the end, and silently truncates a non-integer index (e.g. `.0.1` lexes as the single float 0.1, which Ruby's [] truncates to index 0) -- both looked like a legitimate result instead of a mistake.
 		def array_index_value collection, index, expr
 			unless index.is_a?(::Integer) && index.between?(-collection.values.length, collection.values.length - 1)
-				raise Ore::Invalid_Array_Index.new(expr)
+				raise Lost::Invalid_Array_Index.new(expr)
 			end
 			collection.values[index]
 		end
 
 		def interp_dot_array_or_tuple scope, expr
 			case
-			when expr.right.is(Ore::Func_Expr) && expr.right.name.value == 'each'
+			when expr.right.is(Lost::Func_Expr) && expr.right.name.value == 'each'
 				interp_each_loop scope, expr.right
 				scope
 
-			when expr.right.is(Ore::Number_Expr)
+			when expr.right.is(Lost::Number_Expr)
 				array_index_value scope, expr.right.value, expr
 
-			when expr.right.is(Ore::Array_Index_Expr)
+			when expr.right.is(Lost::Array_Index_Expr)
 				expr.right.indices_in_order.reduce(scope) do |current, index|
-					raise Ore::Invalid_Dot_Infix_Left_Operand.new(expr) unless current.is_a?(Ore::Array)
+					raise Lost::Invalid_Dot_Infix_Left_Operand.new(expr) unless current.is_a?(Lost::Array)
 					array_index_value current, index, expr
 				end
 
@@ -1324,12 +1324,12 @@ module Ore
 		end
 
 		def interp_dot_range range, expr
-			return interp_each_loop range, expr.right if expr.right.is(Ore::Func_Expr) && expr.right.name.value == 'each'
+			return interp_each_loop range, expr.right if expr.right.is(Lost::Func_Expr) && expr.right.name.value == 'each'
 			interp_dot_scope range, expr
 		end
 
 		def interp_dot_dictionary dict, expr
-			if expr.right.is_a? Ore::Identifier_Expr
+			if expr.right.is_a? Lost::Identifier_Expr
 				key_sym = expr.right.value.to_sym
 				if dict.hash.has_key?(key_sym)
 					return dict.hash[key_sym]
@@ -1340,8 +1340,8 @@ module Ore
 		end
 
 		def interp_dot_scope scope, expr
-			raise Ore::Invalid_Dot_Infix_Left_Operand.new(expr) if scope.nil?
-			raise Ore::Invalid_Dot_Infix_Right_Operand.new(expr.right) unless expr.right.instance_of? Ore::Identifier_Expr
+			raise Lost::Invalid_Dot_Infix_Left_Operand.new(expr) if scope.nil?
+			raise Lost::Invalid_Dot_Infix_Right_Operand.new(expr.right) unless expr.right.instance_of? Lost::Identifier_Expr
 
 			check_dot_access_permissions! scope, expr.right.value, expr
 
@@ -1350,7 +1350,7 @@ module Ore
 
 		def interp_each_loop collection, func_expr
 			collection.each do |it|
-				each_scope                 = Ore::Scope.new 'each{;}'
+				each_scope                 = Lost::Scope.new 'each{;}'
 				each_scope.enclosing_scope = stack.last
 				push_scope each_scope
 				each_scope.declare 'it', it
@@ -1361,13 +1361,13 @@ module Ore
 		end
 
 		# The values for expr.operator, expr.left, and expr.right should all exist by this point
-		# @param expr [Ore::Nil_Init_Expr]
+		# @param expr [Lost::Nil_Init_Expr]
 		def interp_nil_init expr
 			# attr_accessor :operator, :left, :right
 			current_scope = stack.last
 
 			# Same shadowing fix as interp_infix_assignment: inside an Instance/Type body, a plain identifier's nil-init must declare on the current Instance/Type even if an enclosing scope (e.g. the Type, whose body already ran once at definition time) already has an identically-named identifier. Otherwise re-running `thing,` per-instance in interp_type_call finds the Type's stale copy and never declares it on the instance.
-			if (current_scope.is_a?(Ore::Instance) || current_scope.is_a?(Ore::Type)) && !current_scope.has?(expr.left.value)
+			if (current_scope.is_a?(Lost::Instance) || current_scope.is_a?(Lost::Type)) && !current_scope.has?(expr.left.value)
 				current_scope.declare expr.left.value, interpret(expr.right)
 				track_static_declaration current_scope, expr.left
 				return current_scope.get expr.left.value
@@ -1375,7 +1375,7 @@ module Ore
 
 			begin
 				return interpret expr.left
-			rescue # Ore::Undeclared_Identifier and ArgumentError # todo: Why `ArgumentError: empty string`. Once this is resolved, then the rescue here should explicitly catch Undeclared_Identifier, probably.
+			rescue # Lost::Undeclared_Identifier and ArgumentError # todo: Why `ArgumentError: empty string`. Once this is resolved, then the rescue here should explicitly catch Undeclared_Identifier, probably.
 				scope = scope_for_identifier(expr.left) || stack.last
 				scope.declare expr.left.value, interpret(expr.right)
 
@@ -1394,19 +1394,19 @@ module Ore
 		# A type's own @operator overload takes precedence over a same-named global one. Checks the operand's own declarations first, then its enclosing Type (for shorthand-constructed instances that never got the type's declarations copied onto themselves, see #interp_type_call), and only falls back to a global operator (excluding Type/Instance scopes, see the comment at the call site in #interp_infix) if neither applies.
 
 		def find_operator_overload operator, operand = nil
-			if operand.is_a?(Ore::Instance) && operand.has?(operator)
+			if operand.is_a?(Lost::Instance) && operand.has?(operator)
 				return operand.get operator
 			end
 
-			if operand.is_a?(Ore::Scope) && operand.enclosing_scope.is_a?(Ore::Type) && operand.enclosing_scope.has?(operator)
+			if operand.is_a?(Lost::Scope) && operand.enclosing_scope.is_a?(Lost::Type) && operand.enclosing_scope.has?(operator)
 				return operand.enclosing_scope.get operator
 			end
 
-			find_in_stack operator, excluding: Ore::Type
+			find_in_stack operator, excluding: Lost::Type
 		end
 
 		# Second-level dispatcher for infix operators, mirroring #interpret's own shape: each branch hands off to one interp_*_infix handler. The first group dispatches before operand evaluation — the assignment family treats the left side as a target rather than a value, `@` (the unpack marker) isn't a value at all, and logical operators must stay lazy to short-circuit. Every remaining operator evaluates each operand exactly once, here, and passes the values down so no handler re-interprets an operand (side effects run once).
-		# @param expr [Ore::Infix_Expr]
+		# @param expr [Lost::Infix_Expr]
 		def interp_infix expr
 			operator = expr.operator.value
 
@@ -1434,7 +1434,7 @@ module Ore
 
 		# Calls an @operator overload as a regular two-argument function. `values` carries the operands when the caller already evaluated them; nil lets #interp_func_body evaluate the raw expressions once itself (only the lazy logical path needs that).
 		def call_operator_overload overload, expr, values
-			call           = Ore::Call_Expr.new
+			call           = Lost::Call_Expr.new
 			call.arguments = [expr.left, expr.right]
 			interp_func_body overload, call, arg_values: values
 		end
@@ -1442,7 +1442,7 @@ module Ore
 		# Interprets its own operands (the one infix handler that does) because `&&`/`||` must short-circuit. A scope-level @operator overload still wins first, called with the raw expressions so the operands evaluate once, eagerly, inside the call.
 		def interp_logical_infix expr
 			overload = find_operator_overload expr.operator.value
-			return call_operator_overload(overload, expr, nil) if overload.is_a? Ore::Func
+			return call_operator_overload(overload, expr, nil) if overload.is_a? Lost::Func
 
 			case expr.operator.value
 			when '&&', 'and'
@@ -1460,7 +1460,7 @@ module Ore
 		def interp_arithmetic_infix expr, left, right
 			overload = find_operator_overload expr.operator.value, maybe_instance(left)
 
-			if overload.is_a? Ore::Func
+			if overload.is_a? Lost::Func
 				call_operator_overload overload, expr, [left, right]
 			else
 				maybe_instance(left).send expr.operator.value, maybe_instance(right)
@@ -1468,9 +1468,9 @@ module Ore
 		end
 
 		# note; I'm special casing these because they don't behave like the traditional == and != in Ruby.
-		# The literal `Any` type (ore/preload.ore), a universal wildcard -- see #interp_comparison_infix.
+		# The literal `Any` type (lost/preload.tape), a universal wildcard -- see #interp_comparison_infix.
 		def any_type? value
-			value.is_a?(Ore::Type) && value.name == 'Any'
+			value.is_a?(Lost::Type) && value.name == 'Any'
 		end
 
 		def interp_comparison_infix expr, left, right
@@ -1483,10 +1483,10 @@ module Ore
 
 			case expr.operator.value
 			when '===', '=!=', '=>=', '=<=', '=/='
-				left_structure  = left.is_a?(Ore::Type) ? left.structure_instance&.types : nil
-				right_structure = right.is_a?(Ore::Type) ? right.structure_instance&.types : nil
+				left_structure  = left.is_a?(Lost::Type) ? left.structure_instance&.types : nil
+				right_structure = right.is_a?(Lost::Type) ? right.structure_instance&.types : nil
 
-				# note; `left`/`right` are whatever #interpret returned (a raw Ruby Integer/String/etc for literals, not necessarily an Ore::Type/Instance), so `.types` can't be called on them directly. Using #composed_types_for here which resolves the correct composed-type set.
+				# note; `left`/`right` are whatever #interpret returned (a raw Ruby Integer/String/etc for literals, not necessarily an Lost::Type/Instance), so `.types` can't be called on them directly. Using #composed_types_for here which resolves the correct composed-type set.
 				left_types  = composed_types_for left
 				right_types = composed_types_for right
 
@@ -1525,20 +1525,20 @@ module Ore
 				# note; ==, !=, <, >, <=, >=, <=> aren't given fixed set-comparison semantics above, so — same as arithmetic — check for a user-declared @operator overload (on left itself, or falling back to left.enclosing_scope for shorthand-constructed instances, or a same-named global operator) before falling back to Ruby's own #==/#<=>/etc.
 				overload = find_operator_overload expr.operator.value, left
 
-				# note; A type declaring `@operator ==` but no `@operator !=` of its own (the common case ore/struct.ore's Member/Struct are exactly this) used to fall straight through to Ruby's own #!= for `!=`, which is identity-based and ignores the custom == entirely, two structurally-equal Members compared unequal with `!=` even though `==` correctly said they were equal. `!=` now derives from a declared `==` overload (negated) when it has no overload of its own, matching how most languages auto-derive != from ==.
-				if !overload.is_a?(Ore::Func) && expr.operator.value == '!='
+				# note; A type declaring `@operator ==` but no `@operator !=` of its own (the common case lost/struct.tape's Member/Struct are exactly this) used to fall straight through to Ruby's own #!= for `!=`, which is identity-based and ignores the custom == entirely, two structurally-equal Members compared unequal with `!=` even though `==` correctly said they were equal. `!=` now derives from a declared `==` overload (negated) when it has no overload of its own, matching how most languages auto-derive != from ==.
+				if !overload.is_a?(Lost::Func) && expr.operator.value == '!='
 					overload      = find_operator_overload '==', left
 					negate_result = true
 				end
 
-				if overload.is_a? Ore::Func
+				if overload.is_a? Lost::Func
 					result = call_operator_overload overload, expr, [left, right]
 					negate_result ? !truthy?(result) : result
 				elsif left.respond_to?(expr.operator.value) && !(expr.operator.value == '<=>' && left.method(:<=>).owner == ::Kernel)
 					left.send expr.operator.value, right
 				else
-					# note; Numbers/Strings reach here fine (they decay to plain Ruby values with a native <=>/</>/etc.), but a plain Ore::Instance has none of these implemented -- except <=>, which Ruby's own Kernel/Object gives every object a trivial, identity-based default for. `respond_to?` alone can't tell that apart from a real one, so the method's actual owner is checked too. There's no sensible fallback to invent here, equality doesn't imply order.
-					raise Ore::Undeclared_Infix_Operator.new expr
+					# note; Numbers/Strings reach here fine (they decay to plain Ruby values with a native <=>/</>/etc.), but a plain Lost::Instance has none of these implemented -- except <=>, which Ruby's own Kernel/Object gives every object a trivial, identity-based default for. `respond_to?` alone can't tell that apart from a real one, so the method's actual owner is checked too. There's no sensible fallback to invent here, equality doesn't imply order.
+					raise Lost::Undeclared_Infix_Operator.new expr
 				end
 			end
 		end
@@ -1546,7 +1546,7 @@ module Ore
 		# (a += b)  ==>  (a = (a + b)). Compound operators only ever consult a scope-level @operator overload (never the operand's own), since their built-in meaning is assignment, not a property of the operand's type.
 		def interp_compound_infix expr, left, right
 			overload = find_operator_overload expr.operator.value
-			return call_operator_overload(overload, expr, [left, right]) if overload.is_a? Ore::Func
+			return call_operator_overload(overload, expr, [left, right]) if overload.is_a? Lost::Func
 
 			base_op = expr.operator.value[..-2] # Trim the = from +=, -=, etc.
 			result  = maybe_instance(left).send base_op, maybe_instance(right)
@@ -1555,7 +1555,7 @@ module Ore
 			# #assign_dot_member path plain `.`-assignment uses; #scope_for_identifier only understands
 			# plain Identifier_Exprs, so a dot-target used to silently fall through to `stack.last` and
 			# declare a bogus `nil`-named identifier there instead of touching the actual member.
-			if expr.left.is_a?(Ore::Infix_Expr) && expr.left.operator&.value == '.'
+			if expr.left.is_a?(Lost::Infix_Expr) && expr.left.operator&.value == '.'
 				assign_dot_member expr, expr.left, result
 			else
 				assignment_scope = scope_for_identifier expr.left
@@ -1565,31 +1565,31 @@ module Ore
 
 		def interp_range_infix expr, start, finish
 			overload = find_operator_overload expr.operator.value
-			return call_operator_overload(overload, expr, [start, finish]) if overload.is_a? Ore::Func
+			return call_operator_overload(overload, expr, [start, finish]) if overload.is_a? Lost::Func
 
 			case expr.operator.value
 			when '...'
-				Ore::Range.new start, finish
+				Lost::Range.new start, finish
 			when '..<'
-				Ore::Range.new start, finish, exclude_end: true
+				Lost::Range.new start, finish, exclude_end: true
 			when '>..'
-				Ore::Range.new start + 1, finish
+				Lost::Range.new start + 1, finish
 			when '>.<'
-				Ore::Range.new start + 1, finish, exclude_end: true
+				Lost::Range.new start + 1, finish, exclude_end: true
 			end
 		end
 
 		# A user-declared @operator with no built-in category of its own. The operand's own overload wins over a global one (#find_operator_overload). Reachable with no overload in scope when the operator is declared inside some other scope (the parser's pre-scan registers it file-wide) — that used to silently evaluate to nil; now it raises.
 		def interp_custom_infix expr, left, right
 			overload = find_operator_overload expr.operator.value, maybe_instance(left)
-			unless overload.is_a? Ore::Func
-				raise Ore::Undeclared_Infix_Operator.new(expr)
+			unless overload.is_a? Lost::Func
+				raise Lost::Undeclared_Infix_Operator.new(expr)
 			end
 
 			call_operator_overload overload, expr, [left, right]
 		end
 
-		# @param expr [Ore::Postfix_Expr]
+		# @param expr [Lost::Postfix_Expr]
 		def interp_postfix expr
 			# note: See constants.rb POSTFIX for exhaustive list of language-defined postfixes. Currently there are no built-in postfix operators.
 			# 1) look up the opreator (expr.operator.value) as it should be a normal func in the scope.
@@ -1600,16 +1600,16 @@ module Ore
 				raise "Could not find #{expr.operator.value} declared anywhere man!"
 			end
 
-			call           = Ore::Call_Expr.new
+			call           = Lost::Call_Expr.new
 			call.arguments = [expr.expression]
 			interp_func_body postfix_overloaded_func, call
 		end
 
-		# @param expr [Ore::Percent_Literal_Expr < Ore::Circumfix_Expr]
+		# @param expr [Lost::Percent_Literal_Expr < Lost::Circumfix_Expr]
 		def interp_percent_literal expr
 			literal_expr_class = case expr.kind
-			when 'string', 'str', 'Str', 'STR' then Ore::String_Expr
-			when 'symbol', 'sym', 'Sym', 'SYM' then Ore::Symbol_Expr
+			when 'string', 'str', 'Str', 'STR' then Lost::String_Expr
+			when 'symbol', 'sym', 'Sym', 'SYM' then Lost::Symbol_Expr
 			end
 
 			# %string/%symbol preserve the identifier's own casing; the rest force one.
@@ -1620,11 +1620,11 @@ module Ore
 			when 'STR', 'SYM' then :upcase
 			end
 
-			array_expr             = Ore::Circumfix_Expr.new
+			array_expr             = Lost::Circumfix_Expr.new
 			array_expr.grouping    = '[]'
 			array_expr.expressions = expr.expressions.map do |it|
-				# A backtick item is evaluated immediately, like string interpolation, then folded through the same to_s + casing treatment as every other item. No Ore::Statement gets built here (unlike #invoke_statement's callers), so use_caller_scope/memoize never come into play -- it's always immediate, in whatever scope this literal is written in.
-				if it.is_a? Ore::Statement_Expr
+				# A backtick item is evaluated immediately, like string interpolation, then folded through the same to_s + casing treatment as every other item. No Lost::Statement gets built here (unlike #invoke_statement's callers), so use_caller_scope/memoize never come into play -- it's always immediate, in whatever scope this literal is written in.
+				if it.is_a? Lost::Statement_Expr
 					value = interpret(it.expression).to_s.send casing
 					literal_expr_class.new value
 				else
@@ -1640,18 +1640,18 @@ module Ore
 		def interp_circumfix expr
 			case expr.grouping
 			when '[]'
-				array             = Ore::Array.new
+				array             = Lost::Array.new
 				array.expressions = expr.expressions
 
 				values = []
 				expr.expressions.each do |e|
-					# Same as #interp_percent_literal above: `` `expr` `` inside an array literal evaluates immediately, no Ore::Statement built.
-					e = e.expression if e.is_a? Ore::Statement_Expr
+					# Same as #interp_percent_literal above: `` `expr` `` inside an array literal evaluates immediately, no Lost::Statement built.
+					e = e.expression if e.is_a? Lost::Statement_Expr
 					values << interpret(e)
 				end
 				link_instance_to_type array, 'Array'
 
-				# Make values accessible as an Ore identifier (`for values`, `arr.values`), sharing the same list object as the real backing store so mutations (push/pop/etc) stay in sync.
+				# Make values accessible as an Lost identifier (`for values`, `arr.values`), sharing the same list object as the real backing store so mutations (push/pop/etc) stay in sync.
 				array.values                 = values
 				array.declarations['values'] = values
 
@@ -1662,27 +1662,27 @@ module Ore
 					interpret expr.expressions.first
 				else
 					values = expr.expressions.map { |e| interpret(e) }
-					tuple  = Ore::Tuple.new values
+					tuple  = Lost::Tuple.new values
 					link_instance_to_type tuple, 'Tuple'
 					tuple.declarations['values'] = tuple.values
 					tuple
 				end
 			when '{}'
-				dict = expr.expressions.reduce(Ore::Dictionary.new) do |dict, it|
-					if it.is_a? Ore::Identifier_Expr
+				dict = expr.expressions.reduce(Lost::Dictionary.new) do |dict, it|
+					if it.is_a? Lost::Identifier_Expr
 						dict.proxy_set it.value.to_sym, nil
-					elsif it.is_a? Ore::Infix_Expr
+					elsif it.is_a? Lost::Infix_Expr
 						case it.operator.value
 						when ':', '='
-							if it.left.is_a?(Ore::Identifier_Expr) || it.left.is_a?(Ore::Symbol_Expr) || it.left.is_a?(Ore::String_Expr)
-								# note; Deliberately NOT wrap_string_literal_value here, unlike Array/Tuple literals -- Dictionary#hash is handed straight to Ruby-level consumers as a raw Hash (Sequel queries in table.rb chief among them), so wrapping a value into Ore::String here broke every DB call passing string attributes. #to_s below just always double-quotes String values instead of matching the original literal's quote char.
+							if it.left.is_a?(Lost::Identifier_Expr) || it.left.is_a?(Lost::Symbol_Expr) || it.left.is_a?(Lost::String_Expr)
+								# note; Deliberately NOT wrap_string_literal_value here, unlike Array/Tuple literals -- Dictionary#hash is handed straight to Ruby-level consumers as a raw Hash (Sequel queries in table.rb chief among them), so wrapping a value into Lost::String here broke every DB call passing string attributes. #to_s below just always double-quotes String values instead of matching the original literal's quote char.
 								dict.proxy_set it.left.value.to_sym, interpret(it.right)
 							else
 								# The left operand should be allowed to be any hashable object. It's too early in the project to consider hashing but this'll be a good reminder.
-								raise Ore::Invalid_Dictionary_Key.new(it)
+								raise Lost::Invalid_Dictionary_Key.new(it)
 							end
 						else
-							raise Ore::Invalid_Dictionary_Infix_Operator.new(it)
+							raise Lost::Invalid_Dictionary_Infix_Operator.new(it)
 						end
 					end
 					# In case I forget, #reduce requires that the injected value be returned to be passed to the next iteration.
@@ -1691,66 +1691,66 @@ module Ore
 				link_instance_to_type dict, 'Dictionary'
 				dict
 			else
-				raise Ore::Unknown_Circumfix_Grouping.new(expr)
+				raise Lost::Unknown_Circumfix_Grouping.new(expr)
 			end
 		end
 
-		# @param expr [Ore::Call_Expr]
+		# @param expr [Lost::Call_Expr]
 		def interp_call expr
 			# `X.new(...)` parses as Call_Expr(receiver: Infix_Expr(X, '.', new), arguments: [...]). Intercept it here, before evaluating the receiver, so we don't route through interp_dot_new (which eagerly builds a whole Instance for bare `X.new`) and then build a second Instance via interp_type_call below. Bare `X.new` with no call still goes through interp_dot_new untouched, since it never reaches interp_call.
-			if expr.receiver.is_a?(Ore::Infix_Expr) && expr.receiver.operator&.value == '.' && expr.receiver.right.is('new')
+			if expr.receiver.is_a?(Lost::Infix_Expr) && expr.receiver.operator&.value == '.' && expr.receiver.right.is('new')
 				type = interpret expr.receiver.left
 
-				# Ore::Struct < Instance < Type (Ruby class hierarchy), so a bare struct schema value (`thing := <a: Number>`, or a persisted named struct -- see #interp_type) passes the `is_a? Ore::Type` check below too, but it has no `.expressions` for #interp_type_call's construction path to run -- route it through the same Ore::Struct call path #interp_call's own receiver-dispatch further down already uses for `thing(...)`.
-				if type.is_a? Ore::Struct
+				# Lost::Struct < Instance < Type (Ruby class hierarchy), so a bare struct schema value (`thing := <a: Number>`, or a persisted named struct -- see #interp_type) passes the `is_a? Lost::Type` check below too, but it has no `.expressions` for #interp_type_call's construction path to run -- route it through the same Lost::Struct call path #interp_call's own receiver-dispatch further down already uses for `thing(...)`.
+				if type.is_a? Lost::Struct
 					return interp_struct_call type, expr
 				end
 
-				unless type.is_a? Ore::Type
-					raise Ore::Cannot_Initialize_Non_Type_Identifier.new(expr.receiver.left)
+				unless type.is_a? Lost::Type
+					raise Lost::Cannot_Initialize_Non_Type_Identifier.new(expr.receiver.left)
 				end
 
 				return interp_type_call type, expr
 			end
 
-			# A bare `` `expr`() `` written and called in the same place -- always immediate, in whatever scope it's written in. No Ore::Statement is ever built here, so #invoke_statement (used below, once one *has* been built and stored) doesn't apply.
-			if expr.receiver.is_a? Ore::Statement_Expr
+			# A bare `` `expr`() `` written and called in the same place -- always immediate, in whatever scope it's written in. No Lost::Statement is ever built here, so #invoke_statement (used below, once one *has* been built and stored) doesn't apply.
+			if expr.receiver.is_a? Lost::Statement_Expr
 				return interpret expr.receiver.expression
 			end
 
 			receiver = interpret expr.receiver
 
 			# A nil-safe dot chain (`x.?method`) that found nothing evaluates to nil deliberately -- a trailing call (`x.?method()`) should short-circuit to nil too, not try to invoke nil.
-			if receiver.nil? && expr.receiver.is_a?(Ore::Infix_Expr) && expr.receiver.operator&.value == '.?'
+			if receiver.nil? && expr.receiver.is_a?(Lost::Infix_Expr) && expr.receiver.operator&.value == '.?'
 				return nil
 			end
 
 			case receiver
-			when Ore::Route
+			when Lost::Route
 				interp_func_body receiver.handler, expr
 
-			when Ore::Func
+			when Lost::Func
 				interp_func_body receiver, expr
 
-			when Ore::Struct
+			when Lost::Struct
 				interp_struct_call receiver, expr
 
-			when Ore::Statement
-				# Reached once a Statement has been stored in a variable (or field, etc.) and is being called from somewhere else -- Ore::Statement < Instance, so this has to come before the generic Instance branch below or it'd be mistaken for "construct a new Statement".
+			when Lost::Statement
+				# Reached once a Statement has been stored in a variable (or field, etc.) and is being called from somewhere else -- Lost::Statement < Instance, so this has to come before the generic Instance branch below or it'd be mistaken for "construct a new Statement".
 				invoke_statement receiver
 
-			when Ore::Instance, Ore::Type
+			when Lost::Instance, Lost::Type
 				interp_type_call receiver, expr
 
-			when Ore::Func_Signature
-				raise Ore::Cannot_Call_Func_Signature.new expr
+			when Lost::Func_Signature
+				raise Lost::Cannot_Call_Func_Signature.new expr
 
 			else
-				raise Ore::Cannot_Call_Value.new expr.receiver
+				raise Lost::Cannot_Call_Value.new expr.receiver
 			end
 		end
 
-		# @param expr [Ore::Type_Expr]
+		# @param expr [Lost::Type_Expr]
 		def interp_type expr
 			return interp_anonymous_composition expr if expr.anonymous_composition
 
@@ -1761,24 +1761,24 @@ module Ore
 
 					# note; `expr.name` is normally a real type name ("String"), but if it's instead a local alias bound to an earlier structured reference (`X := String<Flying>`), re-structure against *that value's own* family name rather than treating "X" itself as a type name. So `X<duck>` should behave exactly like `String<duck>`, since `.name` on any Type object (dup'd or not) always reflects its true declared family.
 					aliased     = find_in_stack expr.name
-					lookup_name = aliased.is_a?(Ore::Type) ? aliased.name : expr.name
+					lookup_name = aliased.is_a?(Lost::Type) ? aliased.name : expr.name
 
 					existing = find_structured_type_variant lookup_name, supplied
-					unless existing.is_a? Ore::Type
+					unless existing.is_a? Lost::Type
 						# Nothing declared under this name -> bare named struct (see Bare Named Structs, CLAUDE.md). Also allows re-declaring the same struct with an identical shape as a no-op.
-						redeclaring_same_struct = aliased.is_a?(Ore::Struct) && aliased.get('name') == expr.name && aliased.structure_declaration_equal?(supplied)
+						redeclaring_same_struct = aliased.is_a?(Lost::Struct) && aliased.get('name') == expr.name && aliased.structure_declaration_equal?(supplied)
 						if (aliased.nil? || redeclaring_same_struct) && structured_variants_for(lookup_name).empty?
 							supplied.declare 'name', expr.name
 							supplied.types = Set[expr.name] + supplied.types # `.types` inherited `Set['Struct']` alone from Struct#initialize's `super 'Struct'`; put the struct's own declared name first (own-name-before-composed, same order an ordinary `Ident | Struct {}` composition would produce) so type-identity checks (===, a `-> Ident` return-type contract, `type_name_to_string`'s `.types.first`, ...) see it as `Ident`-shaped, not just generically Struct-shaped.
 							stack.last.declare expr.name, supplied if supplied.names.all?
 							return supplied
 						end
-						raise Ore::Undeclared_Type_Structure.new(expr)
+						raise Lost::Undeclared_Type_Structure.new(expr)
 					end
 				else
 					existing = find_in_stack expr.name
-					unless existing.is_a? Ore::Type
-						raise Ore::Undeclared_Identifier.new(expr)
+					unless existing.is_a? Lost::Type
+						raise Lost::Undeclared_Identifier.new(expr)
 					end
 				end
 
@@ -1789,10 +1789,10 @@ module Ore
 				if expr.structure
 					# Call-site member values are usually positional (`Woof<'hello', 4815>`), but a member can be named at the reference site too (`Woof<key := 'hello'>`) to disambiguate an otherwise-ambiguous match. Either way, re-associate them with the names — and pick up any defaults — from the matched variant's own struct declaration (`Woof<String, key: Dictionary> {}`) so `.structure.key` still works on the resulting instance.
 					declaration            = existing.structure_declaration
-					declaration_names      = declaration.is_a?(Ore::Struct) ? declaration.names : []
-					declaration_types      = declaration.is_a?(Ore::Struct) ? declaration.type_objects : [] # declared type objects, used below only to detect an unfilled default via identity
-					declaration_type_names = declaration.is_a?(Ore::Struct) ? declaration.type_names : []
-					declaration_values     = declaration.is_a?(Ore::Struct) ? declaration.values : []
+					declaration_names      = declaration.is_a?(Lost::Struct) ? declaration.names : []
+					declaration_types      = declaration.is_a?(Lost::Struct) ? declaration.type_objects : [] # declared type objects, used below only to detect an unfilled default via identity
+					declaration_type_names = declaration.is_a?(Lost::Struct) ? declaration.type_names : []
+					declaration_values     = declaration.is_a?(Lost::Struct) ? declaration.values : []
 
 					# A default only fills in for a member that just re-asserts the declaration's own declared type for that member (`Abc<Dictionary>()`, re-stating `dict`'s own type rather than giving it a value) — never when a real value was actually supplied there (`Abc<{x=1}>()` must keep {x=1}, not fall back to the default). That check has to run against `supplied.type_objects` (identity against the declared type), since that's what "just restated the type" even means -- but the *result*, when it's a real value, has to be `supplied.values`, not `type_objects`. A bare `name := value` reference member (see #interp_struct) resolves its own `type_objects` entry down to the value's *inferred type*, not the value itself, so using `type_objects` here for both the check and the result silently substituted the wrong thing for exactly that case.
 					resolved_values = supplied.values.each_with_index.map do |real_value, i|
@@ -1820,13 +1820,13 @@ module Ore
 
 		# A composition chain with no `{}` body (`Abc|Def`, `A & B`, ...) is a value, not a declaration, built by applying the chain to a fresh, unnamed Type exactly as if `X | Abc | Def { }` had been written for some unnamed X.
 		def interp_anonymous_composition expr
-			anonymous             = Ore::Type.new nil
-			anonymous.types       = Set.new # Type#initialize seeds `@types = Set[name]` -- Set[nil] here, which would leave a stray nil in .types (breaking #find_ruby_class_for_type's `"Ore::#{type_name}"` lookup) since the union step below only ever adds, never resets.
+			anonymous             = Lost::Type.new nil
+			anonymous.types       = Set.new # Type#initialize seeds `@types = Set[name]` -- Set[nil] here, which would leave a stray nil in .types (breaking #find_ruby_class_for_type's `"Lost::#{type_name}"` lookup) since the union step below only ever adds, never resets.
 			anonymous.expressions = [] # A real declaration always ends up with this set (even to []) via #interp_bare_type_declaration's own body-merge -- there's no body here, but #run_type_body_on_instance still expects an Array to iterate when constructing an instance.
 
-			seed            = Ore::Composition_Expr.new
-			seed.operator   = Ore::Lexeme.new(:operator, '|')
-			seed.identifier = Ore::Identifier_Expr.new.tap { |it| it.lexeme = Ore::Lexeme.new(:Identifier, expr.name) }
+			seed            = Lost::Composition_Expr.new
+			seed.operator   = Lost::Lexeme.new(:operator, '|')
+			seed.identifier = Lost::Identifier_Expr.new.tap { |it| it.lexeme = Lost::Lexeme.new(:Identifier, expr.name) }
 
 			push_then_pop anonymous do
 				interp_composition seed
@@ -1836,12 +1836,12 @@ module Ore
 			anonymous
 		end
 
-		# Shared tail of both declaration paths below: parent the type to the declaring scope, link it to its Ore:: Ruby class when one exists, record its own name in @types, and run `body_expressions` in the type's scope.
+		# Shared tail of both declaration paths below: parent the type to the declaring scope, link it to its Lost:: Ruby class when one exists, record its own name in @types, and run `body_expressions` in the type's scope.
 		def finish_type_declaration type, body_expressions
 			type.enclosing_scope = stack.last
 
-			ore_name = "Ore::#{type.name}"
-			defined  = type.name[0] != '_' && Object.const_defined?(ore_name) # note; #const_defined? does not allow underscore as the first character, hence the underscore check.
+			lost_name = "Lost::#{type.name}"
+			defined   = type.name[0] != '_' && Object.const_defined?(lost_name) # note; #const_defined? does not allow underscore as the first character, hence the underscore check.
 			link_instance_to_type type, type.name if defined
 
 			type.types ||= []
@@ -1862,10 +1862,10 @@ module Ore
 			type
 		end
 
-		# A plain, unstructured declaration (`String { ... }`) -- reopens/extends the same shared Type object across multiple declarations of the same bare name, e.g. how preload.ore's files each contribute to the same base String/Array/etc.
+		# A plain, unstructured declaration (`String { ... }`) -- reopens/extends the same shared Type object across multiple declarations of the same bare name, e.g. how preload.tape's files each contribute to the same base String/Array/etc.
 		def interp_bare_type_declaration expr
 			existing = stack.last.has?(expr.name) && stack.last[expr.name]
-			type     = existing.is_a?(Ore::Type) ? existing : Ore::Type.new(expr.name)
+			type     = existing.is_a?(Lost::Type) ? existing : Lost::Type.new(expr.name)
 
 			type.expressions = (type.expressions || []) + expr.expressions
 			finish_type_declaration type, expr.expressions
@@ -1885,9 +1885,9 @@ module Ore
 			if existing
 				variant = existing
 			else
-				variant             = Ore::Type.new(expr.name)
+				variant             = Lost::Type.new(expr.name)
 				blueprint           = stack.last.has?(expr.name) && stack.last[expr.name]
-				variant.expressions = blueprint.is_a?(Ore::Type) ? (blueprint.expressions || []).dup : []
+				variant.expressions = blueprint.is_a?(Lost::Type) ? (blueprint.expressions || []).dup : []
 			end
 
 			variant.expressions           = (variant.expressions || []) + expr.expressions
@@ -1911,14 +1911,14 @@ module Ore
 				declared_type = struct.type_names[i]
 				next if declared_type == 'Any'
 
-				unless value.is_a?(Ore::Scope) && value.has?(name)
-					raise Ore::Type_Contract_Violation.new(expr, "<#{struct.names.compact.join(', ')}>", describe_value_shape(value))
+				unless value.is_a?(Lost::Scope) && value.has?(name)
+					raise Lost::Type_Contract_Violation.new(expr, "<#{struct.names.compact.join(', ')}>", describe_value_shape(value))
 				end
 
 				member_value = value.get name
 				candidates   = member_value.nil? ? [] : member_candidate_type_names(member_value)
 				unless candidates.include? declared_type
-					raise Ore::Type_Contract_Violation.new(expr, declared_type, type_name_to_string(member_value))
+					raise Lost::Type_Contract_Violation.new(expr, declared_type, type_name_to_string(member_value))
 				end
 			end
 		end
@@ -1935,7 +1935,7 @@ module Ore
 			when ::TrueClass, ::FalseClass
 				['Bool']
 			else
-				if value.is_a?(Ore::Type) && value.types && !value.types.empty?
+				if value.is_a?(Lost::Type) && value.types && !value.types.empty?
 					value.types.to_a
 				else
 					[value.name]
@@ -1969,7 +1969,7 @@ module Ore
 		def structured_variants_for base_name, current_scope_only: false
 			scopes = current_scope_only ? [stack.last] : stack.reverse_each
 			scopes.each do |scope|
-				# `stack` can briefly hold non-Scope receivers during dot-access (e.g. Ore::Range).
+				# `stack` can briefly hold non-Scope receivers during dot-access (e.g. Lost::Range).
 				next unless scope.respond_to? :structured_type_variants
 				list = scope.structured_type_variants.fetch(base_name, [])
 				return list unless list.empty?
@@ -1982,14 +1982,14 @@ module Ore
 			global.structured_type_variants.values.flatten
 		end
 
-		# For Ore::Database#proxy_create_table: finds the Table-composed type declared with this exact schema, if any, so the created table can be tagged with the model's real identity. Nil if none matches.
+		# For Lost::Database#proxy_create_table: finds the Table-composed type declared with this exact schema, if any, so the created table can be tagged with the model's real identity. Nil if none matches.
 		def find_table_type_for_schema schema
 			all_structured_type_variants.find do |variant|
 				variant.types.include?('Table') && variant.structure_declaration&.structure_declaration_equal?(schema)
 			end
 		end
 
-		# Searches the full scope stack (innermost to outermost) for `key`, the same way a bare identifier resolves via #scope_for_identifier -- checking only `stack.last` would miss a type declared in an outer/global scope while evaluating from inside a nested context (e.g. a type's own declaration body during composition). This returns an Ore type. `excluding:` skips scopes of that class -- used by #find_operator_overload to keep looking past a currently-executing Type/Instance body, since merely being on the stack doesn't mean the *current* operands belong to it (Instance < Type, so excluding: Ore::Type skips both).
+		# Searches the full scope stack (innermost to outermost) for `key`, the same way a bare identifier resolves via #scope_for_identifier -- checking only `stack.last` would miss a type declared in an outer/global scope while evaluating from inside a nested context (e.g. a type's own declaration body during composition). This returns an Lost type. `excluding:` skips scopes of that class -- used by #find_operator_overload to keep looking past a currently-executing Type/Instance body, since merely being on the stack doesn't mean the *current* operands belong to it (Instance < Type, so excluding: Lost::Type skips both).
 		def find_in_stack key, excluding: nil
 			stack.reverse_each do |scope|
 				next if excluding && scope.is_a?(excluding)
@@ -1998,7 +1998,7 @@ module Ore
 			nil
 		end
 
-		# Makes `.structure` readable via Ore dot-access on a Type, Instance, or type reference, and marks it static so it's also readable straight off a bare Type (not just an instance). Only adds the declaration when this particular one actually has a structure, so plain unstructured types don't pick up a stray `structure` member.
+		# Makes `.structure` readable via Lost dot-access on a Type, Instance, or type reference, and marks it static so it's also readable straight off a bare Type (not just an instance). Only adds the declaration when this particular one actually has a structure, so plain unstructured types don't pick up a stray `structure` member.
 		def declare_structure scope
 			return unless scope.structure_instance
 
@@ -2007,16 +2007,16 @@ module Ore
 		end
 
 		#
-		# Ore::Type_Expr is converted to Ore::Type in #interp_type.
-		# Ore::Instance inherits Ore::Type's @name and @types.
+		# Lost::Type_Expr is converted to Lost::Type in #interp_type.
+		# Lost::Instance inherits Lost::Type's @name and @types.
 		#
-		#     (See types.rb for Ore::Type and Ore::Instance declarations)
-		#     (See expressions.rb for Ore::Type_Expr declaration)
+		#     (See types.rb for Lost::Type and Lost::Instance declarations)
+		#     (See expressions.rb for Lost::Type_Expr declaration)
 		#
 		# - Push instance onto stack
 		# - Interpret type.expressions so the declarations are made on the instance
 		# - Keep instance on the stack
-		# - For each Ore::Func declared on instance, set `func.enclosing_scope = instance`
+		# - For each Lost::Func declared on instance, set `func.enclosing_scope = instance`
 		# - Interpret type[:new], the initializer
 		# - Delete :new from instance, inheritd from type, not needed on the instance
 		#
@@ -2030,7 +2030,7 @@ module Ore
 							# Skip static declarations - they were already executed during type definition and shouldn't be re-executed for each instance
 							next if static_var_declaration_expr? expr
 
-							if expr.is_a?(Ore::Func_Expr) && expr.name.is_a?(Ore::Identifier_Expr) &&
+							if expr.is_a?(Lost::Func_Expr) && expr.name.is_a?(Lost::Identifier_Expr) &&
 							   expr.name.scope_operator&.value == '../'
 								next
 							end
@@ -2050,7 +2050,7 @@ module Ore
 			end
 
 			instance.declarations.each do |key, decl|
-				next unless decl.is_a? Ore::Func
+				next unless decl.is_a? Lost::Func
 
 				cloned                     = decl.dup
 				cloned.enclosing_scope     = instance
@@ -2058,16 +2058,16 @@ module Ore
 			end
 		end
 
-		# Builds the raw instance for #interp_type_call: backed by its Ore:: Ruby class when one exists, linked to its type, struct bound, and the type's body run on it. `new{;}` is invoked afterward by #interp_type_call itself.
+		# Builds the raw instance for #interp_type_call: backed by its Lost:: Ruby class when one exists, linked to its type, struct bound, and the type's body run on it. `new{;}` is invoked afterward by #interp_type_call itself.
 		def build_instance_of_type type, expr
 			ruby_class = find_ruby_class_for_type type
-			instance   = ruby_class ? ruby_class.new : Ore::Instance.new(type.name)
+			instance   = ruby_class ? ruby_class.new : Lost::Instance.new(type.name)
 
-			# `.name =`/`.types =` are Ruby attr writes only -- for a composed type sharing a built-in's Ruby class (e.g. `Tasks | Table {}` -> Ore::Table), the `declarations[...]` writes below are also needed or an Ore-level `.name`/`.types` dot-read stays stuck on the backing class's own values.
+			# `.name =`/`.types =` are Ruby attr writes only -- for a composed type sharing a built-in's Ruby class (e.g. `Tasks | Table {}` -> Lost::Table), the `declarations[...]` writes below are also needed or an Lost-level `.name`/`.types` dot-read stays stuck on the backing class's own values.
 			instance.name                  = type.name
 			instance.declarations['name']  = type.name
 			instance.types                 = type.types
-			instance.declarations['types'] = wrap_ore_array type.types.to_a
+			instance.declarations['types'] = wrap_lost_array type.types.to_a
 			instance.enclosing_scope       = type
 			instance.expressions           = type.expressions
 
@@ -2090,7 +2090,7 @@ module Ore
 				interp_func_body func_new, expr
 			elsif expr.arguments.count > 0
 				# No initializer was declared so we have nowhere to pass the arguments
-				raise Ore::Arguments_Given_But_Not_Expected.new(expr)
+				raise Lost::Arguments_Given_But_Not_Expected.new(expr)
 			end
 
 			instance.delete :new
@@ -2115,7 +2115,7 @@ module Ore
 		end
 
 		def interp_func expr
-			func                 = Ore::Func.new expr.lexeme
+			func                 = Lost::Func.new expr.lexeme
 			func.name            = expr.lexeme
 			func.enclosing_scope = stack.last
 			func.expressions     = expr.expressions
@@ -2123,7 +2123,7 @@ module Ore
 			param_types          = expr.parameters.map do |p|
 				p.type&.value
 			end
-			func.func_signature  = Ore::Func_Signature.new(param_types, expr.type&.value)
+			func.func_signature  = Lost::Func_Signature.new(param_types, expr.type&.value)
 
 			if func.name&.value
 				stack.last.declare func.name.value, func
@@ -2137,7 +2137,7 @@ module Ore
 		def interp_func_body func, expr, arg_values: nil
 			# A bare Capitalized/UPPERCASE param (`f { ABC; ABC }`) parses as a signature-literal-style bare type (`param.type` set, `param.name` left nil, see #parse_func) rather than a named param -- real function params always start lowercase. Every other param-binding path below assumes `.name` is always present, so this is checked once, up front, with a real error instead of a raw NoMethodError the first time something reads `param.name.value`.
 			nameless_param = func.parameters.find { |param| param.name.nil? }
-			raise Ore::Invalid_Parameter_Name.new(expr, nameless_param.type.value) if nameless_param
+			raise Lost::Invalid_Parameter_Name.new(expr, nameless_param.type.value) if nameless_param
 
 			# note; Evaluate arguments in caller's scope (before pushing function scopes). A labeled argument (`to: someone`) parses as a plain `:` Infix_Expr, and a named argument (`to := someone`) as a plain `:=` Infix_Expr (same production named struct members use) -- #classify_argument unwraps either rather than letting #interpret try to resolve `to` as an identifier and raise Undeclared_Identifier.
 			# A caller that already evaluated the operands (operator-overload dispatch in #interp_infix) passes them via arg_values so their side effects don't run a second time; labels/named args only exist in real call syntax, so neither applies there.
@@ -2152,12 +2152,12 @@ module Ore
 
 					# Named arguments must come last -- once you switch to naming arguments, every argument after that has to be named too. A positional argument (bare or labeled) can never follow one.
 					if seen_named && kind != :named
-						raise Ore::Positional_Argument_After_Named.new(expr)
+						raise Lost::Positional_Argument_After_Named.new(expr)
 					end
 
 					if kind == :named
 						seen_named = true
-						raise Ore::Duplicate_Named_Argument.new(expr, name_or_label) if named_args.key? name_or_label
+						raise Lost::Duplicate_Named_Argument.new(expr, name_or_label) if named_args.key? name_or_label
 						named_args[name_or_label] = interpret value_expr
 					else
 						arg_labels << (kind == :labeled ? name_or_label : nil)
@@ -2169,7 +2169,7 @@ module Ore
 			end
 
 			# note: `func` is the single, shared Func object registered when the function was declared. Pushing it directly as the call frame (as this used to do) meant every invocation declared its params onto that same shared object, so recursive/repeated calls stomped on each other's param values. Each call gets its own fresh scope instead.
-			call_scope                 = Ore::Func.new func.name
+			call_scope                 = Lost::Func.new func.name
 			call_scope.expressions     = func.expressions
 			call_scope.parameters      = func.parameters
 			call_scope.enclosing_scope = func.enclosing_scope
@@ -2177,7 +2177,7 @@ module Ore
 
 			# Push type scope if calling an instance method (instance methods need access to type-level declarations)
 			# Also push the type's enclosing_scope so sibling types can be found
-			if func.enclosing_scope.is_a?(Ore::Instance) && func.enclosing_scope.enclosing_scope
+			if func.enclosing_scope.is_a?(Lost::Instance) && func.enclosing_scope.enclosing_scope
 				type = func.enclosing_scope.enclosing_scope
 				push_scope type.enclosing_scope if type.enclosing_scope # Push the Type's enclosing scope
 				push_scope type # Push the Type
@@ -2189,11 +2189,11 @@ module Ore
 			unless named_args.empty?
 				declared_names = func.parameters.map { |param| param.name.value }
 				unknown_name   = named_args.keys.find { |name| !declared_names.include? name }
-				raise Ore::Unknown_Named_Argument.new(expr, unknown_name) if unknown_name
+				raise Lost::Unknown_Named_Argument.new(expr, unknown_name) if unknown_name
 			end
 
 			if func.parameters.empty? && arg_values.any?
-				raise Ore::Arguments_Given_But_Not_Expected.new(expr)
+				raise Lost::Arguments_Given_But_Not_Expected.new(expr)
 			end
 
 			func.parameters.each_with_index do |param, i|
@@ -2202,7 +2202,7 @@ module Ore
 				has_named      = named_args.key? name_key
 
 				if has_positional && has_named
-					raise Ore::Argument_Given_By_Name_And_Position.new(expr, name_key)
+					raise Lost::Argument_Given_By_Name_And_Position.new(expr, name_key)
 				end
 
 				value = if has_named
@@ -2212,20 +2212,20 @@ module Ore
 				elsif param.default
 					interpret param.default
 				else
-					raise Ore::Missing_Argument.new(expr)
+					raise Lost::Missing_Argument.new(expr)
 				end
 
 				# Labels are positional, not a lookup key -- a labeled argument at position `i` must match that position's declared label (Swift/ObjC-style), never used to reorder arguments. A bare, unlabeled argument is always accepted regardless of whether the param declares a label -- labels are opt-in at the call site, not mandatory. Named arguments bypass label-checking entirely -- they're matched by declared name, not position, so there's no positional label to compare against.
 				supplied_label = arg_labels[i]
 				if !has_named && supplied_label && supplied_label != param.label&.value
-					raise Ore::Argument_Label_Mismatch.new(expr, param.label&.value, supplied_label)
+					raise Lost::Argument_Label_Mismatch.new(expr, param.label&.value, supplied_label)
 				end
 
 				check_struct_type_contract param, value, expr if param.type_struct
 
 				stack.last.declare param.name.value, value
 
-				if value.is_a? Ore::Type
+				if value.is_a? Lost::Type
 					if param.respond_to?(:add_to_readable) && param.add_to_readable
 						call_scope.add_readable_scope value
 					elsif param.respond_to?(:add_to_readable) && param.add_to_writable
@@ -2237,31 +2237,31 @@ module Ore
 
 			body = call_scope.expressions
 			if call_scope.name == 'assert'
-				raise Ore::Assert_Triggered.new(expr) unless interpret(body.first) == true # Just to be explicit.
+				raise Lost::Assert_Triggered.new(expr) unless interpret(body.first) == true # Just to be explicit.
 			end
 
 			result = nil
 			body.compact.each do |e|
 				result = interpret e
-				break if result.is_a? Ore::Return
+				break if result.is_a? Lost::Return
 			end
 
-			Ore.assert pop_scope == call_scope
-			Ore.assert pop_scope == func.enclosing_scope
+			Lost.assert pop_scope == call_scope
+			Lost.assert pop_scope == func.enclosing_scope
 
-			if func.enclosing_scope.is_a?(Ore::Instance) && func.enclosing_scope.enclosing_scope
+			if func.enclosing_scope.is_a?(Lost::Instance) && func.enclosing_scope.enclosing_scope
 				type = func.enclosing_scope.enclosing_scope
-				Ore.assert pop_scope == type
+				Lost.assert pop_scope == type
 				pop_scope if type.enclosing_scope # Pop the Type's enclosing scope
 			end
 
-			return_value = result.is_a?(Ore::Return) ? result.value : result
+			return_value = result.is_a?(Lost::Return) ? result.value : result
 
 			if func.func_signature.return_type
 				# Compositional, not exact-name -- a `-> Table` returning a `Task`-composed value is a safe covariant return.
 				actual_type = type_name_to_string return_value
 				unless composed_types_for(return_value).include? func.func_signature.return_type
-					raise Ore::Type_Contract_Violation.new(expr, func.func_signature.return_type, actual_type)
+					raise Lost::Type_Contract_Violation.new(expr, func.func_signature.return_type, actual_type)
 				end
 			end
 
@@ -2276,9 +2276,9 @@ module Ore
 		#   - anything else (positional)
 		# Returns [kind, name_or_label, value_expr] -- name_or_label is nil for :positional. Never interprets `arg`/the name-or-label side itself; that's the caller's job once it knows which expression actually holds the real value.
 		def classify_argument arg
-			if arg.is_a?(Ore::Infix_Expr) && arg.operator&.value == ':=' && arg.left.is_a?(Ore::Identifier_Expr)
+			if arg.is_a?(Lost::Infix_Expr) && arg.operator&.value == ':=' && arg.left.is_a?(Lost::Identifier_Expr)
 				[:named, arg.left.value, arg.right]
-			elsif arg.is_a?(Ore::Infix_Expr) && arg.operator&.value == ':' && arg.left.is_a?(Ore::Identifier_Expr)
+			elsif arg.is_a?(Lost::Infix_Expr) && arg.operator&.value == ':' && arg.left.is_a?(Lost::Identifier_Expr)
 				[:labeled, arg.left.value, arg.right]
 			else
 				[:positional, nil, arg]
@@ -2287,8 +2287,8 @@ module Ore
 
 		# `<name: String, age: Number>` alone is a structure-only (each named member's declared type, no real data yet; see #interp_struct). `()` is how you turn that struct into an actual instance: the call's own arguments become each member's real value, positionally, same order as declared. Goes through #build_struct like every other struct construction so a declared `Struct` type's own body/methods still run.
 		#
-		# @param struct [Ore::Struct]
-		# @param expr [Ore::Call_Expr]
+		# @param struct [Lost::Struct]
+		# @param expr [Lost::Call_Expr]
 		def interp_struct_call struct, expr
 			values   = expr.arguments.map { |arg| wrap_string_literal_value(arg, interpret(arg)) }
 			instance = build_struct struct.names, struct.type_names, struct.type_objects, values
@@ -2303,12 +2303,12 @@ module Ore
 			instance
 		end
 
-		# @param expr [Ore::Route_Expr]
-		# @return Ore::Route
+		# @param expr [Lost::Route_Expr]
+		# @return Lost::Route
 		def interp_route expr
 			func = interpret expr.expression
 
-			route                 = Ore::Route.new
+			route                 = Lost::Route.new
 			route.name            = func.name
 			route.enclosing_scope = stack.last
 			route.handler         = func
@@ -2329,7 +2329,7 @@ module Ore
 
 			# Store route in the enclosing Type's @routes if it has one (e.g., Server)
 			enclosing_type = stack.reverse.find do |scope|
-				scope.is_a? Ore::Type # note: You could have an instance on the stack, or an empty scope, whatever.
+				scope.is_a? Lost::Type # note: You could have an instance on the stack, or an empty scope, whatever.
 			end
 			if enclosing_type
 				enclosing_type.routes            ||= {}
@@ -2342,17 +2342,17 @@ module Ore
 			route
 		end
 
-		# @param route [Ore::Route] The route to execute
-		# @param req [Ore::Request] Request object to inject
-		# @param res [Ore::Response] Response object to inject
+		# @param route [Lost::Route] The route to execute
+		# @param req [Lost::Request] Request object to inject
+		# @param res [Lost::Response] Response object to inject
 		# @param url_params [Hash] Extracted URL parameters (e.g., {"id" => "123"})
-		# @param server_instance [Ore::Instance] The server instance (for accessing instance variables)
+		# @param server_instance [Lost::Instance] The server instance (for accessing instance variables)
 		# @return The result of handler execution
 		def interp_route_body route, req, res, url_params = {}, server_instance: nil
 			handler = route.handler
 			params  = handler.parameters
 
-			call_scope = Ore::Scope.new "#{handler.name || 'anonymous'}_route"
+			call_scope = Lost::Scope.new "#{handler.name || 'anonymous'}_route"
 			push_scope handler.enclosing_scope
 			push_scope server_instance if server_instance
 			push_scope call_scope
@@ -2368,7 +2368,7 @@ module Ore
 				if value.nil?
 					if route.param_names.include? param.name.value
 						# todo: I haven't triggered this yet to ensure this works.
-						raise Ore::Route_Param_Expected_But_Not_Found.new(route)
+						raise Lost::Route_Param_Expected_But_Not_Found.new(route)
 					end
 
 					# Use default value or raise
@@ -2376,7 +2376,7 @@ module Ore
 						value = interpret param.default
 					else
 						# todo: Is this reachable?
-						raise Ore::Missing_Argument.new(expr)
+						raise Lost::Missing_Argument.new(expr)
 					end
 				end
 
@@ -2389,22 +2389,22 @@ module Ore
 			body.compact.each do |expr|
 				# bug todo: Sometimes body contains `nil` when that should never be the case
 				result = interpret expr
-				break if result.is_a? Ore::Return
+				break if result.is_a? Lost::Return
 			end
 
 			if result.is_a? ::String
 				res.declarations['body'] = result
-			elsif result.is_a? Ore::Array
+			elsif result.is_a? Lost::Array
 				html = ''
 				result.values.each do |it|
 					if it.is_a? ::String
 						html += it
-					elsif it.is_a?(Ore::Instance) && it.types.include?('Dom')
+					elsif it.is_a?(Lost::Instance) && it.types.include?('Dom')
 						html += render_dom_to_html it
 					end
 				end
 				res.declarations['body'] = html
-			elsif result.is_a? Ore::Instance
+			elsif result.is_a? Lost::Instance
 				# todo: Maybe find a better class name than Dom, and add a constant for it.
 				if result.types.include? 'Dom'
 					html                     = render_dom_to_html result
@@ -2416,22 +2416,22 @@ module Ore
 
 			# Clean up scopes in reverse order
 			popped_call = pop_scope
-			Ore.assert popped_call == call_scope
+			Lost.assert popped_call == call_scope
 
 			if server_instance
 				popped_instance = pop_scope
-				Ore.assert popped_instance == server_instance
+				Lost.assert popped_instance == server_instance
 			end
 
 			popped_enclosing = pop_scope
-			Ore.assert popped_enclosing == handler.enclosing_scope
+			Lost.assert popped_enclosing == handler.enclosing_scope
 
 			result
 		end
 
 		def interp_statement expr
-			instance = Ore::Statement.new expr.expression
-			# Capture the scope this literal was built in -- see Ore::Statement's class comment.
+			instance = Lost::Statement.new expr.expression
+			# Capture the scope this literal was built in -- see Lost::Statement's class comment.
 			instance.captured_scope = stack.last
 			link_instance_to_type instance, 'Statement'
 
@@ -2445,7 +2445,7 @@ module Ore
 			instance
 		end
 
-		# Enforces use_caller_scope/memoize for an already-built Ore::Statement (#interp_call's `Ore::Statement` branch). Immediate `` `expr`() `` and backtick items in percent/array literals never build a real Statement, so they skip this entirely.
+		# Enforces use_caller_scope/memoize for an already-built Lost::Statement (#interp_call's `Lost::Statement` branch). Immediate `` `expr`() `` and backtick items in percent/array literals never build a real Statement, so they skip this entirely.
 		def invoke_statement statement
 			return statement['_memoized_value'] if statement['memoize'] && statement['_memoized']
 
@@ -2466,12 +2466,12 @@ module Ore
 			result
 		end
 
-		# @param expr [Ore::Fence_Expr]
+		# @param expr [Lost::Fence_Expr]
 		def interp_fence expr
-			Ore::Fence.new expr.value # note: Ore::Fence extends Ore::String
+			Lost::Fence.new expr.value # note: Lost::Fence extends Lost::String
 		end
 
-		# @param expr [Ore::Html_Fence_Expr]
+		# @param expr [Lost::Html_Fence_Expr]
 		def interp_html_fence expr
 			interp_string expr.body
 		end
@@ -2480,14 +2480,14 @@ module Ore
 			# These are interpreted sequentially, so there are no precedence rules. I think that'll be better in the long term because there's no magic behind their evaluation. You can ensure the correct outcome by using these operators to form the types you need.
 
 			right      = maybe_instance interpret expr.identifier
-			unless right.is_a? Ore::Scope
-				raise Ore::Invalid_Composition_With_A_Non_Scope_type.new(right)
+			unless right.is_a? Lost::Scope
+				raise Lost::Invalid_Composition_With_A_Non_Scope_type.new(right)
 			end
 			curr_scope = stack.last
 
 			case expr.operator.value
 			when '|'
-				# Union with Ore::Type
+				# Union with Lost::Type
 
 				right.declarations.each do |key, value|
 					curr_scope[key] = value unless curr_scope.has?(key)
@@ -2500,7 +2500,7 @@ module Ore
 				curr_scope.types += right.types
 				curr_scope.types = curr_scope.types.uniq
 			when '~'
-				# Removal of Ore::Type
+				# Removal of Lost::Type
 
 				operand_keys_to_remove = right.declarations.keys
 
@@ -2553,34 +2553,34 @@ module Ore
 					curr_scope[key] = right[key]
 				end
 			else
-				raise Ore::Invalid_Composition_Operator.new(expr)
+				raise Lost::Invalid_Composition_Operator.new(expr)
 			end
 		end
 
-		# @param for_loop_expr [Ore::For_Loop_Expr]
+		# @param for_loop_expr [Lost::For_Loop_Expr]
 		def interp_for_loop for_loop_expr
 			collection = interpret for_loop_expr.collection
 			stride     = interpret(for_loop_expr.stride) if for_loop_expr.stride
 
-			Ore.assert stride.nil? || stride.is_a?(Integer), "Stride must be an integer" if stride
+			Lost.assert stride.nil? || stride.is_a?(Integer), "Stride must be an integer" if stride
 
-			loop_type = for_loop_expr.type&.value || 'each' # one of Ore::FOR_VERBS
+			loop_type = for_loop_expr.type&.value || 'each' # one of Lost::FOR_VERBS
 			result    = nil
 
 			values = case collection
 
-			when Ore::Dictionary
+			when Lost::Dictionary
 				collection.hash
-			when Ore::Array
+			when Lost::Array
 				collection.values
 
-			when Ore::Range
+			when Lost::Range
 				collection
-			when Ore::String
+			when Lost::String
 				collection.value.chars
 
-			when Ore::Struct
-				# `.members` (an `Ore::Array` of `Ore::Member`) is only populated when the opt-in `ore/struct.ore` layer is loaded (see #build_struct) -- a bare Struct with no matching declared `Struct` type has nothing to iterate.
+			when Lost::Struct
+				# `.members` (an `Lost::Array` of `Lost::Member`) is only populated when the opt-in `lost/struct.tape` layer is loaded (see #build_struct) -- a bare Struct with no matching declared `Struct` type has nothing to iterate.
 				collection.declarations['members']&.values || []
 
 			else
@@ -2609,14 +2609,14 @@ module Ore
 				begin
 					scope.declare 'it', element
 					scope.declare 'at', index
-					if collection.is_a? Ore::Dictionary
+					if collection.is_a? Lost::Dictionary
 						scope.declare 'value', element
 						scope.declare 'key', index
 					end
 					catch :skip do
 						for_loop_expr.body.each do |e|
 							body_result = interpret e
-							throw(:stop, body_result) if body_result.is_a? Ore::Return
+							throw(:stop, body_result) if body_result.is_a? Lost::Return
 						end
 					end
 				ensure
@@ -2628,16 +2628,16 @@ module Ore
 			# Initialize collection variables outside catch block so they persist after stop
 			collected = []
 			count_val = 0
-			elements  = if stride && !collection.is_a?(Ore::Dictionary)
-				# `each_slice` yields raw Ruby Arrays -- wrap each chunk as a real Ore::Array so `it` behaves like any other Ore value (`==`, `.push`, etc.), not just dot-index access (`it.0`), which already worked because #interp_dot_infix calls #maybe_instance on its receiver regardless.
-				values.each_slice(stride).map { |chunk| Ore::Array.new(chunk) }.each_with_index
+			elements  = if stride && !collection.is_a?(Lost::Dictionary)
+				# `each_slice` yields raw Ruby Arrays -- wrap each chunk as a real Lost::Array so `it` behaves like any other Lost value (`==`, `.push`, etc.), not just dot-index access (`it.0`), which already worked because #interp_dot_infix calls #maybe_instance on its receiver regardless.
+				values.each_slice(stride).map { |chunk| Lost::Array.new(chunk) }.each_with_index
 			else
 				values.each_with_index
 			end
 
 			stop_value = catch :stop do
 				elements.each do |element, index|
-					if collection.is_a? Ore::Dictionary
+					if collection.is_a? Lost::Dictionary
 						new_it  = element[1]
 						new_at  = element[0]
 						element = new_it
@@ -2663,12 +2663,12 @@ module Ore
 			# Assign results after catch block so partial results are preserved on stop
 			case loop_type
 			when 'map', 'select', 'reject'
-				result = Ore::Array.new(collected)
+				result = Lost::Array.new(collected)
 			when 'count'
 				result = count_val
 			end
 
-			result     = stop_value if stop_value.is_a? Ore::Return
+			result     = stop_value if stop_value.is_a? Lost::Return
 
 			result
 		end
@@ -2709,7 +2709,7 @@ module Ore
 					end
 				end
 
-				if expr.when_false.is_a? Ore::Conditional_Expr
+				if expr.when_false.is_a? Lost::Conditional_Expr
 					result = interp_conditional expr.when_false
 				elsif expr.when_false.is_a? ::Array
 					expr.when_false.each do |expr|
@@ -2726,7 +2726,7 @@ module Ore
 				falsy_body  = expr.type.value == 'unless' ? expr.when_true : expr.when_false
 				body        = truthy?(condition) ? truthy_body : falsy_body
 
-				if body.is_a? Ore::Conditional_Expr
+				if body.is_a? Lost::Conditional_Expr
 					interp_conditional body
 				else
 					body.each.inject(nil) do |result, expr|
@@ -2740,7 +2740,7 @@ module Ore
 			case expr.name.value
 			when 'declare' # ident: String, value, type
 				interpreted_expr = interpret expr.expression
-				if interpreted_expr.is_a? Ore::Struct
+				if interpreted_expr.is_a? Lost::Struct
 					interpreted_expr.members.values.each do |member|
 						next unless member.name
 						stack.last.declare member.name, member.value, member.type
@@ -2761,7 +2761,7 @@ module Ore
 					# name, value, type
 					stack.last.declare data[0], data[1], data[2]
 				else
-					raise Ore::Invalid_Directive_Usage.new(expr)
+					raise Lost::Invalid_Directive_Usage.new(expr)
 				end
 			when 'puts'
 				value = expr.expression ? interpret(expr.expression) : nil
@@ -2773,7 +2773,7 @@ module Ore
 				condition = interpret expr.expression
 				unless truthy? condition
 					message = interpret expr.message if expr.message
-					raise Ore::Assert_Triggered.new(expr, message)
+					raise Lost::Assert_Triggered.new(expr, message)
 				end
 				condition
 
@@ -2781,15 +2781,15 @@ module Ore
 				condition = interpret expr.expression
 				if truthy? condition
 					message = interpret expr.message if expr.message
-					raise Ore::Refute_Triggered.new(expr, message)
+					raise Lost::Refute_Triggered.new(expr, message)
 				end
 				condition
 
 			when 'ruby'
 				# The @ruby directive evaluates to the result of calling the ruby Ruby method
 				func_scope = stack.last
-				unless func_scope.is_a? Ore::Func
-					raise Ore::Invalid_Ruby_Proxy_Directive_Usage.new func_scope
+				unless func_scope.is_a? Lost::Func
+					raise Lost::Invalid_Ruby_Proxy_Directive_Usage.new func_scope
 				end
 
 				func_name        = func_scope.name
@@ -2797,7 +2797,7 @@ module Ore
 				instance_or_type = func_scope.enclosing_scope # An instance or type that should have the ruby method declared
 
 				# note: For static proxies on Types (like Record.find), create a temporary instance of the Ruby class. This allows the proxy method to access the Type's declarations.
-				target = if instance_or_type.instance_of?(Ore::Type) && instance_or_type.name
+				target = if instance_or_type.instance_of?(Lost::Type) && instance_or_type.name
 					ruby_class = find_ruby_class_for_type instance_or_type
 					if ruby_class
 						temp_instance              = ruby_class.new instance_or_type.name
@@ -2812,13 +2812,13 @@ module Ore
 				end
 
 				unless target.respond_to? proxy_method
-					raise Ore::Missing_Ruby_Proxy_Declaration.new expr
+					raise Lost::Missing_Ruby_Proxy_Declaration.new expr
 				end
 
 				result = target.send proxy_method, *func_scope.arguments
 
 				# Auto-link instances created by proxy methods to their global types
-				if result.is_a?(Ore::Instance) && result.enclosing_scope.nil?
+				if result.is_a?(Lost::Instance) && result.enclosing_scope.nil?
 					type_name = result.class.name.split('::').last
 					link_instance_to_type result, type_name
 				end
@@ -2827,11 +2827,11 @@ module Ore
 
 			when 'start_server'
 				server = interpret expr.expression
-				unless server.is_a? Ore::Instance
-					raise Ore::Invalid_Start_Directive_Argument.new(expr)
+				unless server.is_a? Lost::Instance
+					raise Lost::Invalid_Start_Directive_Argument.new(expr)
 				end
 
-				server.port   = Integer(server.get(:port) || Ore::Server::DEFAULT_PORT)
+				server.port   = Integer(server.get(:port) || Lost::Server::DEFAULT_PORT)
 				server.routes = collect_routes_from_instance server
 				servers << server
 
@@ -2840,8 +2840,8 @@ module Ore
 
 			when 'stop_server'
 				server = interpret expr.expression
-				unless server.is_a? Ore::Instance
-					raise Ore::Invalid_Start_Directive_Argument.new(expr)
+				unless server.is_a? Lost::Instance
+					raise Lost::Invalid_Start_Directive_Argument.new(expr)
 				end
 
 				stop_server server
@@ -2854,54 +2854,54 @@ module Ore
 
 			when 'push_scope'
 				# Target must be a bare identifier naming something already bound -- a literal or constructor call builds a fresh object every evaluation, so #pop_scope's identity assert could never match it later (Scope#get returns the same object for repeat lookups of an existing Type/Instance).
-				raise Ore::Invalid_Scope_Directive_Argument.new(expr.expression) unless expr.expression.is_a?(Ore::Identifier_Expr)
+				raise Lost::Invalid_Scope_Directive_Argument.new(expr.expression) unless expr.expression.is_a?(Lost::Identifier_Expr)
 
 				if target = maybe_instance(interpret expr.expression)
 					# Only Type/Instance makes sense to reopen -- a Func is duped on every lookup (#interp_identifier's enclosing_scope rebind), so it could never satisfy the identity check either.
-					raise Ore::Invalid_Scope_Directive_Argument.new(expr.expression) unless target.is_a?(Ore::Type)
+					raise Lost::Invalid_Scope_Directive_Argument.new(expr.expression) unless target.is_a?(Lost::Type)
 					push_scope target
 				else
-					raise Ore::Invalid_Directive_Usage.new(expr)
+					raise Lost::Invalid_Directive_Usage.new(expr)
 				end
 
 			when 'pop_scope'
-				raise Ore::Invalid_Directive_Usage.new(expr) unless expr.expression
-				raise Ore::Invalid_Scope_Directive_Argument.new(expr.expression) unless expr.expression.is_a?(Ore::Identifier_Expr)
+				raise Lost::Invalid_Directive_Usage.new(expr) unless expr.expression
+				raise Lost::Invalid_Scope_Directive_Argument.new(expr.expression) unless expr.expression.is_a?(Lost::Identifier_Expr)
 
 				scope_to_pop = maybe_instance interpret expr.expression
-				raise Ore::Invalid_Scope_Directive_Argument.new(expr.expression) unless scope_to_pop.is_a?(Ore::Type)
+				raise Lost::Invalid_Scope_Directive_Argument.new(expr.expression) unless scope_to_pop.is_a?(Lost::Type)
 
 				# note; these are by identity, so you cannot interchange an instance of a type and a reference to its type. push 1 cannot pair with pop Number
-				Ore.assert pop_scope == scope_to_pop
+				Lost.assert pop_scope == scope_to_pop
 				scope_to_pop
 
 			when 'add_readable_scope', 'add_readable', 'readable'
 				target = maybe_instance interpret(expr.expression)
 				if target
-					raise Ore::Invalid_Scope_Directive_Argument.new(expr.expression) unless target.is_a?(Ore::Scope)
+					raise Lost::Invalid_Scope_Directive_Argument.new(expr.expression) unless target.is_a?(Lost::Scope)
 					stack.last.add_readable_scope target
 				else
-					raise Ore::Invalid_Directive_Usage.new(expr)
+					raise Lost::Invalid_Directive_Usage.new(expr)
 				end
 
 			when 'add_writable_scope', 'add_writable', 'writable'
 				target = maybe_instance interpret(expr.expression)
 				if target
-					raise Ore::Invalid_Scope_Directive_Argument.new(expr.expression) unless target.is_a?(Ore::Scope)
+					raise Lost::Invalid_Scope_Directive_Argument.new(expr.expression) unless target.is_a?(Lost::Scope)
 					stack.last.add_writable_scope target
 				else
-					raise Ore::Invalid_Directive_Usage.new(expr)
+					raise Lost::Invalid_Directive_Usage.new(expr)
 				end
 
 			when 'remove_readable_scope', 'remove_readable'
-				raise Ore::Invalid_Directive_Usage.new(expr) unless expr.expression
+				raise Lost::Invalid_Directive_Usage.new(expr) unless expr.expression
 				scope_to_remove = maybe_instance interpret expr.expression
 
 				stack.last.remove_readable_scope scope_to_remove
 				scope_to_remove
 
 			when 'remove_writable_scope', 'remove_writable'
-				raise Ore::Invalid_Directive_Usage.new(expr) unless expr.expression
+				raise Lost::Invalid_Directive_Usage.new(expr) unless expr.expression
 				scope_to_remove = maybe_instance interpret expr.expression
 
 				stack.last.remove_writable_scope scope_to_remove
@@ -2917,29 +2917,29 @@ module Ore
 				load_file_into_scope filepath, stack.last
 
 			else
-				raise Ore::Invalid_Directive_Usage.new(expr)
+				raise Lost::Invalid_Directive_Usage.new(expr)
 			end
 		end
 
 		def interp_subscript expr
 			if expr.expression.expressions.count > 1
-				raise Ore::Too_Many_Subscript_Expressions.new(expr.expression)
+				raise Lost::Too_Many_Subscript_Expressions.new(expr.expression)
 			end
 
 			receiver = maybe_instance interpret expr.receiver
 
 			case receiver
-			when Ore::Dictionary, Ore::Array
+			when Lost::Dictionary, Lost::Array
 				key = interpret expr.expression.expressions.first
 				receiver.proxy_get key
-			when Ore::Nil
+			when Lost::Nil
 				# todo: What should happen when subscripting nil? A warning of some kind maybe?
 				nil
-			when Ore::String
+			when Lost::String
 				index = interpret expr.expression.expressions.first
 				receiver.value[index]
 			else
-				raise Ore::Invalid_Subscript_Receiver.new(expr.receiver)
+				raise Lost::Invalid_Subscript_Receiver.new(expr.receiver)
 			end
 		end
 
@@ -2950,13 +2950,13 @@ module Ore
 			instance
 		end
 
-		# Builds (but doesn't declare) a real Ore::Enum for an Enum_Expr -- shared by #interp_enum and nested enum members (#build_enum_member).
+		# Builds (but doesn't declare) a real Lost::Enum for an Enum_Expr -- shared by #interp_enum and nested enum members (#build_enum_member).
 		def build_enum expr
 			# Named at construction, not via `.name =` after -- a later attr write never touches @declarations.
-			instance = Ore::Enum.new expr.name.value
+			instance = Lost::Enum.new expr.name.value
 			link_instance_to_type instance, 'Enum'
 
-			# Skips normal Type-construction, so Enum's own Ore-level body (keys/values/types/count, @operator ==) is run by hand.
+			# Skips normal Type-construction, so Enum's own Lost-level body (keys/values/types/count, @operator ==) is run by hand.
 			type = instance.enclosing_scope
 			if type
 				instance.expressions = type.expressions
@@ -2973,17 +2973,17 @@ module Ore
 			end
 
 			instance.declarations['type']   = expr.type ? find_in_stack(expr.type.value) : nil
-			instance.declarations['keys']   = wrap_ore_array keys
-			instance.declarations['values'] = wrap_ore_array values
-			instance.declarations['types']  = wrap_ore_array types
+			instance.declarations['keys']   = wrap_lost_array keys
+			instance.declarations['values'] = wrap_lost_array values
+			instance.declarations['types']  = wrap_lost_array types
 			instance.declarations['count']  = keys.length
 
 			instance
 		end
 
-		# Links a raw Ore::Array to the real Array type so its own Ore-level methods (to_s{;}, etc.) are reachable. Used by #build_enum and #build_instance_of_type.
-		def wrap_ore_array list
-			array = Ore::Array.new list
+		# Links a raw Lost::Array to the real Array type so its own Lost-level methods (to_s{;}, etc.) are reachable. Used by #build_enum and #build_instance_of_type.
+		def wrap_lost_array list
+			array = Lost::Array.new list
 			link_instance_to_type array, 'Array'
 			array
 		end
@@ -2991,16 +2991,16 @@ module Ore
 		# Returns [name, value, type] for one enum member, per #parse_enum_expr's five member forms (see CLAUDE.md). Bare/typed-only members get a Symbol matching their own name; `:=`/`: Type =` members use their real value; nested enums recurse into #build_enum.
 		def build_enum_member member_expr
 			case member_expr
-			when Ore::Enum_Expr
+			when Lost::Enum_Expr
 				[member_expr.name.value, build_enum(member_expr), nil]
-			when Ore::Nil_Init_Expr
+			when Lost::Nil_Init_Expr
 				name = member_expr.left.value
 				[name, name.to_sym, nil]
-			when Ore::Identifier_Expr
+			when Lost::Identifier_Expr
 				name        = member_expr.value
 				member_type = member_expr.type ? find_in_stack(member_expr.type.value) : nil
 				[name, name.to_sym, member_type]
-			when Ore::Infix_Expr
+			when Lost::Infix_Expr
 				name        = member_expr.left.value
 				member_type = member_expr.left.type ? find_in_stack(member_expr.left.type.value) : nil
 				[name, interpret(member_expr.right), member_type]
@@ -3017,7 +3017,7 @@ module Ore
 				if expr.names[i]
 					# note; Named member (e.g. `some_string: String`), the member's own identifier (`some_string`) is just a label, not something to look up; resolve its declared type instead. Named members are never spread: the name is always its namespace (`.structure.columns`), even when the value is itself a Struct.
 					if member.type
-						type_ref        = Ore::Identifier_Expr.new
+						type_ref        = Lost::Identifier_Expr.new
 						type_ref.lexeme = member.type
 						types << interpret(type_ref)
 						if member.member_default
@@ -3036,7 +3036,7 @@ module Ore
 				else
 					value = interpret member
 
-					if single_member && value.is_a?(Ore::Struct)
+					if single_member && value.is_a?(Lost::Struct)
 						types.concat value.type_objects
 						values.concat value.values
 						names.concat value.names
@@ -3053,18 +3053,18 @@ module Ore
 			build_struct names, type_names, types, values
 		end
 
-		# A value built directly from a string literal gets wrapped into a real Ore::String carrying the literal's own `quotation_style`, instead of staying the bare Ruby string #interp_string normally returns. Struct/Member's to_s{;} (ore/member.ore) and Array/Dictionary/Tuple's to_s{;} (ore/array.ore, ore/dictionary.ore, ore/preload.ore) read `.quotation_style` straight off the value to decide how to quote it for display.
+		# A value built directly from a string literal gets wrapped into a real Lost::String carrying the literal's own `quotation_style`, instead of staying the bare Ruby string #interp_string normally returns. Struct/Member's to_s{;} (lost/member.tape) and Array/Dictionary/Tuple's to_s{;} (lost/array.tape, lost/dictionary.tape, lost/preload.tape) read `.quotation_style` straight off the value to decide how to quote it for display.
 		def wrap_string_literal_value source_expr, value
-			return value unless source_expr.is_a?(Ore::String_Expr) && value.is_a?(::String)
-			finish_intrinsic_instance Ore::String.new(value, source_expr.quotation_style), 'String'
+			return value unless source_expr.is_a?(Lost::String_Expr) && value.is_a?(::String)
+			finish_intrinsic_instance Lost::String.new(value, source_expr.quotation_style), 'String'
 		end
 
-		# The low-level Ore::Struct object is always built first and exactly the same way regardless of `struct_type` -- it's what #type_objects/etc. read from, and every existing member-matching call site depends on it being real.
+		# The low-level Lost::Struct object is always built first and exactly the same way regardless of `struct_type` -- it's what #type_objects/etc. read from, and every existing member-matching call site depends on it being real.
 		def build_struct names, type_names, types, values
 			struct_type = find_in_stack 'Struct'
-			struct      = Ore::Struct.new names, type_names, types, values
+			struct      = Lost::Struct.new names, type_names, types, values
 
-			unless struct_type.is_a?(Ore::Type)
+			unless struct_type.is_a?(Lost::Type)
 				link_instance_to_type struct, 'Struct'
 				return struct
 			end
@@ -3076,21 +3076,21 @@ module Ore
 
 			zipped = %w(names type_names types values).zip [names, type_names, types, values]
 			zipped.each do |key, list|
-				array = Ore::Array.new list
+				array = Lost::Array.new list
 				link_instance_to_type array, 'Array'
 				struct.declarations[key] = array
 			end
 
 			member_type = find_in_stack 'Member'
-			if member_type.is_a?(Ore::Type) && struct.has?('members')
+			if member_type.is_a?(Lost::Type) && struct.has?('members')
 				members = names.each_index.map do |i|
 					member_display_type = names[i] ? types[i] : find_in_stack(type_names[i])
-					member              = Ore::Member.new names[i], member_display_type, values[i]
+					member              = Lost::Member.new names[i], member_display_type, values[i]
 					link_instance_to_type member, 'Member'
 					member
 				end
 
-				members_array = Ore::Array.new members
+				members_array = Lost::Array.new members
 				link_instance_to_type members_array, 'Array'
 				struct.members                 = members_array
 				struct.declarations['members'] = members_array
@@ -3099,7 +3099,7 @@ module Ore
 			struct
 		end
 
-		# @param expr [Ore::Operator_Overload_Expr]
+		# @param expr [Lost::Operator_Overload_Expr]
 		def interp_operator_overload expr
 			# expr attrs:  func_expr(Func_Expr)  fixity(Lexeme)  precedence(Int)  value(String)
 			# This is setting up operators to be treated as regular functions, whose identifier is its operator symbols without spaces.
@@ -3110,83 +3110,83 @@ module Ore
 		# note: This is the entry point for all expressions. This is called in a loop until all expressions are evaluated, or the program crashes.
 		def interpret expr
 			case expr
-			when Ore::Number_Expr, Ore::Symbol_Expr
+			when Lost::Number_Expr, Lost::Symbol_Expr
 				expr.value
 
-			when Ore::Identifier_Expr
+			when Lost::Identifier_Expr
 				interp_identifier expr
 
-			when Ore::String_Expr
+			when Lost::String_Expr
 				interp_string expr
 
-			when Ore::Type_Expr
+			when Lost::Type_Expr
 				interp_type expr
 
-			when Ore::Route_Expr
+			when Lost::Route_Expr
 				interp_route expr
 
-			when Ore::Func_Expr
+			when Lost::Func_Expr
 				interp_func expr
 
-			when Ore::Func_Signature_Expr
+			when Lost::Func_Signature_Expr
 				interp_func_signature expr
 
-			when Ore::Composition_Expr
+			when Lost::Composition_Expr
 				interp_composition expr
 
-			when Ore::Prefix_Expr
+			when Lost::Prefix_Expr
 				interp_prefix expr
 
-			when Ore::Nil_Init_Expr
+			when Lost::Nil_Init_Expr
 				# This is a special infix expression `<ident>,` that desugars to `ident = ident or nil`. left is assigned nil if it doesn't exist, or is returned if it does
 				interp_nil_init expr
 
-			when Ore::Infix_Expr
+			when Lost::Infix_Expr
 				interp_infix expr
 
-			when Ore::Postfix_Expr
+			when Lost::Postfix_Expr
 				interp_postfix expr
 
-			when Ore::Percent_Literal_Expr
+			when Lost::Percent_Literal_Expr
 				interp_percent_literal expr
 
-			when Ore::Circumfix_Expr
+			when Lost::Circumfix_Expr
 				interp_circumfix expr
 
-			when Ore::Call_Expr
+			when Lost::Call_Expr
 				interp_call expr
 
-			when Ore::For_Loop_Expr
+			when Lost::For_Loop_Expr
 				interp_for_loop expr
 
-			when Ore::Conditional_Expr
+			when Lost::Conditional_Expr
 				interp_conditional expr
 
-			when Ore::Array_Index_Expr
+			when Lost::Array_Index_Expr
 				maybe_instance expr.indices_in_order
 
-			when Ore::Subscript_Expr
+			when Lost::Subscript_Expr
 				interp_subscript expr
 
-			when Ore::Directive_Expr
+			when Lost::Directive_Expr
 				interp_directive expr
 
-			when Ore::Statement_Expr
+			when Lost::Statement_Expr
 				interp_statement expr
 
-			when Ore::Fence_Expr
+			when Lost::Fence_Expr
 				interp_fence expr
 
-			when Ore::Html_Fence_Expr
+			when Lost::Html_Fence_Expr
 				interp_html_fence expr
 
-			when Ore::Comment_Expr
+			when Lost::Comment_Expr
 				expr.value
 
-			when Ore::Operator_Overload_Expr
+			when Lost::Operator_Overload_Expr
 				interp_operator_overload expr
 
-			when Ore::Operator_Expr
+			when Lost::Operator_Expr
 				case expr.value
 				when 'skip'
 					throw :skip
@@ -3194,17 +3194,17 @@ module Ore
 					throw :stop
 				end
 
-			when Ore::Struct_Expr
+			when Lost::Struct_Expr
 				interp_struct expr
 
-			when Ore::Enum_Expr
+			when Lost::Enum_Expr
 				interp_enum expr
 
 			when nil
 				maybe_instance nil
 
 			else
-				raise Ore::Interpret_Expr_Not_Implemented.new(expr)
+				raise Lost::Interpret_Expr_Not_Implemented.new(expr)
 			end
 		end
 	end

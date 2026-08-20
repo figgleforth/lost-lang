@@ -1,4 +1,4 @@
-module Ore
+module Lost
 	# name: String
 	# type: Any
 	# value: Any

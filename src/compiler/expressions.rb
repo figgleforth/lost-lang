@@ -1,4 +1,4 @@
-module Ore
+module Lost
 	class Expression
 		attr_accessor :value, :type, :l0, :c0, :l1, :c1, :source_file
 		attr_reader :lexeme
@@ -9,12 +9,12 @@ module Ore
 
 		def lexeme= lexeme
 			case lexeme
-			when Ore::Lexeme
+			when Lost::Lexeme
 				@value  = lexeme.value
 				@lexeme = lexeme
 			when ::String, ::Symbol
 				@value  = lexeme
-				@lexeme = Ore::Lexeme.new Helpers.type_identifier?(lexeme), lexeme
+				@lexeme = Lost::Lexeme.new Helpers.type_identifier?(lexeme), lexeme
 			end
 		end
 
@@ -61,7 +61,7 @@ module Ore
 				default = param.default ? "=#{param.default.value}" : ''
 				"#{label}#{param.name.value}#{default}"
 			end.join(',')
-			sig += Ore::FUNCTION_DELIMITER
+			sig += Lost::FUNCTION_DELIMITER
 			sig += '}'
 			sig
 		end
@@ -234,7 +234,7 @@ module Ore
 		attr_accessor :header
 		# ```header
 		# ```
-		# Examples are md, css, html, ore, etc
+		# Examples are md, css, html, lost, etc
 	end
 
 	class Statement_Expr < Expression

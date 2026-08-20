@@ -1,7 +1,7 @@
 ### What's here?
 
-This [`examples`](.) folder contains examples written in Ore.
+This [`examples`](.) folder contains examples written in Lost.
 
 ```bash
-bundle exec bin/ore examples/file.ore
+bundle exec bin/lost examples/file.tape
 ```

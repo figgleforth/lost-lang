@@ -1,57 +1,57 @@
 require 'minitest/autorun'
-require_relative '../src/ore'
+require_relative '../src/lost'
 require_relative 'base_test'
 
 class Structs_Test < Base_Test
 	def test_parses_standalone_struct_literal
-		out = Ore.parse '<String, Number>'
-		assert_kind_of Ore::Struct_Expr, out.first
+		out = Lost.parse '<String, Number>'
+		assert_kind_of Lost::Struct_Expr, out.first
 		assert_equal %w(String Number), out.first.types.map(&:value)
 	end
 
 	def test_parses_standalone_struct_literal_with_single_type
-		out = Ore.parse '<String>'
-		assert_kind_of Ore::Struct_Expr, out.first
+		out = Lost.parse '<String>'
+		assert_kind_of Lost::Struct_Expr, out.first
 		assert_equal %w(String), out.first.types.map(&:value)
 	end
 
 	def test_parses_type_declaration_with_struct
-		out = Ore.parse 'Array<String> {}'
-		assert_kind_of Ore::Type_Expr, out.first
+		out = Lost.parse 'Array<String> {}'
+		assert_kind_of Lost::Type_Expr, out.first
 		assert_equal 'Array', out.first.name
-		assert_kind_of Ore::Struct_Expr, out.first.structure
+		assert_kind_of Lost::Struct_Expr, out.first.structure
 		assert_equal %w(String), out.first.structure.types.map(&:value)
 	end
 
 	def test_parses_type_declaration_with_multiple_members
-		out = Ore.parse 'Dictionary<String, Number> {}'
+		out = Lost.parse 'Dictionary<String, Number> {}'
 		assert_equal %w(String Number), out.first.structure.types.map(&:value)
 	end
 
 	def test_type_declaration_without_struct_has_nil_struct
-		out = Ore.parse 'String {}'
+		out = Lost.parse 'String {}'
 		assert_nil out.first.structure
 	end
 
 	def test_struct_members_can_be_arbitrary_expressions
-		out = Ore.parse 'Abc<1+2+3/123>'
-		assert_kind_of Ore::Infix_Expr, out.first.structure.types.first
+		out = Lost.parse 'Abc<1+2+3/123>'
+		assert_kind_of Lost::Infix_Expr, out.first.structure.types.first
 
-		result = Ore.interp "Abc {}
+		result = Lost.interp "Abc {}
 		Abc<Number> {}
 		Abc<1+2+3/123>.structure.types.first()"
 		assert_equal 3, result
 	end
 
 	def test_interprets_standalone_struct_literal_to_struct_instance
-		out = Ore.interp '<String, Number>'
-		assert_kind_of Ore::Struct, out
+		out = Lost.interp '<String, Number>'
+		assert_kind_of Lost::Struct, out
 		assert_equal 'String', out.type_objects[0].name
 		assert_equal 'Number', out.type_objects[1].name
 	end
 
-	def test_struct_instance_types_accessible_from_ore
-		out = Ore.interp "g := <String, Number>
+	def test_struct_instance_types_accessible_from_lost
+		out = Lost.interp "g := <String, Number>
 		g.types"
 		assert_equal 'String', out.values[0].name
 		assert_equal 'Number', out.values[1].name
@@ -59,21 +59,21 @@ class Structs_Test < Base_Test
 
 	def test_bare_struct_assignable_and_storable
 		# A bare annotation alone on its own line (no `=` on the same expression) is undeclared, same as any other annotation (`x: Number` alone behaves identically) — combine the annotation and assignment into one expression, which is how self-declaring annotations actually work today.
-		out = Ore.interp 'thing: <String, Number> = <String, Number>
+		out = Lost.interp 'thing: <String, Number> = <String, Number>
 		thing.types.count'
 		assert_equal 2, out
 	end
 
 	def test_type_with_struct_still_composes_normally
 		refute_raises do
-			out = Ore.interp 'Array<String> {}'
-			assert_kind_of Ore::Type, out
+			out = Lost.interp 'Array<String> {}'
+			assert_kind_of Lost::Type, out
 			assert_equal 'Array', out.name
 		end
 	end
 
 	def test_composing_builtin_type_with_struct_does_not_break_it
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    String<Dictionary> {}
 		    s := String('hello')
 		    s.upcase()
@@ -82,7 +82,7 @@ class Structs_Test < Base_Test
 	end
 
 	def test_struct_does_not_interfere_with_plain_type_declarations
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    Point {
 		    	x, y,
 		    	new { x, y;
@@ -97,19 +97,19 @@ class Structs_Test < Base_Test
 	end
 
 	def test_annotation_form_captures_struct
-		out = Ore.parse 'x: Abc<Number>'
-		assert_kind_of Ore::Struct_Expr, out.first.type_struct
+		out = Lost.parse 'x: Abc<Number>'
+		assert_kind_of Lost::Struct_Expr, out.first.type_struct
 		assert_equal %w(Number), out.first.type_struct.types.map(&:value)
 	end
 
 	def test_bare_struct_annotation_with_no_type_name
-		out = Ore.parse 'thing: <String, Number>'
-		assert_kind_of Ore::Struct_Expr, out.first.type_struct
+		out = Lost.parse 'thing: <String, Number>'
+		assert_kind_of Lost::Struct_Expr, out.first.type_struct
 		assert_equal %w(String Number), out.first.type_struct.types.map(&:value)
 	end
 
 	def test_type_reference_with_struct_does_not_mutate_shared_type
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    Abc<Number> {}
 		    Abc<String> {}
 		    x := Abc<Number>
@@ -121,7 +121,7 @@ class Structs_Test < Base_Test
 	end
 
 	def test_type_reference_works_with_constants_too
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    Abc {
 		    	val,
 		    	new { v; self.val = v }
@@ -134,7 +134,7 @@ class Structs_Test < Base_Test
 	end
 
 	def test_type_reference_can_be_reassigned_before_calling
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    Abc {
 		    	val,
 		    	new { v; self.val = v }
@@ -148,7 +148,7 @@ class Structs_Test < Base_Test
 	end
 
 	def test_struct_bound_onto_instance_before_new_runs
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    Abc<Number> {
 		    	new {;}
 		    }
@@ -160,7 +160,7 @@ class Structs_Test < Base_Test
 	end
 
 	def test_struct_members_are_not_forwarded_as_constructor_arguments
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    Abc {
 		    	val,
 		    	new { v := -1; self.val = v }
@@ -173,27 +173,27 @@ class Structs_Test < Base_Test
 	end
 
 	def test_named_member_schema_parses_and_resolves_declared_type
-		out = Ore.parse 'Type<some_string: String, num: Number> {}'
+		out = Lost.parse 'Type<some_string: String, num: Number> {}'
 		assert_equal ['some_string', 'num'], out.first.structure.names
 
-		type = Ore.interp 'Type<some_string: String, num: Number> {}'
+		type = Lost.interp 'Type<some_string: String, num: Number> {}'
 		assert_equal 'String', type.structure_declaration.declarations['some_string'].name
 		assert_equal 'Number', type.structure_declaration.declarations['num'].name
 	end
 
 	def test_structure_declaration_captures_default_values
-		type = Ore.interp 'Widget<indent: Number = 2> {}'
+		type = Lost.interp 'Widget<indent: Number = 2> {}'
 		assert_equal ['indent'], type.structure_declaration.names
 		assert_equal [2], type.structure_declaration.values
 	end
 
 	def test_unstructured_declaration_has_no_structure_declaration
-		type = Ore.interp 'Plain { x, }'
+		type = Lost.interp 'Plain { x, }'
 		assert_nil type.structure_declaration
 	end
 
 	def test_structure_declaration_is_independent_per_variant
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    dict_variant := String<dict: Dictionary> {}
 		    num_variant := String<num: Number> {}
 		    (dict_variant, num_variant)
@@ -208,10 +208,10 @@ class Structs_Test < Base_Test
 	end
 
 	def test_structure_declaration_equal_compares_names_and_types
-		dict_a = Ore::Struct.new(['dict'], ['Dictionary'], [nil])
-		dict_b = Ore::Struct.new(['dict'], ['Dictionary'], [nil])
-		other  = Ore::Struct.new(['other'], ['Dictionary'], [nil]) # same type, different name
-		number = Ore::Struct.new(['dict'], ['Number'], [nil]) # same name, different type
+		dict_a = Lost::Struct.new(['dict'], ['Dictionary'], [nil])
+		dict_b = Lost::Struct.new(['dict'], ['Dictionary'], [nil])
+		other  = Lost::Struct.new(['other'], ['Dictionary'], [nil]) # same type, different name
+		number = Lost::Struct.new(['dict'], ['Number'], [nil]) # same name, different type
 
 		assert dict_a.structure_declaration_equal?(dict_b)
 		refute dict_a.structure_declaration_equal?(other)
@@ -221,14 +221,14 @@ class Structs_Test < Base_Test
 	# Reference matching (`String<{x=1}>()`) never supplies member names, so it only ever compares
 	# against `type_names` -- names exist purely to keep declarations distinct from each other.
 	def test_structure_satisfied_by_candidates_ignores_names
-		declared = Ore::Struct.new(['dict'], ['Dictionary'], [nil])
+		declared = Lost::Struct.new(['dict'], ['Dictionary'], [nil])
 
 		assert declared.satisfied_by_candidates?([['Dictionary']])
 		refute declared.satisfied_by_candidates?([['Number']])
 	end
 
 	def test_differently_named_same_typed_members_are_distinct_variants_regression
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    String<dict: Dictionary> { to_s {; "dict-named" } }
 		    String<other: Dictionary> { to_s {; "other-named" } }
 
@@ -237,7 +237,7 @@ class Structs_Test < Base_Test
 		CODE
 		assert_equal 'dict-named', out
 
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    String<dict: Dictionary> { to_s {; "dict-named" } }
 		    String<other: Dictionary> { to_s {; "other-named" } }
 
@@ -246,7 +246,7 @@ class Structs_Test < Base_Test
 		CODE
 		assert_equal 'other-named', out
 
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    String<dict: Dictionary> { to_s {; "dict-named" } }
 		    String<other: Dictionary> { to_s {; "other-named" } }
 
@@ -258,13 +258,13 @@ class Structs_Test < Base_Test
 
 	def test_reference_to_never_declared_type_name_builds_a_bare_named_struct
 		# `Ident<...>` with a base name that's never been declared as anything at all (no bare Type, no structured variant, no alias) isn't an error -- it's a bare named struct, same shape as `<...>` but with `.name` set from the identifier. Only collides with something else declared -- a real Type with a mismatched structure, or an alias to a non-Type value -- does it still raise (see test_reference_to_mismatched_declared_structure_raises).
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    n := Named<Number>
 		    n.name
 		CODE
 		assert_equal 'Named', out
 
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    n := Named<Number>
 		    n.types.values.map({it; it.name}).join(', ')
 		CODE
@@ -274,7 +274,7 @@ class Structs_Test < Base_Test
 	# Re-declaring the exact same bare named struct a second time used to raise Undeclared_Type_Structure -- `aliased` (the struct from the first declaration) being non-nil blocked the bare-named-struct fallback, even though the shape hadn't actually changed.
 	def test_redeclaring_same_bare_named_struct_is_a_no_op
 		refute_raises do
-			out = Ore.interp <<~CODE
+			out = Lost.interp <<~CODE
 			    Task <
 			    	id: Number
 			    	done := false
@@ -291,8 +291,8 @@ class Structs_Test < Base_Test
 
 	# A genuinely different shape under the same name still raises, unchanged.
 	def test_redeclaring_bare_named_struct_with_a_different_shape_still_raises
-		assert_raises Ore::Undeclared_Type_Structure do
-			Ore.interp <<~CODE
+		assert_raises Lost::Undeclared_Type_Structure do
+			Lost.interp <<~CODE
 			    Task <id: Number>
 			    Task <id: String>
 			CODE
@@ -301,7 +301,7 @@ class Structs_Test < Base_Test
 
 	# A name, not position, identifies a named member everywhere it's actually used -- reordering named members is still the same declaration, not a different one.
 	def test_redeclaring_bare_named_struct_with_reordered_members_is_a_no_op
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    Task <id: Number, done: Bool>
 		    Task <done: Bool, id: Number>
 		    Task.name
@@ -311,7 +311,7 @@ class Structs_Test < Base_Test
 
 	# Not just "doesn't raise" -- the actual member set is unchanged by the reorder, before and after.
 	def test_redeclaring_bare_named_struct_with_reordered_members_keeps_the_same_members
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    before := Task <id: Number, done: Bool>
 		    after := Task <done: Bool, id: Number>
 		    (before.names, before.type_names, after.names, after.type_names)
@@ -325,8 +325,8 @@ class Structs_Test < Base_Test
 
 	# Unnamed members have no such identity besides position -- reordering those still counts as a different structure and raises, same as any other shape mismatch.
 	def test_redeclaring_unnamed_structured_type_with_reordered_members_still_raises
-		assert_raises Ore::Undeclared_Type_Structure do
-			Ore.interp <<~CODE
+		assert_raises Lost::Undeclared_Type_Structure do
+			Lost.interp <<~CODE
 			    Abc<Number, String> {}
 			    Abc<String, Number>
 			CODE
@@ -334,8 +334,8 @@ class Structs_Test < Base_Test
 	end
 
 	def test_reference_to_mismatched_declared_structure_raises
-		assert_raises Ore::Undeclared_Type_Structure do
-			Ore.interp <<~CODE
+		assert_raises Lost::Undeclared_Type_Structure do
+			Lost.interp <<~CODE
 			    Abc<Number> {}
 			    Abc<String>
 			CODE
@@ -344,20 +344,20 @@ class Structs_Test < Base_Test
 
 	# Undeclared_Type_Structure's own message-rendering used to crash (NoMethodError inside Struct_Expr#to_s) when the mismatched struct had a named member with no `: Type` annotation (`done := false` -- `.type` is nil, unlike `.type.value` this code blindly read). assert_raises here would surface that NoMethodError instead of the real error if this regressed.
 	def test_mismatched_structure_error_message_renders_untyped_member_without_crashing
-		error = assert_raises Ore::Undeclared_Type_Structure do
-			Ore.interp <<~CODE
+		error = assert_raises Lost::Undeclared_Type_Structure do
+			Lost.interp <<~CODE
 			    Task <id: String>
 			    Task <
 			    	id: Number
 			    	done := false
 			    >
-			    CODE
+			CODE
 		end
 		assert_includes error.message, 'done: false'
 	end
 
 	def test_reference_matches_structure_by_composed_type_not_just_own_name
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    Flying { can_fly := true }
 		    Duck | Flying { name := 'duck' }
 
@@ -372,7 +372,7 @@ class Structs_Test < Base_Test
 	end
 
 	def test_structured_type_can_be_aliased_and_restructured_through_the_alias
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    Flying { can_fly := true }
 		    Duck | Flying { name := 'duck' }
 
@@ -388,7 +388,7 @@ class Structs_Test < Base_Test
 	end
 
 	def test_multi_member_reference_matches_via_composed_types_in_combination
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    Alpha { }
 		    Beta { }
 		    Combo_Alpha | Alpha { }
@@ -404,7 +404,7 @@ class Structs_Test < Base_Test
 	end
 
 	def test_unnamed_member_value_that_is_a_struct_spreads_into_the_struct
-		type = Ore.interp <<~CODE
+		type = Lost.interp <<~CODE
 		    DEFAULT_COLUMNS := <id: Number, created_at: Number>
 		    Thing<DEFAULT_COLUMNS> {}
 		CODE
@@ -413,7 +413,7 @@ class Structs_Test < Base_Test
 	end
 
 	def test_spread_struct_members_bind_correctly_at_construction
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    DEFAULT_COLUMNS := <id: Number, created_at: Number>
 		    Thing<DEFAULT_COLUMNS> {}
 
@@ -424,7 +424,7 @@ class Structs_Test < Base_Test
 	end
 
 	def test_reference_to_struct_valued_identifier_does_not_spread_regression
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    Options := <table_name: String, columns: Number>
 
 		    Thing<opts: Options = Options> {
@@ -445,7 +445,7 @@ class Structs_Test < Base_Test
 	# read `supplied.type_objects` (identity-only, used for the "did they just restate the type"
 	# check) where it should have read `supplied.values` for the actual result.
 	def test_named_reference_member_preserves_the_real_supplied_value_regression
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    Data_Conn { name, new { name; self.name = name } }
 		    Table<columns: Struct, database: Data_Conn> {}
 
@@ -460,7 +460,7 @@ class Structs_Test < Base_Test
 	end
 
 	def test_redeclaring_same_structure_extends_the_same_variant
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    Abc<Number> {
 		    	first {; 'first' }
 		    }
@@ -476,7 +476,7 @@ class Structs_Test < Base_Test
 
 	# A structured type declaration never bound its own bare name in @declarations the way a bare `Type { }` does -- only `Abc<Number>()` (a full reference) resolved it. When exactly one variant is declared under a name, the bare name is unambiguous, so it's reachable too now.
 	def test_structured_type_reachable_by_bare_name_when_unambiguous
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    Abc<Number> {
 		    	greet {; 'hi' }
 		    }
@@ -488,8 +488,8 @@ class Structs_Test < Base_Test
 
 	# A genuinely ambiguous name (2+ declared variants) still can't resolve on its own -- there'd be no way to know which variant a bare `X()` should build.
 	def test_structured_type_bare_name_stays_unreachable_when_ambiguous
-		assert_raises Ore::Undeclared_Identifier do
-			Ore.interp <<~CODE
+		assert_raises Lost::Undeclared_Identifier do
+			Lost.interp <<~CODE
 			    X<a: Number> {}
 			    X<b: String> {}
 			    X()
@@ -516,27 +516,27 @@ class Structs_Test < Base_Test
 		    b := String<{x=0, y=1, z=2}>("My dict: ")
 		    (a.to_s(), b.to_s())
 		CODE
-		out = Ore.interp src
+		out = Lost.interp src
 		assert_equal '{x::0, y::1, z::2, }', out.values[0]
 		assert_equal 'My dict: {x::0, y::1, z::2, }', out.values[1]
 	end
 
-	# Member#to_s used to check `if value`/`elif not value` (truthy) to mean "has a value" -- `false` is a legitimate value that's also falsy in Ore, so a member holding it looked exactly like one holding nothing at all (`<done: Bool>` instead of `<done: Bool = false>`).
+	# Member#to_s used to check `if value`/`elif not value` (truthy) to mean "has a value" -- `false` is a legitimate value that's also falsy in Lost, so a member holding it looked exactly like one holding nothing at all (`<done: Bool>` instead of `<done: Bool = false>`).
 	def test_member_display_shows_a_real_false_value_not_as_unset
-		out = Ore.interp '<done := false>.to_s()'
+		out = Lost.interp '<done := false>.to_s()'
 		assert_equal '<done: Bool = false>', out
 	end
 
 	def test_bare_default_member_infers_type_from_value
-		out = Ore.interp '<id := 4815>'
+		out = Lost.interp '<id := 4815>'
 		assert_equal ['id'], out.names
 		assert_equal ['Number'], out.type_names
 		assert_equal [4815], out.values
 	end
 
 	def test_structured_reference_has_members_populated
-		out = Ore.interp <<~CODE
-		    @load 'ore/struct.ore'
+		out = Lost.interp <<~CODE
+		    @load 'lost/struct.tape'
 		    Abc<dict: Dictionary> {
 		    	new {;}
 		    }
@@ -549,29 +549,29 @@ class Structs_Test < Base_Test
 	end
 
 	def test_members_array_stays_positionally_aligned_with_unnamed_members
-		out = Ore.interp <<~CODE
-		    @load 'ore/struct.ore'
+		out = Lost.interp <<~CODE
+		    @load 'lost/struct.tape'
 		    s := <name: String, Number>('Alice', 42)
 		    s.members
 		CODE
 		assert_equal 2, out.values.length
 		assert_equal 'name', out.values[0].name
-		# .value is wrapped (Ore::String, carrying quotation_style) -- .value.value unwraps to the raw content.
+		# .value is wrapped (Lost::String, carrying quotation_style) -- .value.value unwraps to the raw content.
 		assert_equal 'Alice', out.values[0].value.value
 		assert_nil out.values[1].name
 		assert_equal 42, out.values[1].value
 	end
 
 	def test_bare_struct_literal_with_computed_value_parses
-		assert_kind_of Ore::Struct, Ore.interp('<123>')
-		assert_equal [3], Ore.interp('<1+2+3/123>').values
-		assert_equal [3], Ore.interp('x := <1+2+3/123>
+		assert_kind_of Lost::Struct, Lost.interp('<123>')
+		assert_equal [3], Lost.interp('<1+2+3/123>').values
+		assert_equal [3], Lost.interp('x := <1+2+3/123>
 			x').values
 	end
 
-	# `for` over a Struct iterates its `.members` (Ore::Member instances, populated via `ore/struct.ore`, loaded by default) -- regression: used to call a nonexistent method and raise NoMethodError unconditionally.
+	# `for` over a Struct iterates its `.members` (Lost::Member instances, populated via `lost/struct.tape`, loaded by default) -- regression: used to call a nonexistent method and raise NoMethodError unconditionally.
 	def test_for_loop_over_struct_iterates_members
-		out = Ore.interp <<~CODE
+		out = Lost.interp <<~CODE
 		    s := <name: String, age: Number>('Alice', 30)
 		    names := for s map
 		        it.name
@@ -580,9 +580,9 @@ class Structs_Test < Base_Test
 		CODE
 		assert_equal ['name', 'age'], out.values
 
-		# With the standard library not loaded at all, a bare Struct has no `.members` to read (`ore/struct.ore` never ran) -- iterates zero elements rather than raising.
+		# With the standard library not loaded at all, a bare Struct has no `.members` to read (`lost/struct.tape` never ran) -- iterates zero elements rather than raising.
 		refute_raises do
-			out = Ore.interp(<<~CODE, load_standard_library: false)
+			out = Lost.interp(<<~CODE, load_standard_library: false)
 			    s := <1, 2, 3>
 			    count := 0
 			    for s
@@ -596,34 +596,34 @@ class Structs_Test < Base_Test
 
 	# A struct member's only two named forms are `name: Type` and `name := value` -- there's no general `name: value` the way Dictionaries have. A lowercase value right after `:` used to be silently accepted: #parse_identifier_expr's own `: Type` lookahead declined to consume the `:` (since a lowercase identifier can never be a type), leaving it for the next loop iteration to reparse as an unrelated `:symbol` prefix literal -- `<columns: cols>` silently became the two elements `columns, :cols` instead of raising anywhere.
 	def test_lowercase_value_after_colon_in_struct_raises
-		assert_raises Ore::Invalid_Struct_Member_Annotation do
-			Ore.interp 'columns := 99
+		assert_raises Lost::Invalid_Struct_Member_Annotation do
+			Lost.interp 'columns := 99
 				<columns: cols>'
 		end
 	end
 
 	# The two legitimate ways to read as "two elements" instead: an explicit comma, or `:=` to actually give a member a value.
 	def test_struct_still_supports_the_forms_that_look_similar
-		out = Ore.interp 'columns := 99
+		out = Lost.interp 'columns := 99
 			<columns, :cols>'
 		assert_equal [99, :cols], out.values
 
-		out = Ore.interp 'cols := <name: String>
+		out = Lost.interp 'cols := <name: String>
 			<columns := cols>'
-		assert_kind_of Ore::Struct, out.values.first
+		assert_kind_of Lost::Struct, out.values.first
 	end
 
 	def test_struct_typed_param_parses
-		out = Ore.parse 'f { right: <name: String, type: Any, value: Any>; right }'
+		out   = Lost.parse 'f { right: <name: String, type: Any, value: Any>; right }'
 		param = out.first.parameters.first
-		assert_kind_of Ore::Struct_Expr, param.type_struct
+		assert_kind_of Lost::Struct_Expr, param.type_struct
 		assert_equal %w(name type value), param.type_struct.names
 		assert_equal %w(String Any Any), param.type_struct.types.map { |member| member.type.value }
 	end
 
 	def test_struct_typed_param_accepts_structurally_compatible_argument
 		refute_raises do
-			out = Ore.interp "@load 'ore/member.ore'
+			out = Lost.interp "@load 'lost/member.tape'
 				f { right: <name: String, type: Any, value: Any>; right.name }
 				m := Member('x', String, 4)
 				f(m)"
@@ -632,16 +632,16 @@ class Structs_Test < Base_Test
 	end
 
 	def test_struct_typed_param_raises_for_missing_member
-		error = assert_raises Ore::Type_Contract_Violation do
-			Ore.interp 'f { right: <name: String, type: Any, value: Any>; right }
+		error = assert_raises Lost::Type_Contract_Violation do
+			Lost.interp 'f { right: <name: String, type: Any, value: Any>; right }
 				f(nil)'
 		end
 		assert_equal '<name, type, value>', error.contract
 	end
 
 	def test_struct_typed_param_raises_for_wrong_member_type
-		error = assert_raises Ore::Type_Contract_Violation do
-			Ore.interp 'Thing { name := 4 }
+		error = assert_raises Lost::Type_Contract_Violation do
+			Lost.interp 'Thing { name := 4 }
 				f { right: <name: String>; right }
 				f(Thing())'
 		end
@@ -651,7 +651,7 @@ class Structs_Test < Base_Test
 
 	def test_struct_typed_param_any_matches_anything
 		refute_raises do
-			out = Ore.interp "f { right: <value: Any>; right.value }
+			out = Lost.interp "f { right: <value: Any>; right.value }
 				Thing { value := 4815 }
 				f(Thing())"
 			assert_equal 4815, out
@@ -660,7 +660,7 @@ class Structs_Test < Base_Test
 
 	def test_struct_typed_param_works_on_operator_overloads
 		refute_raises do
-			out = Ore.interp "@load 'ore/member.ore'
+			out = Lost.interp "@load 'lost/member.tape'
 				Thing {
 					@operator ~ @infix { left, right: <name: String>; right.name }
 				}
@@ -669,8 +669,8 @@ class Structs_Test < Base_Test
 			assert_equal 'x', out
 		end
 
-		assert_raises Ore::Type_Contract_Violation do
-			Ore.interp "Thing {
+		assert_raises Lost::Type_Contract_Violation do
+			Lost.interp "Thing {
 				@operator ~ @infix { left, right: <name: String>; right.name }
 			}
 			t := Thing()
@@ -681,7 +681,7 @@ class Structs_Test < Base_Test
 	# A struct annotation with only unnamed members (`<String, Number>`, no names to check anything by) enforces nothing at all on a param -- there's no name on the argument to look up. Documenting the current, if surprising, behavior rather than letting it go unnoticed.
 	def test_struct_typed_param_with_only_unnamed_members_enforces_nothing
 		refute_raises do
-			out = Ore.interp 'f { x: <String, Number>; x }
+			out = Lost.interp 'f { x: <String, Number>; x }
 				f(nil)'
 			assert_nil out
 		end
@@ -689,17 +689,17 @@ class Structs_Test < Base_Test
 
 	# `x: Abc<Number>` (a named type plus a structure) parses the same way it already does for plain identifiers/variables.
 	def test_named_type_plus_struct_param_parses
-		out = Ore.parse 'f { x: Abc<Number>; x }'
+		out   = Lost.parse 'f { x: Abc<Number>; x }'
 		param = out.first.parameters.first
 		assert_equal 'Abc', param.type.value
-		assert_kind_of Ore::Struct_Expr, param.type_struct
+		assert_kind_of Lost::Struct_Expr, param.type_struct
 		assert_equal 'Abc', param.type_struct.name
 	end
 
 	# --- `<>` immediately followed by `;`/`,` (no space) -- lexer regression ---
 
 	def test_struct_close_immediately_followed_by_semicolon_lexes_correctly
-		out = Ore.lex '<String>;'
+		out    = Lost.lex '<String>;'
 		values = out.map(&:value)
 		assert_includes values, '>'
 		assert_includes values, ';'
@@ -707,7 +707,7 @@ class Structs_Test < Base_Test
 	end
 
 	def test_struct_close_immediately_followed_by_comma_lexes_correctly
-		out = Ore.lex '<String>,X'
+		out    = Lost.lex '<String>,X'
 		values = out.map(&:value)
 		assert_includes values, '>'
 		assert_includes values, ','

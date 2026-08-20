@@ -1,7 +1,7 @@
-require './src/ore.rb'
+require_relative '../lost'
 require 'readline'
 
-module Ore
+module Lost
 	class REPL
 		HELP = <<~TEXT
 		    exit with \\q, \\x, or exit
@@ -15,7 +15,7 @@ module Ore
 		end
 
 		def run
-			puts Ascii.dim "Ore REPL  \\q to quit"
+			puts Ascii.dim "Lost REPL  \\q to quit"
 
 			Readline.completion_append_character = nil
 			Readline.completion_proc             = proc { [] }

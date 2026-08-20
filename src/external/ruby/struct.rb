@@ -1,4 +1,4 @@
-module Ore
+module Lost
 	# Represents a set of declarations which make up an object (including dictionaries and their keys)
 	#
 	#   name, type, value
@@ -16,10 +16,10 @@ module Ore
 
 			# Only ever set for a bare named struct (`Named <Struct>`, see #interp_type) -- nil for every other construction path, including the plain `<...>`/`ANY_IDENT := <struct>` forms, which stay anonymous (reachable only through whatever variable holds them).
 			declare 'name', nil
-			declare 'names', Ore::Array.new(names), 'Array'
-			declare 'values', Ore::Array.new(values), 'Array'
-			declare 'type_names', Ore::Array.new(type_names), 'Array'
-			declare 'types', Ore::Array.new(types), 'Array'
+			declare 'names', Lost::Array.new(names), 'Array'
+			declare 'values', Lost::Array.new(values), 'Array'
+			declare 'type_names', Lost::Array.new(type_names), 'Array'
+			declare 'types', Lost::Array.new(types), 'Array'
 
 			names.each_with_index do |name, i|
 				next unless name
@@ -28,7 +28,7 @@ module Ore
 		end
 
 		# Per-member resolved type *objects* (Type instances for named/typed members, or the raw
-		# interpreted value for unnamed members) -- exposed to Ore as `.types`. Distinct from the
+		# interpreted value for unnamed members) -- exposed to Lost as `.types`. Distinct from the
 		# inherited `.types` (Type#types, this Struct instance's own composed-type Set, unrelated --
 		# see Interpreter#build_struct's `struct.types = struct_type.types`), which is why this reads
 		# off `@declarations` under its own name instead of being a plain attr_accessor called `types`.

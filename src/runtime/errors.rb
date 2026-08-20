@@ -1,6 +1,6 @@
 require_relative 'error_formatter'
 
-module Ore
+module Lost
 	class Error < StandardError
 		attr_accessor :expression
 
@@ -25,7 +25,7 @@ module Ore
 	end
 
 	class Undeclared_Identifier < Error
-		# `expression` is whatever AST node was being resolved when lookup failed, usually an Ore::Identifier_Expr (a plain identifier reference), but also an Ore::Type_Expr when a bare type reference (`Abc()`) never got declared. Both expose `.value` via the shared Expression base (set from their own lexeme), so one implementation covers either raise site without caring which one it actually got.
+		# `expression` is whatever AST node was being resolved when lookup failed, usually an Lost::Identifier_Expr (a plain identifier reference), but also an Lost::Type_Expr when a bare type reference (`Abc()`) never got declared. Both expose `.value` via the shared Expression base (set from their own lexeme), so one implementation covers either raise site without caring which one it actually got.
 		def detail_message
 			name = expression.respond_to?(:value) ? expression.value : nil
 			return nil unless name
@@ -35,7 +35,7 @@ module Ore
 
 	class Undeclared_Type_Structure < Error
 		# When a structured-type reference (`Abc<Number>`) has no declared variant matching its structure (`Abc<Number> {}`)
-		# @expression: Ore::Type_Expr
+		# @expression: Lost::Type_Expr
 
 		def detail_message
 			name                     = expression.name
@@ -382,7 +382,7 @@ module Ore
 			exprs    = expression.expressions
 			given    = exprs.map(&:class).join(', ')
 			expected = exprs.map do |it|
-				'Ore::Identifier_Expr or Ore::Number_Expr or Ore::Operator_Expr'
+				'Lost::Identifier_Expr or Lost::Number_Expr or Lost::Operator_Expr'
 			end.join(', ')
 			"%#{kind}(#{given}) expects %#{kind}(#{expected})"
 		end

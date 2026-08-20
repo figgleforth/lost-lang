@@ -14,7 +14,7 @@ module Helpers
 	def type_identifier? ident
 		return false unless ident
 
-		Ore.assert ident.is_a?(::String), "#type_identifier? expected a ::String got #{ident.class}"
+		Lost.assert ident.is_a?(::String), "#type_identifier? expected a ::String got #{ident.class}"
 
 		# Capitalized Like_This or This
 		ident[0] && ident[0].upcase == ident[0]
@@ -71,7 +71,7 @@ module Helpers
 
 		return nil unless scope.has? ident
 
-		if scope.is_a?(Ore::Type) && scope.static_declarations&.include?(ident)
+		if scope.is_a?(Lost::Type) && scope.static_declarations&.include?(ident)
 			:static
 		else
 			:instance

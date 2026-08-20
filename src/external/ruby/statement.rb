@@ -1,18 +1,18 @@
-module Ore
-	# Ore wrapper for `*_Expr < Expression`. Built two ways:
+module Lost
+	# Lost wrapper for `*_Expr < Expression`. Built two ways:
 	# 1. A backtick literal (`` `expr` ``) -- Interpreter#interp_statement builds this directly and
 	#    sets captured_scope, since only interpreter-side code has a stack to read from.
 	# 2. `Statement(...)` -- goes through the normal Type-construction path, so #initialize only ever
-	#    sees a throwaway arg (same as every Ruby-backed Ore type, e.g. Ore::String/Ore::Array); real
-	#    argument binding happens in ore/statement.ore's `new{;}` instead.
+	#    sees a throwaway arg (same as every Ruby-backed Lost type, e.g. Lost::String/Lost::Array); real
+	#    argument binding happens in lost/statement.tape's `new{;}` instead.
 	class Statement < Instance
 		attr_reader :expression #: Expression
 
 		# Scope on top of the stack when this was built from a backtick literal -- mirrors
-		# Ore::Func#enclosing_scope's closure trick. Set only by Interpreter#interp_statement; nil
+		# Lost::Func#enclosing_scope's closure trick. Set only by Interpreter#interp_statement; nil
 		# otherwise, and Interpreter#invoke_statement then falls back to use_caller_scope behavior.
 		#
-		# use_caller_scope/memoize/memoized/_memoized_value live in ore/statement.ore as ordinary Ore
+		# use_caller_scope/memoize/memoized/_memoized_value live in lost/statement.tape as ordinary Lost
 		# members instead (so plain dot-assignment works); read/written from Ruby via Scope#[]/#[]=.
 		attr_accessor :captured_scope
 
@@ -29,7 +29,7 @@ module Ore
 		# Called from `new{;}` when constructing via `Statement(other)` -- copies other's expression,
 		# captured_scope, and settings, so it behaves like reusing `other`, not recapturing here.
 		def proxy_from other
-			return unless other.is_a? Ore::Statement
+			return unless other.is_a? Lost::Statement
 
 			self.expression          = other.expression
 			@captured_scope          = other.captured_scope

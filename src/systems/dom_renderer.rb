@@ -1,4 +1,4 @@
-module Ore
+module Lost
 	class Dom_Renderer
 		HTML_PREFIX  = 'html_'.freeze
 		CSS_PREFIX   = 'css_'.freeze
@@ -14,7 +14,7 @@ module Ore
 		end
 
 		def has_inner_html? # aka void tag
-			!Ore::VOID_HTML_TAGS.include?(element)
+			!Lost::VOID_HTML_TAGS.include?(element)
 		end
 
 		def html_attrs
@@ -74,11 +74,11 @@ module Ore
 				end
 
 				if onclick_expr
-					html << " data-ore-onclick=\"#{onclick_expr.hash}\""
+					html << " data-lost-onclick=\"#{onclick_expr.hash}\""
 				end
 
 				if is_input_element?
-					html << " data-ore-id=\"#{dom.hash}\""
+					html << " data-lost-id=\"#{dom.hash}\""
 				end
 
 				html << ">"

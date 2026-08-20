@@ -1,7 +1,7 @@
-module Ore
+module Lost
 	# @param [::String] key
-	# @param [Ore::Expression | Ore::Declaration] expr_or_decl
-	# @param [Ore::Expression] expr -- the original expression that must be interpreted to actually bring this declaration into being (used for lazy/forward resolution -- see Interpreter#resolve_forward_declaration)
+	# @param [Lost::Expression | Lost::Declaration] expr_or_decl
+	# @param [Lost::Expression] expr -- the original expression that must be interpreted to actually bring this declaration into being (used for lazy/forward resolution -- see Interpreter#resolve_forward_declaration)
 	Declaration = ::Data.define(:key, :expr_or_decl, :expr) do
 		def == other
 			other.key == key
@@ -21,9 +21,9 @@ module Ore
 		# Mirrors Interpreter#load_file_into_scope's own path resolution exactly -- kept here too since Declarator has to resolve a load target itself, ahead of the real interpreter ever reaching that @load.
 		def self.resolve_load_filepath filepath
 			filepath = filepath.dup
-			filepath << '.ore' unless filepath.end_with? '.ore'
-			if filepath.start_with? 'ore/'
-				File.join Ore::ROOT_PATH, filepath
+			filepath << '.tape' unless filepath.end_with? '.tape'
+			if filepath.start_with? 'lost/'
+				File.join Lost::ROOT_PATH, filepath
 			else
 				File.expand_path filepath
 			end
@@ -33,10 +33,10 @@ module Ore
 		attr_reader :declarations
 
 		# note; I'm not evaluating any of these input expressions, I'm just storing them
-		# @param [Array<Ore::Expression>] input
+		# @param [Array<Lost::Expression>] input
 		def initialize input = []
-			@input        = input # [Ore::Expression]
-			@declarations = Hash.new # {::String : Ore::Declaration}
+			@input        = input # [Lost::Expression]
+			@declarations = Hash.new # {::String : Lost::Declaration}
 		end
 
 		def output
@@ -53,8 +53,8 @@ module Ore
 			Declaration[key, expr, expr]
 		end
 
-		# @param [Array<Ore::Expression>] expressions
-		# @return [Hash{::String => Ore::Declaration}]
+		# @param [Array<Lost::Expression>] expressions
+		# @return [Hash{::String => Lost::Declaration}]
 		def declare_all expressions
 			expressions.each_with_object(Hash.new) do |expr, declarations|
 				decl = declare expr
@@ -65,7 +65,7 @@ module Ore
 					# a construct that doesn't push its own scope (Conditional_Expr, Circumfix_Expr, a bare @load) hands back its own nested declarations already-collected -- flatten them into this level rather than nesting them under a made-up key
 					declarations.merge! decl
 				else
-					Ore.assert(decl.is_a? Declaration)
+					Lost.assert(decl.is_a? Declaration)
 					declarations[decl.key] = decl
 				end
 			end
@@ -81,8 +81,8 @@ module Ore
 			end
 		end
 
-		# @param [Ore::Directive_Expr] expr
-		# @return [Hash{::String => Ore::Declaration}, nil]
+		# @param [Lost::Directive_Expr] expr
+		# @return [Hash{::String => Lost::Declaration}, nil]
 		def declarations_for_load expr
 			return nil unless expr.expression.is_a? String_Expr
 
@@ -100,7 +100,7 @@ module Ore
 		end
 
 		# @param [::String] filepath
-		# @return [Hash{::String => Ore::Declaration}]
+		# @return [Hash{::String => Lost::Declaration}]
 		def cached_declarations_for_load filepath
 			filepath = self.class.resolve_load_filepath filepath
 			return Hash.new if self.class.currently_loading_filepaths.include? filepath
@@ -108,7 +108,7 @@ module Ore
 			cached = self.class.cached_declarations_by_filepath[filepath]
 			return cached if cached
 
-			expressions = Ore::Interpreter.cached_expressions_by_filepath[filepath] ||
+			expressions = Lost::Interpreter.cached_expressions_by_filepath[filepath] ||
 			              Parser.new(Lexer.new(File.read(filepath)).output).output
 
 			self.class.currently_loading_filepaths << filepath
@@ -120,8 +120,8 @@ module Ore
 			Hash.new # missing/unreadable file -- not this pass's job to raise; the real @load will, once actually reached
 		end
 
-		# @param [Ore::Expression] expr to declare
-		# @return [Ore::Declaration, Hash, nil]
+		# @param [Lost::Expression] expr to declare
+		# @return [Lost::Declaration, Hash, nil]
 		def declare expr
 			case expr
 			when Param_Expr

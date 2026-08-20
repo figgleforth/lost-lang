@@ -1,5 +1,5 @@
 require 'minitest/autorun'
-require_relative '../src/ore'
+require_relative '../src/lost'
 require_relative 'base_test'
 require 'net/http'
 require 'uri'
@@ -7,8 +7,8 @@ require 'sequel'
 require 'securerandom'
 
 class Database_Test < Base_Test
-	DATABASE = "@load 'ore/database.ore'"
-	RECORD   = "@load 'ore/table.ore'"
+	DATABASE = "@load 'lost/database.tape'"
+	RECORD   = "@load 'lost/table.tape'"
 
 	def before_setup
 		@filepath = "./temp#{SecureRandom.hex}.db"
@@ -20,14 +20,14 @@ class Database_Test < Base_Test
 	end
 
 	def test_database_instance
-		out = Ore.interp <<~ORE
+		out = Lost.interp <<~TAPE
 		    #{DATABASE}
 			db := Database()
 		    sq := Sqlite('#{@filepath}')
 			(db, sq)
-		ORE
-		assert_instance_of Ore::Database, out.values.first
-		assert_instance_of Ore::Database, out.values.last
+		TAPE
+		assert_instance_of Lost::Database, out.values.first
+		assert_instance_of Lost::Database, out.values.last
 
 		assert_nil out.values.first.get 'adapter'
 		assert_nil out.values.first.get 'url'
@@ -40,29 +40,29 @@ class Database_Test < Base_Test
 	end
 
 	def test_database_connection_instance
-		out = Ore.interp <<~ORE
+		out = Lost.interp <<~TAPE
 		    #{DATABASE}
 		    db := Sqlite('#{@filepath}')
 		    @connect db
 			db.connection
-		ORE
+		TAPE
 		refute_nil out
 		assert_instance_of Sequel::SQLite::Database, out
 	end
 
 	def test_database_connection_is_cached
-		out = Ore.interp <<~ORE
+		out = Lost.interp <<~TAPE
 		    #{DATABASE}
 		    db := Sqlite('#{@filepath}')
 		    c1 := @connect db
 		    c2 := @connect db
 		    (c1, c2)
-		ORE
+		TAPE
 		assert_equal out.values[0].object_id, out.values[1].object_id
 	end
 
 	def test_inferring_record_table_name
-		out = Ore.interp <<~ORE
+		out = Lost.interp <<~TAPE
 		    #{RECORD}
 			r := Table()
 			r.table_name
@@ -71,30 +71,30 @@ class Database_Test < Base_Test
 			t := Thing()
 			t.infer_table_name_from_class!()
 			(r, t)
-		ORE
+		TAPE
 		assert_nil out.values.first.get 'table_name'
 		assert_equal 'things', out.values.last.get('table_name')
 	end
 
 	def test_connect_directive_creates_database_connection
-		out = Ore.interp <<~ORE
+		out = Lost.interp <<~TAPE
 		    #{DATABASE}
 		    db := Sqlite('#{@filepath}')
 			db.connection
-		ORE
+		TAPE
 		assert_nil out
 
-		out = Ore.interp <<~ORE
+		out = Lost.interp <<~TAPE
 		    #{DATABASE}
 		    db := Sqlite('#{@filepath}')
 			@connect db
 			db.connection
-		ORE
+		TAPE
 		assert_instance_of Sequel::SQLite::Database, out
 	end
 
 	def test_creating_table
-		out = Ore.interp <<~ORE
+		out = Lost.interp <<~TAPE
 		    #{DATABASE}
 		    db := Sqlite('#{@filepath}')
 			@connect db
@@ -106,12 +106,12 @@ class Database_Test < Base_Test
 			post_tables := db.tables()
 
 			(pre_tables, post_tables)
-		ORE
-		assert_equal [[], [:users]], out.values.map { |ore_array| ore_array.get('values') }
+		TAPE
+		assert_equal [[], [:users]], out.values.map { |lost_array| lost_array.get('values') }
 	end
 
 	def test_record_database_reference
-		out = Ore.interp <<~ORE
+		out = Lost.interp <<~TAPE
 		    #{DATABASE}, #{RECORD}
 		    db := @connect Sqlite('#{@filepath}')
 
@@ -133,7 +133,7 @@ class Database_Test < Base_Test
 
 			users := User.all()
 			(none, users, cooper, luna, db.table_exists?('users'))
-		ORE
+		TAPE
 		assert_equal 0, out.values[0].values.count
 		assert_equal 2, out.values[1].values.count
 		assert_equal [{ id: 1, name: 'Cooper' }, { id: 2, name: 'Luna' }], out.values[1].values.map(&:hash)
@@ -144,7 +144,7 @@ class Database_Test < Base_Test
 
 	def test_create_table_column_types
 		refute_raises do
-			Ore.interp <<~ORE
+			Lost.interp <<~TAPE
 			    #{DATABASE}
 			    db := @connect Sqlite('#{@filepath}')
 
@@ -155,12 +155,12 @@ class Database_Test < Base_Test
 					active: Bool
 				>
 				db.create_table('things', Things_Schema)
-			ORE
+			TAPE
 		end
 	end
 
 	def test_record_update
-		out = Ore.interp <<~ORE
+		out = Lost.interp <<~TAPE
 		    #{DATABASE}, #{RECORD}
 		    db := @connect Sqlite('#{@filepath}')
 
@@ -178,12 +178,12 @@ class Database_Test < Base_Test
 			created := User.create({name: 'Cooper'})
 			User.update(created.id, {name: 'Cooper Updated'})
 			User.find(created.id)
-		ORE
+		TAPE
 		assert_equal 'Cooper Updated', out.hash[:name]
 	end
 
 	def test_record_find_by
-		out = Ore.interp <<~ORE
+		out = Lost.interp <<~TAPE
 		    #{DATABASE}, #{RECORD}
 		    db := @connect Sqlite('#{@filepath}')
 
@@ -201,12 +201,12 @@ class Database_Test < Base_Test
 			User.create({name: 'Cooper'})
 			User.create({name: 'Luna'})
 			User.find_by({name: 'Luna'})
-		ORE
+		TAPE
 		assert_equal({ id: 2, name: 'Luna' }, out.hash)
 	end
 
 	def test_record_find_by_returns_nil_when_not_found
-		out = Ore.interp <<~ORE
+		out = Lost.interp <<~TAPE
 		    #{DATABASE}, #{RECORD}
 		    db := @connect Sqlite('#{@filepath}')
 
@@ -222,12 +222,12 @@ class Database_Test < Base_Test
 			}
 
 			User.find_by({name: 'nobody'})
-		ORE
+		TAPE
 		assert_nil out
 	end
 
 	def test_record_where
-		out = Ore.interp <<~ORE
+		out = Lost.interp <<~TAPE
 		    #{DATABASE}, #{RECORD}
 		    db := @connect Sqlite('#{@filepath}')
 
@@ -248,20 +248,20 @@ class Database_Test < Base_Test
 			Item.create({name: 'Carrot', kind: 'vegetable'})
 
 			Item.where({kind: 'fruit'})
-		ORE
+		TAPE
 		assert_equal 2, out.values.count
 		assert_equal ['Apple', 'Banana'], out.values.map { |d| d.hash[:name] }
 	end
 
 	def test_number_rand
 		100.times do
-			out = Ore.interp 'Number.rand(10)'
+			out = Lost.interp 'Number.rand(10)'
 			assert_includes 0..10, out
 		end
 	end
 
 	def test_number_rand_zero
-		out = Ore.interp 'Number.rand(0)'
+		out = Lost.interp 'Number.rand(0)'
 		assert_equal 0, out
 	end
 end

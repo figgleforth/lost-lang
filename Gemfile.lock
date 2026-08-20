@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    ore-lang (0.0.1)
+    lost-lang (0.0.1)
       listen (~> 3.9)
       logger (~> 1.7)
       sequel (~> 5.99)
@@ -62,8 +62,8 @@ PLATFORMS
   x86_64-linux-musl
 
 DEPENDENCIES
+  lost-lang!
   minitest (= 5.25.4)
-  ore-lang!
   rake (= 13.3.0)
   reline (~> 0.6.3)
   sqlite3 (= 2.9.0)
@@ -83,8 +83,8 @@ CHECKSUMS
   io-console (0.8.2) sha256=d6e3ae7a7cc7574f4b8893b4fca2162e57a825b223a177b7afa236c5ef9814cc
   listen (3.10.0) sha256=c6e182db62143aeccc2e1960033bebe7445309c7272061979bb098d03760c9d2
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
+  lost-lang (0.0.1)
   minitest (5.25.4) sha256=9cf2cae25ac4dfc90c988ebc3b917f53c054978b673273da1bd20bcb0778f947
-  ore-lang (0.0.1)
   rake (13.3.0) sha256=96f5092d786ff412c62fde76f793cc0541bd84d2eb579caa529aa8a059934493
   rb-fsevent (0.11.2) sha256=43900b972e7301d6570f64b850a5aa67833ee7d87b458ee92805d56b7318aefe
   rb-inotify (0.11.1) sha256=a0a700441239b0ff18eb65e3866236cd78613d6b9f78fea1f9ac47a85e47be6e

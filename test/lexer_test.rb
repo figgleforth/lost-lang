@@ -1,217 +1,217 @@
 require 'minitest/autorun'
-require_relative '../src/ore'
+require_relative '../src/lost'
 require_relative 'base_test'
 
 class Lexer_Test < Base_Test
 	def test_single_linecomment
-		out = Ore.lex '# single line comment'
+		out = Lost.lex '# single line comment'
 		assert_equal :comment, out.first.type
 		assert_equal 'single line comment', out.first.value
-		assert_kind_of Ore::Lexeme, out.first
+		assert_kind_of Lost::Lexeme, out.first
 	end
 
 	def test_fence_blocks
-		out = Ore.lex '```single line fence block```'
+		out = Lost.lex '```single line fence block```'
 		assert_equal :fence, out.first.type
 		assert_equal 'single line fence block', out.first.value
-		assert_kind_of Ore::Lexeme, out.first
+		assert_kind_of Lost::Lexeme, out.first
 
-		out = Ore.lex '```multi
+		out = Lost.lex '```multi
 		line
 		fence
 		block```'
 		assert_equal :fence, out.first.type
 		assert out.first.value.start_with? 'multi'
-		assert_kind_of Ore::Lexeme, out.first
+		assert_kind_of Lost::Lexeme, out.first
 	end
 
 	def test_identifiers
 		tests = %w(lowercase UPPERCASE Capitalized).zip %I(identifier IDENTIFIER Identifier)
 		tests.all? do |code, type|
-			out = Ore.lex code
+			out = Lost.lex code
 			assert_equal type, out.first.type
-			assert_kind_of Ore::Lexeme, out.first
+			assert_kind_of Lost::Lexeme, out.first
 		end
 	end
 
 	def test_numbers
-		assert_equal :number, Ore.lex('4').first.type
-		assert_equal :number, Ore.lex('8.0').first.type
+		assert_equal :number, Lost.lex('4').first.type
+		assert_equal :number, Lost.lex('8.0').first.type
 	end
 
 	def test_prefixed_numbers
-		out = Ore.lex '-15'
+		out = Lost.lex '-15'
 		assert_equal %I(number), out.map(&:type)
 		assert_equal '-15', out.last.value # These are converted to numerical values once they become Number_Exprs
 		assert_equal 1, out.count
 
-		out = Ore.lex '+1.6'
+		out = Lost.lex '+1.6'
 		assert_equal %I(operator number), out.map(&:type)
 		assert_equal '1.6', out.last.value
 		assert_equal 2, out.count
 	end
 
 	def test_unusual_number_situations
-		out = Ore.lex '20three'
+		out = Lost.lex '20three'
 		assert_equal %I(number identifier), out.map(&:type)
 		assert_equal 2, out.count
 
-		out = Ore.lex '40__two'
+		out = Lost.lex '40__two'
 		assert_equal %I(number identifier), out.map(&:type)
 		assert_equal 2, out.count
 
-		out = Ore.lex '4_15_6_3_4'
+		out = Lost.lex '4_15_6_3_4'
 		assert_equal :number, out.first.type
 		assert_equal 1, out.count
 
-		out = Ore.lex 'abc123'
+		out = Lost.lex 'abc123'
 		assert_equal :identifier, out.first.type
 		assert_equal 1, out.count
 	end
 
 	def test_strings
-		out = Ore.lex '"A string"'
+		out = Lost.lex '"A string"'
 		assert_equal :string, out.first.type
 
-		out = Ore.lex "'Another string'"
+		out = Lost.lex "'Another string'"
 		assert_equal :string, out.first.type
 
 	end
 
 	def test_interpolated_strings
-		out = Ore.lex '"An `interpolated` string"'
+		out = Lost.lex '"An `interpolated` string"'
 		assert_equal :string, out.first.type
 
-		out = Ore.lex "'Another `interpolated` string'"
+		out = Lost.lex "'Another `interpolated` string'"
 		assert_equal :string, out.first.type
 	end
 
 	def test_unterminated_string_literal
-		assert_raises Ore::Unterminated_String_Literal do
-			Ore.lex '"test\\'
+		assert_raises Lost::Unterminated_String_Literal do
+			Lost.lex '"test\\'
 		end
 
-		assert_raises Ore::Unterminated_String_Literal do
-			Ore.lex "'test\\"
+		assert_raises Lost::Unterminated_String_Literal do
+			Lost.lex "'test\\"
 		end
 	end
 
 	def test_operators
 		# todo Should this be such a long test?
-		out = Ore.lex 'numbers += 4815162342'
+		out = Lost.lex 'numbers += 4815162342'
 		assert_equal %I(identifier operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex 'ENABLED = true'
+		out = Lost.lex 'ENABLED = true'
 		assert_equal %I(IDENTIFIER operator identifier), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex 'Type = {}'
+		out = Lost.lex 'Type = {}'
 		assert_equal %I(Identifier operator delimiter delimiter), out.map(&:type)
 		assert_equal 4, out.count
 
-		out = Ore.lex 'numbers,'
+		out = Lost.lex 'numbers,'
 		assert_equal %I(identifier delimiter), out.map(&:type)
 		assert_equal 2, out.count
 
-		out = Ore.lex 'number: Number = 1'
+		out = Lost.lex 'number: Number = 1'
 		assert_equal %I(identifier operator Identifier operator number), out.map(&:type)
 		assert_equal 5, out.count
 
-		out = Ore.lex '1 + 2 * 3 / 4'
+		out = Lost.lex '1 + 2 * 3 / 4'
 		assert_equal %I(number operator number operator number operator number), out.map(&:type)
 		assert_equal 7, out.count
 
-		out = Ore.lex '1 <=> 2'
+		out = Lost.lex '1 <=> 2'
 		assert_equal %I(number operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex '1 == 2'
+		out = Lost.lex '1 == 2'
 		assert_equal %I(number operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex '1 != 2'
+		out = Lost.lex '1 != 2'
 		assert_equal %I(number operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex '1 > 2'
+		out = Lost.lex '1 > 2'
 		assert_equal %I(number operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex '1 <= 2'
+		out = Lost.lex '1 <= 2'
 		assert_equal %I(number operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex '1...2'
+		out = Lost.lex '1...2'
 		assert_equal %I(number operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex '3.0...4.0'
+		out = Lost.lex '3.0...4.0'
 		assert_equal %I(number operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex '3..<4'
+		out = Lost.lex '3..<4'
 		assert_equal %I(number operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex '5>..6'
+		out = Lost.lex '5>..6'
 		assert_equal %I(number operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex '7>.<8'
+		out = Lost.lex '7>.<8'
 		assert_equal %I(number operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex 'a, B, 5, "cool"'
+		out = Lost.lex 'a, B, 5, "cool"'
 		assert_equal %I(identifier delimiter IDENTIFIER delimiter number delimiter string), out.map(&:type)
 		assert_equal 7, out.count
 
-		out = Ore.lex '1...2, 3..<4, 5>..6, 7>.<8'
+		out = Lost.lex '1...2, 3..<4, 5>..6, 7>.<8'
 		assert_equal %I(number operator number delimiter number operator number delimiter number operator number delimiter number operator number), out.map(&:type)
 		assert_equal 15, out.count
 
-		out = Ore.lex './this_instance'
+		out = Lost.lex './this_instance'
 		assert_equal %I(operator identifier), out.map(&:type)
 		assert_equal 2, out.count
 
-		out = Ore.lex '../class_scope'
+		out = Lost.lex '../class_scope'
 		assert_equal %I(operator identifier), out.map(&:type)
 		assert_equal 2, out.count
 	end
 
 	def test_declaration_operators
-		out = Ore.lex 'numbers := 4815162342' # This parses but I'm not using this any longer. Maybe I'll repurpose it.
+		out = Lost.lex 'numbers := 4815162342' # This parses but I'm not using this any longer. Maybe I'll repurpose it.
 		assert_equal %I(identifier operator number), out.map(&:type)
 		assert_equal 3, out.count
 
-		out = Ore.lex 'numbers = 123'
+		out = Lost.lex 'numbers = 123'
 		assert_equal %I(identifier operator number), out.map(&:type)
 		assert_equal 3, out.count
 	end
 
 	def test_functions
-		out = Ore.lex '{;}'
+		out = Lost.lex '{;}'
 		assert_equal [:delimiter, :delimiter, :delimiter], out.map(&:type)
 
-		out = Ore.lex 'named_function {;}'
+		out = Lost.lex 'named_function {;}'
 		assert_equal [:identifier, :delimiter, :delimiter, :delimiter], out.map(&:type)
 
-		out = Ore.lex '{ input; }'
+		out = Lost.lex '{ input; }'
 		assert_equal [:delimiter, :identifier, :delimiter, :delimiter], out.map(&:type)
 
-		out = Ore.lex '{ labeled input; }'
+		out = Lost.lex '{ labeled input; }'
 		assert_equal [:delimiter, :identifier, :identifier, :delimiter, :delimiter], out.map(&:type)
 
-		out = Ore.lex '{ value := 123; }'
+		out = Lost.lex '{ value := 123; }'
 		assert_equal [:delimiter, :identifier, :operator, :number, :delimiter, :delimiter], out.map(&:type)
 
-		out = Ore.lex '{ labeled value := 123; }'
+		out = Lost.lex '{ labeled value := 123; }'
 		assert_equal [:delimiter, :identifier, :identifier, :operator, :number, :delimiter, :delimiter], out.map(&:type)
 
-		out = Ore.lex '{ mixed, labeled value := 456; }'
+		out = Lost.lex '{ mixed, labeled value := 456; }'
 		assert_equal [:delimiter, :identifier, :delimiter, :identifier, :identifier, :operator, :number, :delimiter, :delimiter], out.map(&:type)
 
-		out = Ore.lex 'square { input;
+		out = Lost.lex 'square { input;
 		 		input * input
 		 	 }'
 		assert_equal [
@@ -219,7 +219,7 @@ class Lexer_Test < Base_Test
 			             :identifier, :operator, :identifier, :delimiter, :delimiter
 		             ], out.map(&:type)
 
-		out = Ore.lex 'wrap { number, limit;
+		out = Lost.lex 'wrap { number, limit;
 		 		if number > limit
 		 			number = 0
 		 		end
@@ -233,10 +233,10 @@ class Lexer_Test < Base_Test
 	end
 
 	def test_types
-		out = Ore.lex 'String {}'
+		out = Lost.lex 'String {}'
 		assert_equal [:Identifier, :delimiter, :delimiter], out.map(&:type)
 
-		out = Ore.lex 'Transform {
+		out = Lost.lex 'Transform {
 		 	position,
 		 	rotation,
 		 }'
@@ -247,7 +247,7 @@ class Lexer_Test < Base_Test
 			             :delimiter
 		             ], out.map(&:type)
 
-		out = Ore.lex 'Entity {
+		out = Lost.lex 'Entity {
 		 	|Transform
 		}'
 		assert_equal [
@@ -258,7 +258,7 @@ class Lexer_Test < Base_Test
 	end
 
 	def test_control_flow
-		out = Ore.lex 'if true
+		out = Lost.lex 'if true
 			celebrate()
 		end'
 		assert_equal [
@@ -267,7 +267,7 @@ class Lexer_Test < Base_Test
 			             :identifier
 		             ], out.map(&:type)
 
-		out = Ore.lex 'if 1 + 2 * 3 == 7
+		out = Lost.lex 'if 1 + 2 * 3 == 7
 			"This one!"
 		elif 1 + 2 * 3 == 9
 			\'No, this one!\'
@@ -284,7 +284,7 @@ class Lexer_Test < Base_Test
 			             :identifier
 		             ], out.map(&:type)
 
-		out = Ore.lex 'for [1, 2, 3, 4, 5]
+		out = Lost.lex 'for [1, 2, 3, 4, 5]
 			remove it if randf() > 0.5
 			skip
 			stop
@@ -299,33 +299,33 @@ class Lexer_Test < Base_Test
 	end
 
 	def test_compound_operators
-		Ore::COMPOUND_OPERATORS.each do |operator|
-			out = Ore.lex operator
+		Lost::COMPOUND_OPERATORS.each do |operator|
+			out = Lost.lex operator
 			assert_equal operator, out.first.value
 		end
 	end
 
 	def test_conditional_keywords
-		out = Ore.lex 'and or'
+		out = Lost.lex 'and or'
 		assert_equal :operator, out.first.type
 		assert_equal :operator, out.last.type
 	end
 
 	def test_return_is_an_operator
-		out = Ore.lex 'return 1 + 2'
+		out = Lost.lex 'return 1 + 2'
 		assert_equal :operator, out.first.type
 	end
 
 	def test_skip_and_stop_are_operators
-		out = Ore.lex 'skip'
+		out = Lost.lex 'skip'
 		assert_equal :operator, out.first.type
 
-		out = Ore.lex 'stop'
+		out = Lost.lex 'stop'
 		assert_equal :operator, out.first.type
 	end
 
 	def test_identifier_dot_integer
-		out = Ore.lex 'array.0'
+		out = Lost.lex 'array.0'
 		assert_equal :identifier, out.first.type
 		assert_equal 'array', out.first.value
 		assert_equal :operator, out[1].type
@@ -336,7 +336,7 @@ class Lexer_Test < Base_Test
 	end
 
 	def test_identifier_dot_float
-		out = Ore.lex 'array.2.0'
+		out = Lost.lex 'array.2.0'
 		assert_equal :identifier, out.first.type
 		assert_equal 'array', out.first.value
 		assert_equal :operator, out[1].type
@@ -347,52 +347,52 @@ class Lexer_Test < Base_Test
 	end
 
 	def test_number_with_multiple_decimal_points
-		out = Ore.lex '1.2.3'
+		out = Lost.lex '1.2.3'
 		assert_equal 1, out.count
 		assert_equal :number, out.first.type
 	end
 
 	def test_double_less_than_is_operator
-		out = Ore.lex '<<'
+		out = Lost.lex '<<'
 		assert_equal :operator, out.first.type
 	end
 
 	def test_at_at_prefix
-		out = Ore.lex '@count'
+		out = Lost.lex '@count'
 		assert_equal :operator, out.first.type
 	end
 
 	def test_allowed_identifier_special_chars
-		out = Ore.lex 'what?,'
+		out = Lost.lex 'what?,'
 		assert_equal :identifier, out.first.type
 		assert_equal 'what?', out.first.value
 
-		out = Ore.lex 'okay!,'
+		out = Lost.lex 'okay!,'
 		assert_equal :identifier, out.first.type
 		assert_equal 'okay!', out.first.value
 	end
 
 	def test_unpack_prefix
-		out = Ore.lex '@instance_to_unpack'
+		out = Lost.lex '@instance_to_unpack'
 		assert_equal :operator, out.first.type
-		assert_equal Ore::BUILTIN_OPERATOR, out.first.value
+		assert_equal Lost::BUILTIN_OPERATOR, out.first.value
 		assert_equal :identifier, out.last.type
 		assert_equal 'instance_to_unpack', out.last.value
 	end
 
 	def test_for_keyword
-		out = Ore.lex 'for'
+		out = Lost.lex 'for'
 		assert_equal :operator, out.last.type
 	end
 
 	def test_single_line_code_location
-		out = Ore.lex 'abracadabra'
+		out = Lost.lex 'abracadabra'
 		assert_equal 1, out.last.l0
 		assert_equal 1, out.last.c0
 		assert_equal 1, out.last.l1
 		assert_equal 11, out.last.c1
 
-		out = Ore.lex 'abracadabra = whatever'
+		out = Lost.lex 'abracadabra = whatever'
 		assert_equal 1, out.last.l0
 		assert_equal 1, out.last.l1
 		assert_equal 15, out.last.c0
@@ -400,7 +400,7 @@ class Lexer_Test < Base_Test
 	end
 
 	def test_multiline_code_location
-		out = Ore.lex <<~LEX
+		out = Lost.lex <<~LEX
 		    Thing {
 		    	id,
 		    	name,
@@ -444,6 +444,6 @@ class Lexer_Test < Base_Test
 	end
 
 	def test_debug
-		Ore.lex '{ a=1, b="two", c=three }'
+		Lost.lex '{ a=1, b="two", c=three }'
 	end
 end

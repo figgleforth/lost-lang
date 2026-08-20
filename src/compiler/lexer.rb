@@ -1,4 +1,4 @@
-module Ore
+module Lost
 	class Lexer
 		attr_accessor :i, :col, :line, :source_file, :input
 
@@ -17,15 +17,15 @@ module Ore
 		end
 
 		def whitespace? char = curr
-			Ore::WHITESPACES.include? char
+			Lost::WHITESPACES.include? char
 		end
 
 		def newline? char = curr
-			Ore::NEWLINES.include? char
+			Lost::NEWLINES.include? char
 		end
 
 		def delimiter? char = curr
-			Ore::DELIMITERS.include? char
+			Lost::DELIMITERS.include? char
 		end
 
 		def identifier? char = curr
@@ -33,15 +33,15 @@ module Ore
 		end
 
 		def numeric? char = curr
-			char&.match? Ore::NUMERIC_REGEX
+			char&.match? Lost::NUMERIC_REGEX
 		end
 
 		def alpha? char = curr
-			char&.match? Ore::ALPHA_REGEX
+			char&.match? Lost::ALPHA_REGEX
 		end
 
 		def alphanumeric? char = curr
-			char&.match? Ore::ALPHANUMERIC_REGEX
+			char&.match? Lost::ALPHANUMERIC_REGEX
 		end
 
 		def symbol? char = curr
@@ -51,10 +51,10 @@ module Ore
 		def route_pattern?
 			return false unless identifier?
 
-			verb_match = Ore::HTTP_VERBS.any? { |verb| peek(0, verb.length) == verb }
+			verb_match = Lost::HTTP_VERBS.any? { |verb| peek(0, verb.length) == verb }
 			return false unless verb_match
 
-			verb_length = Ore::HTTP_VERBS.find { |verb| peek(0, verb.length) == verb }.length
+			verb_length = Lost::HTTP_VERBS.find { |verb| peek(0, verb.length) == verb }.length
 			peek(verb_length, 3) == '://'
 		end
 
@@ -77,7 +77,7 @@ module Ore
 
 		def eat expected = nil
 			if expected && expected != curr
-				raise Ore::Lexed_Unexpected_Char.new(expected: expected, got: curr)
+				raise Lost::Lexed_Unexpected_Char.new(expected: expected, got: curr)
 			end
 
 			eaten = curr
@@ -101,7 +101,7 @@ module Ore
 			end
 
 			if expected_chars && expected_chars != it
-				raise Ore::Lexed_Unexpected_Char.new(expected: expected_chars, got: it)
+				raise Lost::Lexed_Unexpected_Char.new(expected: expected_chars, got: it)
 			end
 
 			it
@@ -136,7 +136,7 @@ module Ore
 
 		def lex_oneline_comment
 			it = ::String.new
-			eat Ore::COMMENT_CHAR
+			eat Lost::COMMENT_CHAR
 			eat while whitespace?
 
 			while chars? && !newline?
@@ -147,7 +147,7 @@ module Ore
 		end
 
 		def lex_fence_block
-			marker = lex_many Ore::FENCE_CHARS.length, Ore::FENCE_CHARS
+			marker = lex_many Lost::FENCE_CHARS.length, Lost::FENCE_CHARS
 			it     = ::String.new
 
 			eat while whitespace? || newline?
@@ -160,7 +160,7 @@ module Ore
 				end
 			end
 
-			lex_many Ore::FENCE_CHARS.length, Ore::FENCE_CHARS
+			lex_many Lost::FENCE_CHARS.length, Lost::FENCE_CHARS
 			it
 		end
 
@@ -168,7 +168,7 @@ module Ore
 			it    = ::String.new
 			quote = eat
 
-			# todo: Refactor this, maybe? I was trying to use interpolation pipes in multiline text (see ./examples/basic_page.ore) and realized that I wasn't escaping those, which led to the interpreter trying to actually interpolate the string.
+			# todo: Refactor this, maybe? I was trying to use interpolation pipes in multiline text (see ./examples/basic_page.tape) and realized that I wasn't escaping those, which led to the interpreter trying to actually interpolate the string.
 			while chars? && curr != quote
 				if curr == '\\'
 					eat
@@ -185,7 +185,7 @@ module Ore
 							it << "\\#{escaped}"
 						end
 					else
-						raise Ore::Unterminated_String_Literal.new
+						raise Lost::Unterminated_String_Literal.new
 					end
 				else
 					it << eat
@@ -193,7 +193,7 @@ module Ore
 			end
 
 			if !chars? || curr != quote
-				raise Ore::Unterminated_String_Literal.new
+				raise Lost::Unterminated_String_Literal.new
 			end
 
 			eat quote
@@ -212,9 +212,9 @@ module Ore
 				break if it == '>' && curr == '.' && !%w(. <).include?(peek)
 
 				it << eat
-				break if Ore::SCOPE_OPERATORS.include? it
-				break if Ore::ILLEGAL_OPERATOR_CHARS.include? it
-				break if Ore::ILLEGAL_OPERATOR_CHARS.include? curr
+				break if Lost::SCOPE_OPERATORS.include? it
+				break if Lost::ILLEGAL_OPERATOR_CHARS.include? it
+				break if Lost::ILLEGAL_OPERATOR_CHARS.include? curr
 			end
 			it
 		end
@@ -239,11 +239,11 @@ module Ore
 		def lex_route
 			verb = ::String.new
 			while chars? && (identifier? || alphanumeric?)
-				break unless Ore::HTTP_VERBS.any? { |v| v.start_with?(verb + curr) }
+				break unless Lost::HTTP_VERBS.any? { |v| v.start_with?(verb + curr) }
 				verb << eat
 			end
 
-			protocol_sep = lex_many 3, Ore::HTTP_VERB_SEPARATOR
+			protocol_sep = lex_many 3, Lost::HTTP_VERB_SEPARATOR
 
 			path = ::String.new
 			while chars? && !whitespace? && !newline? && curr != '{'
@@ -257,10 +257,10 @@ module Ore
 			tokens = []
 
 			while chars?
-				single = curr == Ore::COMMENT_CHAR
-				fenced = peek(0, Ore::FENCE_CHARS.length) == Ore::FENCE_CHARS
+				single = curr == Lost::COMMENT_CHAR
+				fenced = peek(0, Lost::FENCE_CHARS.length) == Lost::FENCE_CHARS
 
-				token = Ore::Lexeme.new.tap do
+				token = Lost::Lexeme.new.tap do
 					it.source_file = source_file
 					it.l0          = line
 					it.c0          = col
@@ -307,7 +307,7 @@ module Ore
 
 					elsif identifier?
 						it.value = lex_identifier
-						it.type  = Ore.type_of_identifier it.value
+						it.type  = Lost.type_of_identifier it.value
 						if %w(for skip stop).include?(it.value)
 							it.type = :operator
 						end
@@ -350,7 +350,7 @@ module Ore
 						end
 
 					else
-						raise Ore::Lex_Char_Not_Implemented.new(char: curr)
+						raise Lost::Lex_Char_Not_Implemented.new(char: curr)
 					end
 
 					it.l1 = line
@@ -359,7 +359,7 @@ module Ore
 
 				next if whitespace?(token.value)
 
-				token.reserved = Ore::RESERVED.include? token.value
+				token.reserved = Lost::RESERVED.include? token.value
 				tokens << token
 			end
 

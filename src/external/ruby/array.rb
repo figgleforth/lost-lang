@@ -1,5 +1,5 @@
-module Ore
-	# note: Be sure to prefix with Ore:: whenever referencing this Array type to prevent ambiguity with Ruby's ::Array!
+module Lost
+	# note: Be sure to prefix with Lost:: whenever referencing this Array type to prevent ambiguity with Ruby's ::Array!
 	class Array < Instance
 		extend Ruby_Proxies
 		attr_accessor :values
@@ -15,7 +15,7 @@ module Ore
 		proxy :push
 		proxy :pop
 		proxy :shift
-		proxy :unshift, as: :prepend # ore/array.ore's `unshift{;}` was renamed to `prepend{;}` (unshift is now just an alias, see #Interpreter#interp_directive's `@ruby` lookup, which resolves by the func's own declared name -- "prepend" -- not whatever alias it was called through)
+		proxy :unshift, as: :prepend # lost/array.tape's `unshift{;}` was renamed to `prepend{;}` (unshift is now just an alias, see #Interpreter#interp_directive's `@ruby` lookup, which resolves by the func's own declared name -- "prepend" -- not whatever alias it was called through)
 		proxy :length
 		proxy :length, as: :count
 		proxy :join
@@ -39,33 +39,33 @@ module Ore
 		end
 
 		def proxy_flatten depth = -1
-			ruby_array = values.map { |v| v.is_a?(Ore::Array) ? v.values : v }
-			Ore::Array.new ruby_array.flatten depth
+			ruby_array = values.map { |v| v.is_a?(Lost::Array) ? v.values : v }
+			Lost::Array.new ruby_array.flatten depth
 		end
 
 		# first/last/slice can return either a single element or a raw Ruby Array (with a count/range argument) -- only wrap the latter, so `it.first` (no arg) still returns a scalar
-		def proxy_first *args
+		def proxy_first * args
 			wrap_if_array values.first(*args)
 		end
 
-		def proxy_last *args
+		def proxy_last * args
 			wrap_if_array values.last(*args)
 		end
 
-		def proxy_slice *args
+		def proxy_slice * args
 			wrap_if_array values.slice(*args)
 		end
 
 		def proxy_reverse
-			Ore::Array.new values.reverse
+			Lost::Array.new values.reverse
 		end
 
 		def proxy_sort
-			Ore::Array.new values.sort
+			Lost::Array.new values.sort
 		end
 
 		def proxy_uniq
-			Ore::Array.new values.uniq
+			Lost::Array.new values.uniq
 		end
 
 		def == other
@@ -74,17 +74,17 @@ module Ore
 		end
 
 		def + other
-			Ore::Array.new(values + other.values)
+			Lost::Array.new(values + other.values)
 		end
 
 		private
 
 		def wrap_if_array result
-			result.is_a?(::Array) ? Ore::Array.new(result) : result
+			result.is_a?(::Array) ? Lost::Array.new(result) : result
 		end
 	end
 
-	class Tuple < Ore::Array
+	class Tuple < Lost::Array
 		def initialize values = []
 			super values
 		end

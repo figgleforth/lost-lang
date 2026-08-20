@@ -1,4 +1,4 @@
-module Ore
+module Lost
 	BUILTIN_OPERATOR                  = '@'
 	NIL_INIT_POSTFIX                  = ','
 	FUNCTION_DELIMITER                = ';'

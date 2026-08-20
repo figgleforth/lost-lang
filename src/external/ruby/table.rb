@@ -1,10 +1,10 @@
-module Ore
+module Lost
 	class Table < Instance
 		extend Ruby_Proxies
 
 		attr_accessor :connection # to the Sqlite database
 
-		# @return [Ore::Struct]
+		# @return [Lost::Struct]
 		attr_accessor :schema
 
 		attr_accessor :table_name
@@ -19,7 +19,7 @@ module Ore
 			@declarations['table_name'] = first_type.split('::').last.downcase.pluralize
 		end
 
-		# @return [Ore::Database]
+		# @return [Lost::Database]
 		def database
 			@declarations['database']
 		end
@@ -31,14 +31,14 @@ module Ore
 
 		# @return [Sequel::SQLite::Dataset]
 		def table
-			raise Ore::Database_Not_Set_For_Table_Instance unless database
+			raise Lost::Database_Not_Set_For_Table_Instance unless database
 
 			database['connection'][table_name]
 		end
 
 		def proxy_all
 			records = table&.all || []
-			Ore::Array.new records.map { |row| record_struct(row) }
+			Lost::Array.new records.map { |row| record_struct(row) }
 		end
 
 		def proxy_find id
@@ -46,14 +46,14 @@ module Ore
 			record ? record_struct(record) : nil
 		end
 
-		def proxy_find_by ore_dict
-			record = table.where(ore_dict.hash).first
+		def proxy_find_by lost_dict
+			record = table.where(lost_dict.hash).first
 			record ? record_struct(record) : nil
 		end
 
-		def proxy_where ore_dict
-			records = table.where(ore_dict.hash).all
-			Ore::Array.new records.map { |row| record_struct(row) }
+		def proxy_where lost_dict
+			records = table.where(lost_dict.hash).all
+			Lost::Array.new records.map { |row| record_struct(row) }
 		end
 
 		def proxy_create dict_or_struct
@@ -70,9 +70,9 @@ module Ore
 			table.where(id: id).delete
 		end
 
-		# @param dict_or_struct [Ore::Dictionary, Ore::Struct]
+		# @param dict_or_struct [Lost::Dictionary, Lost::Struct]
 		def record_hash dict_or_struct
-			return dict_or_struct.hash if dict_or_struct.is_a? Ore::Dictionary
+			return dict_or_struct.hash if dict_or_struct.is_a? Lost::Dictionary
 
 			dict_or_struct.names.zip(dict_or_struct.values).each_with_object({}) do |(name, value), hash|
 				next unless name
@@ -80,10 +80,10 @@ module Ore
 			end
 		end
 
-		# Sequel only knows how to literalize plain Ruby values -- an Ore::String struct member value needs unwrapping (Sequel also can't tell it apart from a column/identifier reference the way it can a raw String), and a raw Symbol (an enum member's value, e.g. `:TODO`) is itself already treated as a column/identifier reference rather than a string literal, so it needs converting too.
+		# Sequel only knows how to literalize plain Ruby values -- an Lost::String struct member value needs unwrapping (Sequel also can't tell it apart from a column/identifier reference the way it can a raw String), and a raw Symbol (an enum member's value, e.g. `:TODO`) is itself already treated as a column/identifier reference rather than a string literal, so it needs converting too.
 		def sql_literal_value value
 			case value
-			when Ore::String then value.value
+			when Lost::String then value.value
 			when ::Symbol then value.to_s
 			else value
 			end
@@ -94,11 +94,11 @@ module Ore
 			(@declarations['structure'] || enclosing_scope&.declarations&.[]('structure'))&.get('columns')
 		end
 
-		# Builds a real, Task-shaped Ore::Struct from a raw SQL row when the model was declared with a schema (see #struct_schema); falls back to a plain Ore::Dictionary otherwise, unchanged from before -- the older `User | Table { Self.database := ~/db }` pattern (no structured reference) has no schema to shape a Struct from. Goes through Interpreter#build_struct (not a bare Ore::Struct.new) so `.members` gets populated the same way a real struct literal's does -- ore/struct.ore's own `to_s`/`==` read `.members`, not `.names`/`.values` directly.
+		# Builds a real, Task-shaped Lost::Struct from a raw SQL row when the model was declared with a schema (see #struct_schema); falls back to a plain Lost::Dictionary otherwise, unchanged from before -- the older `User | Table { Self.database := ~/db }` pattern (no structured reference) has no schema to shape a Struct from. Goes through Interpreter#build_struct (not a bare Lost::Struct.new) so `.members` gets populated the same way a real struct literal's does -- lost/struct.tape's own `to_s`/`==` read `.members`, not `.names`/`.values` directly.
 		def record_struct row
 			schema      = struct_schema
-			interpreter = Ore::Interpreter.current
-			return Ore::Dictionary.new(row) unless schema.is_a?(Ore::Struct) && interpreter
+			interpreter = Lost::Interpreter.current
+			return Lost::Dictionary.new(row) unless schema.is_a?(Lost::Struct) && interpreter
 
 			values = schema.names.map { |name| row[name.to_sym] }
 			struct = interpreter.build_struct schema.names, schema.type_names, schema.type_objects, values

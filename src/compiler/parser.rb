@@ -1,4 +1,4 @@
-module Ore
+module Lost
 	class Parser
 		attr_accessor :i, :input, :precedences
 
@@ -68,7 +68,7 @@ module Ore
 			end
 		end
 
-		# If the given operator doesn't exist then it returns Ore::DEFAULT_OPERATOR_PRECEDENCE which binds somewhere around the equality operators. See Ore::PRECEDENCES
+		# If the given operator doesn't exist then it returns Lost::DEFAULT_OPERATOR_PRECEDENCE which binds somewhere around the equality operators. See Lost::PRECEDENCES
 		# Neat reference for precedences: https://rosettacode.org/wiki/Operator_precedence
 		# @param operator [::String]
 		# @return precedence [Integer]
@@ -82,7 +82,7 @@ module Ore
 		end
 
 		# input[i]
-		# @return [Ore::Lexeme]
+		# @return [Lost::Lexeme]
 		def curr_lexeme
 			input[i]
 		end
@@ -112,7 +112,7 @@ module Ore
 			slice.each_with_index.all? do |lexeme, index|
 				expected = sequence[index]
 
-				if expected.is_a?(Ore::Array) || expected.is_a?(::Array)
+				if expected.is_a?(Lost::Array) || expected.is_a?(::Array)
 					expected.any? do |alt|
 						lexeme.is(alt)
 					end
@@ -183,11 +183,11 @@ module Ore
 		#   end
 		#
 		def parse_for_loop_expr
-			it            = Ore::For_Loop_Expr.new
+			it            = Lost::For_Loop_Expr.new
 			it.lexeme     = eat 'for'
 			it.collection = parse_expression
 
-			if curr? Ore::FOR_VERBS and verb = eat
+			if curr? Lost::FOR_VERBS and verb = eat
 				it.type   = verb
 				it.lexeme = verb
 			end
@@ -211,7 +211,7 @@ module Ore
 		end
 
 		def parse_conditional_expr
-			it            = Ore::Conditional_Expr.new
+			it            = Lost::Conditional_Expr.new
 			it.type       = eat # One of %w(if while unless until)
 			it.condition  = parse_expression
 			it.when_true  = []
@@ -249,7 +249,7 @@ module Ore
 
 		def parse_circumfix_expr opening: '('
 			start = curr_lexeme
-			it    = Ore::Circumfix_Expr.new
+			it    = Lost::Circumfix_Expr.new
 			it.grouping = CIRCUMFIX_GROUPINGS[opening] or raise "parse_circumfix_expr unknown opening #{opening}"
 			eat opening
 			reduce_newlines
@@ -286,7 +286,7 @@ module Ore
 			# }
 
 			# TYPE_IDENT :: (OPTIONAL_FORCED_TYPE_FOR_CONSTANTS) {
-			expr             = Ore::Enum_Expr.new
+			expr             = Lost::Enum_Expr.new
 			expr.expressions = []
 			expr.name        = eat TYPE_IDENTIFIER
 			eat '::'
@@ -308,21 +308,21 @@ module Ore
 					#   TYPE_IDENT: TYPE_IDENT = EXPR
 					item_name = parse_identifier_expr # also consumes a trailing `: Type` annotation itself, if there is one
 
-					Ore.assert item_name.is_a? Ore::Identifier_Expr
+					Lost.assert item_name.is_a? Lost::Identifier_Expr
 
 					case curr_lexeme.value
 					when ','
 						parse_nil_init_expr item_name
 					when ':='
 						eat ':='
-						infix          = Ore::Infix_Expr.new
+						infix          = Lost::Infix_Expr.new
 						infix.operator = Lexeme.new(:operator, ':=')
 						infix.left     = item_name
 						infix.right    = parse_expression
 						infix
 					when '='
 						eat '='
-						infix          = Ore::Infix_Expr.new
+						infix          = Lost::Infix_Expr.new
 						infix.operator = Lexeme.new(:operator, '=')
 						infix.left     = item_name
 						infix.right    = parse_expression
@@ -345,7 +345,7 @@ module Ore
 		def parse_func precedence = STARTING_PRECEDENCE
 			named            = curr?(:identifier)
 			start            = curr_lexeme
-			func             = Ore::Func_Expr.new
+			func             = Lost::Func_Expr.new
 			func.expressions = [] # Expression
 			func.parameters  = [] # Param_Expr
 
@@ -362,16 +362,16 @@ module Ore
 			eat '{'
 			reduce_newlines
 
-			until curr? Ore::FUNCTION_DELIMITER
+			until curr? Lost::FUNCTION_DELIMITER
 				if curr? '->' and eat '->'
 					# A function (named or anonymous) declaring its own return type inline, at the end of its param list: `{ a: Number -> Number; ... }`. Distinct from `identifier: Type { ... }`, which is a signature reference/alias, not an implementation declaring its own type.
 					func.type = eat(:Identifier)
 					next
 				end
 
-				param = Ore::Param_Expr.new
+				param = Lost::Param_Expr.new
 
-				if curr? Ore::BUILTIN_OPERATOR
+				if curr? Lost::BUILTIN_OPERATOR
 					identifier = parse_identifier_expr
 					case identifier&.value
 					when 'add_readable_scope', 'add_readable', 'readable'
@@ -422,7 +422,7 @@ module Ore
 				reduce_newlines
 			end
 
-			eat Ore::FUNCTION_DELIMITER if curr? Ore::FUNCTION_DELIMITER
+			eat Lost::FUNCTION_DELIMITER if curr? Lost::FUNCTION_DELIMITER
 			reduce_newlines
 
 			until curr? '}'
@@ -438,9 +438,9 @@ module Ore
 			# A declared return type with no real body (just params) is a signature-only declaration — either self-declaring under a name (`double: {Number -> Number;}`) or anonymous (`{Number, Number -> Number;}`). Every param slot in a signature must carry a type (there's no name to fall back on at call sites), so a named-but-untyped param here (`{a -> Number;}`) is malformed.
 			if func.type && !has_real_body
 				untyped_param = func.parameters.find { |param| param.type.nil? }
-				raise Ore::Invalid_Func_Signature.new(untyped_param.name) if untyped_param
+				raise Lost::Invalid_Func_Signature.new(untyped_param.name) if untyped_param
 
-				sig        = Ore::Func_Signature_Expr.new
+				sig        = Lost::Func_Signature_Expr.new
 				sig.name   = func.name
 				sig.type   = func.type
 				sig.lexeme = func.lexeme
@@ -454,8 +454,8 @@ module Ore
 		def parse_struct
 			return nil unless curr? '<'
 			start = curr_lexeme
-			Ore::Struct_Expr.new.tap do |it|
-				it.lexeme = Ore::Lexeme.new :struct, '<>'
+			Lost::Struct_Expr.new.tap do |it|
+				it.lexeme = Lost::Lexeme.new :struct, '<>'
 				it.types  = []
 				it.names  = []
 				eat '<'
@@ -475,16 +475,16 @@ module Ore
 					if curr? ':='
 						eat ':='
 						element.member_default = parse_expression(precedence_for('<'))
-					elsif element.is_a?(Ore::Identifier_Expr) && element.type && curr?('=')
+					elsif element.is_a?(Lost::Identifier_Expr) && element.type && curr?('=')
 						eat '='
 						element.member_default = parse_expression(precedence_for('<'))
 					end
 
 					# A `:` still sitting here means #parse_identifier_expr's own `: Type` lookahead (above, inside `element`) saw a `:` but declined to consume it, because what followed wasn't a valid type -- almost always a lowercase value, as if `:` worked like a Dictionary's `key: value`. It doesn't in a struct member list, so raise here rather than silently leaving the `:` to be reparsed as an unrelated `:symbol` prefix literal starting a whole new element next iteration (commas are optional between struct members, same as any other list).
-					raise Ore::Invalid_Struct_Member_Annotation.new(curr_lexeme) if curr? ':'
+					raise Lost::Invalid_Struct_Member_Annotation.new(curr_lexeme) if curr? ':'
 
 					it.types << element
-					it.names << if element.is_a?(Ore::Identifier_Expr) && (element.type || element.member_default)
+					it.names << if element.is_a?(Lost::Identifier_Expr) && (element.type || element.member_default)
 						element.value
 					else
 						nil
@@ -515,13 +515,13 @@ module Ore
 			#
 
 			start        = curr_lexeme
-			it           = Ore::Type_Expr.new eat # one of valid_idents
+			it           = Lost::Type_Expr.new eat # one of valid_idents
 			it.name      = it.lexeme.value
 			valid_idents = %i(Identifier IDENTIFIER)
 			is_type      = Helpers.type_identifier? it.name
 			is_const     = Helpers.constant_identifier? it.name
 
-			Ore.assert is_type || is_const, "Type names can only be Capitalized or UPPERCASE" # todo; proper error
+			Lost.assert is_type || is_const, "Type names can only be Capitalized or UPPERCASE" # todo; proper error
 
 			it.structure      = parse_struct # returns nil if none was found
 			it.structure.name = it.name if it.structure
@@ -567,9 +567,9 @@ module Ore
 
 		def parse_comment
 			lexeme   = eat
-			it       = Ore::Comment_Expr.new lexeme
-			it.value = Ore::String_Expr.new lexeme
-			it.body  = Ore::String_Expr.new lexeme
+			it       = Lost::Comment_Expr.new lexeme
+			it.value = Lost::String_Expr.new lexeme
+			it.body  = Lost::String_Expr.new lexeme
 			it.type  = lexeme.type
 			it
 		end
@@ -577,8 +577,8 @@ module Ore
 		def parse_fence_expr
 			start    = curr_lexeme
 			lexeme   = eat
-			it       = Ore::Fence_Expr.new lexeme
-			it.value = Ore::String_Expr.new lexeme
+			it       = Lost::Fence_Expr.new lexeme
+			it.value = Lost::String_Expr.new lexeme
 			it.type  = lexeme.type # :fence by default
 			copy_location it, start
 			it
@@ -587,8 +587,8 @@ module Ore
 		def parse_html_expr
 			# TODO: :html_vs_type_expr
 			start      = curr_lexeme
-			it         = Ore::Html_Fence_Expr.new eat
-			it.value   = Ore::String_Expr.new start
+			it         = Lost::Html_Fence_Expr.new eat
+			it.value   = Lost::String_Expr.new start
 			it.body    = it.value
 			it.element = it.lexeme
 			copy_location it, start
@@ -596,14 +596,14 @@ module Ore
 
 		def parse_composition_expr
 			start         = curr_lexeme
-			expr          = Ore::Composition_Expr.new
+			expr          = Lost::Composition_Expr.new
 			expr.operator = eat(:operator)
 			ident         = parse_identifier_expr
 
 			while curr?('.') && peek.is(:Identifier)
 				dot_op         = eat('.')
 				right          = parse_identifier_expr
-				infix          = Ore::Infix_Expr.new
+				infix          = Lost::Infix_Expr.new
 				infix.left     = ident
 				infix.operator = dot_op
 				infix.right    = right
@@ -612,8 +612,8 @@ module Ore
 			end
 
 			# A composed operand can itself be a structured type reference (`| Other<'users'>`), not just a bare type reference. Wrap it into a Type_Expr (mirroring #parse_type_decl's own reference form) so #interp_composition resolves it through the normal structured-type matching. Without this the trailing `<...>` is left unconsumed and #parse_type_decl's `until curr? '{'` loop spins forever re-checking the same token.
-			if curr?('<') && ident.is_a?(Ore::Identifier_Expr)
-				type_ref                = Ore::Type_Expr.new
+			if curr?('<') && ident.is_a?(Lost::Identifier_Expr)
+				type_ref                = Lost::Type_Expr.new
 				type_ref.name           = ident.value
 				type_ref.structure      = parse_struct
 				type_ref.structure.name = type_ref.name if type_ref.structure
@@ -627,7 +627,7 @@ module Ore
 		end
 
 		def parse_statement_expr
-			Ore::Statement_Expr.new.tap do |it|
+			Lost::Statement_Expr.new.tap do |it|
 				eat '`'
 				it.expression = parse_expression
 				eat '`'
@@ -636,7 +636,7 @@ module Ore
 
 		def parse_identifier_expr
 			start = curr_lexeme
-			expr  = Ore::Identifier_Expr.new
+			expr  = Lost::Identifier_Expr.new
 
 			if curr? BUILTIN_OPERATOR and eat BUILTIN_OPERATOR
 				expr.directive = true
@@ -645,7 +645,7 @@ module Ore
 			end
 
 			expr.lexeme  = eat
-			expr.privacy = Ore.privacy_of_ident expr.value
+			expr.privacy = Lost.privacy_of_ident expr.value
 
 			# 7/20/25, I'm storing the type as well, even though I haven't written any code to support types yet.
 
@@ -659,7 +659,7 @@ module Ore
 				expr.type_struct = parse_struct # bare struct annotation, e.g. `thing: <String, Number>`
 			end
 
-			expr.kind = Ore.type_of_identifier expr.value
+			expr.kind = Lost.type_of_identifier expr.value
 			copy_location expr, start
 		end
 
@@ -669,7 +669,7 @@ module Ore
 			eat '.'
 
 			expr                = parse_identifier_expr
-			expr.scope_operator = Ore::Lexeme.new(:operator, keyword.value == 'Self' ? '../' : './')
+			expr.scope_operator = Lost::Lexeme.new(:operator, keyword.value == 'Self' ? '../' : './')
 			expr
 		end
 
@@ -678,7 +678,7 @@ module Ore
 
 			if curr? SCOPE_OPERATORS
 				# There should not be any more scope operators at this point. We've implicitly handled . and ..
-				raise Ore::Invalid_Scope_Syntax.new curr_lexeme
+				raise Lost::Invalid_Scope_Syntax.new curr_lexeme
 			end
 
 			scope
@@ -687,7 +687,7 @@ module Ore
 		def parse_symbol_expr
 			start = curr_lexeme
 			eat ':'
-			it = Ore::Symbol_Expr.new eat
+			it = Lost::Symbol_Expr.new eat
 			copy_location it, start
 		end
 
@@ -712,7 +712,7 @@ module Ore
 			expr = parse_expression
 
 			# Validate: handler params must include all route params
-			handler_params = if expr.is_a? Ore::Func_Expr
+			handler_params = if expr.is_a? Lost::Func_Expr
 				expr.parameters.map(&:name).map(&:value)
 			else
 				[]
@@ -723,8 +723,8 @@ module Ore
 			# unless missing_params.empty?
 			# end
 
-			route             = Ore::Route_Expr.new
-			route.http_method = Ore::Identifier_Expr.new.tap do |expr|
+			route             = Lost::Route_Expr.new
+			route.http_method = Lost::Identifier_Expr.new.tap do |expr|
 				expr.value = http_method
 				expr.kind  = :identifier
 			end
@@ -768,17 +768,17 @@ module Ore
 
 			eat ')'
 
-			percent_lit             = Ore::Percent_Literal_Expr.new # This extends Circumfix_Expr
+			percent_lit             = Lost::Percent_Literal_Expr.new # This extends Circumfix_Expr
 			percent_lit.kind        = kind.value
 			percent_lit.grouping    = '[]' # so that it interprets as an array later
 			percent_lit.expressions = items
 
 			valid_items = percent_lit.expressions.all? do |it|
 				# Each of these can easily be converted to a string, so for now they're the only ones allowed.
-				it.is_a?(Ore::Identifier_Expr) || it.is_a?(Ore::Number_Expr) || it.is_a?(Ore::Operator_Expr) || it.is_a?(Ore::Statement_Expr)
+				it.is_a?(Lost::Identifier_Expr) || it.is_a?(Lost::Number_Expr) || it.is_a?(Lost::Operator_Expr) || it.is_a?(Lost::Statement_Expr)
 			end
 
-			raise Ore::Invalid_Percent_Literal_Expression.new(percent_lit) unless valid_items
+			raise Lost::Invalid_Percent_Literal_Expression.new(percent_lit) unless valid_items
 
 			copy_location percent_lit, start
 		end
@@ -792,22 +792,22 @@ module Ore
 			# Scope operators can't be followed by literals like numbers or strings
 			if SCOPE_OPERATORS.include? operator_lexeme.value
 				if curr? :number
-					raise Ore::Invalid_Scope_Syntax.new
+					raise Lost::Invalid_Scope_Syntax.new
 				elsif curr? :string
-					raise Ore::Invalid_Scope_Syntax.new
+					raise Lost::Invalid_Scope_Syntax.new
 				end
 			end
 
-			it = Ore::Operator_Expr.new operator_lexeme
+			it = Lost::Operator_Expr.new operator_lexeme
 			copy_location it, start
 		end
 
 		def parse_number_expr
 			start       = curr_lexeme
-			expr        = Ore::Number_Expr.new start
+			expr        = Lost::Number_Expr.new start
 			expr.lexeme = eat(:number)
 			if expr.lexeme.value.count('.') > 1
-				expr                  = Ore::Array_Index_Expr.new expr.lexeme
+				expr                  = Lost::Array_Index_Expr.new expr.lexeme
 				expr.indices_in_order = expr.lexeme.value.split '.'
 				expr.indices_in_order = expr.indices_in_order.map &:to_i
 				# It's important not to convert number.value here to anything to preserve the variant number of dots in the string. I think this'll be cool syntax, 2d_array.1.2 would be the equivalent of 2d_array[1][2].
@@ -826,30 +826,30 @@ module Ore
 		def parse_nil_init_expr left = nil
 			start = left&.lexeme || curr_lexeme
 
-			expr          = Ore::Nil_Init_Expr.new
+			expr          = Lost::Nil_Init_Expr.new
 			expr.lexeme   = start
 			expr.left     = left || (curr?(SELF_KEYWORDS, '.') ? parse_self_prefixed_identifier : parse_identifier_expr)
 			expr.operator = Lexeme.new(:operator, '=')
 
-			nil_expr         = Ore::Identifier_Expr.new
+			nil_expr         = Lost::Identifier_Expr.new
 			nil_expr.value   = 'nil'
 			nil_expr.kind    = :identifier
-			nil_expr.privacy = Ore.privacy_of_ident 'nil'
+			nil_expr.privacy = Lost.privacy_of_ident 'nil'
 			expr.right       = nil_expr
 
 			copy_location expr, start
 		end
 
 		def begin_expression precedence = STARTING_PRECEDENCE
-			raise Ore::Out_Of_Tokens.new unless lexemes?
+			raise Lost::Out_Of_Tokens.new unless lexemes?
 
 			if curr? :route
 				parse_route_expr
 
-			elsif curr?(ANY_IDENTIFIER, Ore::NIL_INIT_POSTFIX) || curr?(SCOPE_OPERATORS, ANY_IDENTIFIER, Ore::NIL_INIT_POSTFIX) || curr?(SELF_KEYWORDS, '.', ANY_IDENTIFIER, Ore::NIL_INIT_POSTFIX)
+			elsif curr?(ANY_IDENTIFIER, Lost::NIL_INIT_POSTFIX) || curr?(SCOPE_OPERATORS, ANY_IDENTIFIER, Lost::NIL_INIT_POSTFIX) || curr?(SELF_KEYWORDS, '.', ANY_IDENTIFIER, Lost::NIL_INIT_POSTFIX)
 				parse_nil_init_expr
 
-			elsif peek_contains?(Ore::FUNCTION_DELIMITER, '}') && (curr?('{') || curr?(:identifier, '{') || curr?(:identifier, ':', '{') || curr?(SCOPE_OPERATORS, :identifier, '{') || curr?(SCOPE_OPERATORS, :identifier, ':', '{') || curr?(SELF_KEYWORDS, '.', :identifier, '{') || curr?(SELF_KEYWORDS, '.', :identifier, ':', '{'))
+			elsif peek_contains?(Lost::FUNCTION_DELIMITER, '}') && (curr?('{') || curr?(:identifier, '{') || curr?(:identifier, ':', '{') || curr?(SCOPE_OPERATORS, :identifier, '{') || curr?(SCOPE_OPERATORS, :identifier, ':', '{') || curr?(SELF_KEYWORDS, '.', :identifier, '{') || curr?(SELF_KEYWORDS, '.', :identifier, ':', '{'))
 				parse_func precedence
 
 			elsif curr?(TYPE_IDENTIFIER, '::', TYPE_IDENTIFIER, '{') || curr?(TYPE_IDENTIFIER, '::', '{')
@@ -868,7 +868,7 @@ module Ore
 				parse_type_decl
 
 			elsif curr?(TYPE_IDENTIFIER, '<') && (structured = try_parse_type_decl)
-				# `X < Y` (X/Y capitalized variables holding comparable values, not types) looks identical up to this point to `Abc<Number>` -- #try_parse_type_decl actually attempts the real parse and rewinds on any syntax error, so a comparison that never finds a real closing `>` falls through to ordinary expression parsing below instead of running #parse_struct out of tokens hunting for one (Ore::Out_Of_Tokens).
+				# `X < Y` (X/Y capitalized variables holding comparable values, not types) looks identical up to this point to `Abc<Number>` -- #try_parse_type_decl actually attempts the real parse and rewinds on any syntax error, so a comparison that never finds a real closing `>` falls through to ordinary expression parsing below instead of running #parse_struct out of tokens hunting for one (Lost::Out_Of_Tokens).
 				structured
 
 			elsif curr?(TYPE_COMPOSITION_OPERATORS) && peek.is(:Identifier)
@@ -904,7 +904,7 @@ module Ore
 
 			elsif curr? :string
 				start = curr_lexeme
-				expr  = Ore::String_Expr.new eat(:string)
+				expr  = Lost::String_Expr.new eat(:string)
 				copy_location expr, start
 
 				# elsif curr? SCOPE_OPERATORS
@@ -916,12 +916,12 @@ module Ore
 
 			elsif curr? FUNCTION_DELIMITER
 				# This is reserved for function declarations
-				raise Ore::Reserved_Function_Delimiter.new curr_lexeme
+				raise Lost::Reserved_Function_Delimiter.new curr_lexeme
 
 			elsif curr?(:delimiter) && NEWLINES.include?(curr_lexeme.value)
 				reduce_newlines and nil
 
-			elsif curr? :html # This is a subtype of Ore::Fence_Expr
+			elsif curr? :html # This is a subtype of Lost::Fence_Expr
 				parse_html_expr
 
 			elsif curr? :fence
@@ -953,9 +953,9 @@ module Ore
 		def complete_expression expr, precedence = STARTING_PRECEDENCE
 			return expr unless expr && lexemes?
 
-			if expr.is_a?(Ore::Identifier_Expr) && expr.directive && expr.value != 'ruby'
+			if expr.is_a?(Lost::Identifier_Expr) && expr.directive && expr.value != 'ruby'
 				# note: I'm intentionally skipping `ruby` here because a Directive_Expr assumes an expression will follow it. But in the case of @ruby, I want it to be a standalone expression. Maybe this warrants rewriting how directives work? Or maybe this can just stay as an implementation detail. For now it's fine.
-				directive      = Ore::Directive_Expr.new
+				directive      = Lost::Directive_Expr.new
 				directive.name = expr
 				copy_location directive, expr
 
@@ -965,15 +965,15 @@ module Ore
 					unless %i(operator identifier).include? op_lexeme.type
 						raise "An operator can only by an :operator or :identifier. Your `#{op_lexeme.value}` is :#{op_lexeme.type}. Maybe it's reserved. todo; Better message!"
 					end
-					operator_expr        = Ore::Operator_Expr.new op_lexeme
+					operator_expr        = Lost::Operator_Expr.new op_lexeme
 					directive.expression = operator_expr
 					copy_location operator_expr, op_lexeme
 
 					# If @operator <Op_Expr> is followed by @infix <Num_Expr> then we have a complete operator overload expression
 					next_expr = begin_expression
-					if next_expr.is_a?(Ore::Identifier_Expr) && next_expr.directive
+					if next_expr.is_a?(Lost::Identifier_Expr) && next_expr.directive
 						if %w(prefix infix postfix circumfix).include? next_expr.value
-							subdirective      = Ore::Directive_Expr.new
+							subdirective      = Lost::Directive_Expr.new
 							subdirective.name = next_expr
 							copy_location subdirective, next_expr
 
@@ -981,7 +981,7 @@ module Ore
 								precedence_for(directive.expression.value)
 							else
 								e = parse_expression
-								Ore.assert e.is_a?(Number_Expr)
+								Lost.assert e.is_a?(Number_Expr)
 								e.value
 							end
 
@@ -990,7 +990,7 @@ module Ore
 							end
 
 							# If you can't wrap your mind around this. At this point we know `@operator + @infix 90` so all that's left to parse is the function
-							overload            = Ore::Operator_Overload_Expr.new operator_expr.lexeme
+							overload            = Lost::Operator_Overload_Expr.new operator_expr.lexeme
 							overload.fixity     = subdirective.name.lexeme
 							overload.precedence = subdirective.expression
 							overload.func_expr  = parse_func
@@ -1004,7 +1004,7 @@ module Ore
 				else
 					directive.expression = parse_expression
 
-					# note; Only `@assert cond, "message"` gets a trailing `, <expr>` parsed as part of the same directive (see Ore::Interpreter#interp_directive). This can't be generic across all directives: some fixtures chain unrelated directives on one line via `@load 'a', @load 'b'`, relying on a stray `,` here being silently discarded and the next statement.
+					# note; Only `@assert cond, "message"` gets a trailing `, <expr>` parsed as part of the same directive (see Lost::Interpreter#interp_directive). This can't be generic across all directives: some fixtures chain unrelated directives on one line via `@load 'a', @load 'b'`, relying on a stray `,` here being silently discarded and the next statement.
 					if expr.value == 'assert' && curr?(',')
 						eat
 						directive.message = parse_expression
@@ -1021,7 +1021,7 @@ module Ore
 				return complete_expression directive, precedence
 			end
 
-			if SCOPE_OPERATORS.any? { |it| expr.is it } && !expr.is_a?(Ore::Nil_Init_Expr)
+			if SCOPE_OPERATORS.any? { |it| expr.is it } && !expr.is_a?(Lost::Nil_Init_Expr)
 				return expr
 			end
 
@@ -1032,13 +1032,13 @@ module Ore
 			# string literally spelled `'return'`) matched too -- `"hi".end_with?('!')` parsed `'!'` as
 			# the `!` prefix operator applied to nothing, not the string value "!". A string's content
 			# should never be reinterpreted as an operator, so it's excluded here regardless of value.
-			prefix    = !expr.is_a?(Ore::Operator_Overload_Expr) && !expr.is_a?(Ore::String_Expr) && (PREFIX.include?(expr.value) || (expr.is_a?(Ore::Operator_Expr) && @custom_prefix.include?(expr.value)))
+			prefix    = !expr.is_a?(Lost::Operator_Overload_Expr) && !expr.is_a?(Lost::String_Expr) && (PREFIX.include?(expr.value) || (expr.is_a?(Lost::Operator_Expr) && @custom_prefix.include?(expr.value)))
 			infix     = INFIX.include?(curr_lexeme.value) || @custom_infix.include?(curr_lexeme.value)
 			postfix   = POSTFIX.include?(curr_lexeme.value) || @custom_postfix.include?(curr_lexeme.value)
 			circumfix = CIRCUMFIX.include?(curr_lexeme.value)
 
 			if prefix
-				expr = Ore::Prefix_Expr.new.tap do |it|
+				expr = Lost::Prefix_Expr.new.tap do |it|
 					it.operator   = expr
 					it.expression = parse_expression precedence_for(it.operator.value)
 				end
@@ -1051,26 +1051,26 @@ module Ore
 					return expr if curr_operator_prec <= precedence
 					###
 
-					it          = Ore::Infix_Expr.new
+					it          = Lost::Infix_Expr.new
 					it.left     = expr
 					it.operator = eat
 					it.right    = parse_expression precedence_for it.operator.value
-					it.right    = it.right.left if it.right.is_a? Ore::Nil_Init_Expr
+					it.right    = it.right.left if it.right.is_a? Lost::Nil_Init_Expr
 
 					copy_location it, expr
 					return complete_expression it, precedence
 				elsif RANGE_OPERATORS.include? curr_lexeme.value
-					it          = Ore::Infix_Expr.new
+					it          = Lost::Infix_Expr.new
 					it.left     = expr
 					it.operator = eat
 					it.right    = parse_expression
-					it.right    = it.right.left if it.right.is_a? Ore::Nil_Init_Expr
+					it.right    = it.right.left if it.right.is_a? Lost::Nil_Init_Expr
 
 					copy_location it, expr
 					return complete_expression it, precedence
 				else
 					while (INFIX.include?(curr_lexeme.value) || @custom_infix.include?(curr_lexeme.value)) && curr?(:operator)
-						# It's very important that the curr?(:operator) check here remains because otherwise it breaks Ore::Call_Expr when the receiver is an Ore::Infix_Expr.
+						# It's very important that the curr?(:operator) check here remains because otherwise it breaks Lost::Call_Expr when the receiver is an Lost::Infix_Expr.
 						curr_operator      = curr_lexeme.value
 						curr_operator_prec = precedence_for curr_operator
 
@@ -1079,16 +1079,16 @@ module Ore
 						end
 
 						left          = expr
-						expr          = Ore::Infix_Expr.new
+						expr          = Lost::Infix_Expr.new
 						expr.left     = left
 						expr.operator = eat(curr_lexeme.value)
 						expr.right    = parse_expression curr_operator_prec
-						expr.right    = expr.right.left if expr.right.is_a? Ore::Nil_Init_Expr
+						expr.right    = expr.right.left if expr.right.is_a? Lost::Nil_Init_Expr
 						copy_location expr, left
 
-						if expr.left.is(Ore::Identifier_Expr) && expr.operator.value == '.' && expr.right.is(Ore::Number_Expr) && expr.right.type == :float
+						if expr.left.is(Lost::Identifier_Expr) && expr.operator.value == '.' && expr.right.is(Lost::Number_Expr) && expr.right.type == :float
 							# @copypaste from above #parse_expression when :number.
-							number                  = Ore::Array_Index_Expr.new expr.right
+							number                  = Lost::Array_Index_Expr.new expr.right
 							number.indices_in_order = expr.right.value.to_s.split '.'
 							number.indices_in_order = number.indices_in_order.map &:to_i
 							expr.right              = number
@@ -1099,7 +1099,7 @@ module Ore
 				end
 
 			elsif postfix && precedence_for(curr_lexeme.value) > precedence
-				expr = Ore::Postfix_Expr.new.tap do |it|
+				expr = Lost::Postfix_Expr.new.tap do |it|
 					it.expression = expr
 					it.operator   = eat(%i(operator identifier))
 				end
@@ -1110,14 +1110,14 @@ module Ore
 			if call_expr && (precedence_for(curr_lexeme.value) > precedence)
 				receiver       = expr
 				fix            = parse_circumfix_expr opening: curr_lexeme.value
-				expr           = Ore::Call_Expr.new
+				expr           = Lost::Call_Expr.new
 				expr.receiver  = receiver
 				expr.arguments = fix.expressions
 
 				copy_location expr, receiver
 				return complete_expression expr, precedence
 			elsif subscript && (precedence_for(curr_lexeme.value) > precedence)
-				it            = Ore::Subscript_Expr.new
+				it            = Lost::Subscript_Expr.new
 				it.receiver   = expr
 				it.expression = parse_circumfix_expr opening: curr_lexeme.value
 				it
@@ -1131,7 +1131,7 @@ module Ore
 					return expr
 				end
 
-				it            = Ore::Conditional_Expr.new
+				it            = Lost::Conditional_Expr.new
 				it.when_true  = []
 				it.when_false = []
 				it.type       = eat # One of %w(if while unless until)

@@ -1,4 +1,4 @@
-module Ore
+module Lost
 	class Type_Checker
 		attr_accessor :input
 
@@ -16,14 +16,14 @@ module Ore
 			raise Type_Checking_Failed.new errors if errors.any?
 		end
 
-		# Maps an expression to its Ore type name. Returns nil if unknown.
+		# Maps an expression to its Lost type name. Returns nil if unknown.
 		def infer_type expr
 			case expr
-			when Ore::String_Expr then 'String'
-			when Ore::Number_Expr then 'Number'
-			when Ore::Symbol_Expr then 'Symbol'
-			when Ore::Identifier_Expr then type_by_identifier expr.value
-			when Ore::Infix_Expr then infer_dot_type expr
+			when Lost::String_Expr then 'String'
+			when Lost::Number_Expr then 'Number'
+			when Lost::Symbol_Expr then 'Symbol'
+			when Lost::Identifier_Expr then type_by_identifier expr.value
+			when Lost::Infix_Expr then infer_dot_type expr
 			else nil
 			end
 		end
@@ -31,7 +31,7 @@ module Ore
 		# Resolves `receiver`'s own static type, then looks up `member` as a declared member on that type. Returns nil the moment any link in the chain isn't statically known (an untyped local, a plain unstructured bare type, etc), same "skip rather than guess" philosophy as the rest of this checker.
 		def infer_dot_type expr
 			return nil unless expr.operator&.value == '.'
-			return nil unless expr.right.is_a? Ore::Identifier_Expr
+			return nil unless expr.right.is_a? Lost::Identifier_Expr
 
 			receiver_type = infer_type expr.left
 			return nil unless receiver_type
@@ -59,9 +59,9 @@ module Ore
 
 		# `expr` is a Call_Expr's receiver: either a bare function name (`add(...)`) or a `.`-chain ending in a method name (`app.servers.push(...)`). Returns the param type array for whichever one it resolves to, or nil if neither does.
 		def resolve_call_signature receiver
-			if receiver.is_a? Ore::Identifier_Expr
+			if receiver.is_a? Lost::Identifier_Expr
 				func_signature_by_identifier receiver.value
-			elsif receiver.is_a?(Ore::Infix_Expr) && receiver.operator&.value == '.' && receiver.right.is_a?(Ore::Identifier_Expr)
+			elsif receiver.is_a?(Lost::Infix_Expr) && receiver.operator&.value == '.' && receiver.right.is_a?(Lost::Identifier_Expr)
 				receiver_type = infer_type receiver.left
 				receiver_type && @type_info[receiver_type][:methods][receiver.right.value]
 			end
@@ -107,7 +107,7 @@ module Ore
 
 		# `x := Type(...)` / `x := Type<Struct>(...)`.
 		def check_inferred_declaration expr
-			return unless expr.left.is_a? Ore::Identifier_Expr
+			return unless expr.left.is_a? Lost::Identifier_Expr
 
 			constructed = constructed_type_name expr.right
 			return unless constructed
@@ -121,22 +121,22 @@ module Ore
 		end
 
 		def constructed_type_name expr
-			return nil unless expr.is_a? Ore::Call_Expr
+			return nil unless expr.is_a? Lost::Call_Expr
 			receiver = expr.receiver
 
 			case receiver
-			when Ore::Type_Expr
+			when Lost::Type_Expr
 				qualified_type_name receiver
-			when Ore::Identifier_Expr
+			when Lost::Identifier_Expr
 				receiver.value if Helpers.type_identifier? receiver.value
 			end
 		end
 
 		def qualified_type_name expr
-			return nil unless expr.is_a? Ore::Type_Expr
+			return nil unless expr.is_a? Lost::Type_Expr
 			return expr.name unless expr.structure
 
-			member_names = expr.structure.types.map { |t| t.value if t.is_a? Ore::Identifier_Expr }
+			member_names = expr.structure.types.map { |t| t.value if t.is_a? Lost::Identifier_Expr }
 			return nil if member_names.any?(&:nil?)
 
 			"#{expr.name}<#{member_names.join(',')}>"
@@ -156,28 +156,28 @@ module Ore
 		# @return nil, Error, or Array of Errors.
 		def check expr
 			case expr
-			when Ore::Infix_Expr
+			when Lost::Infix_Expr
 				check_infix expr
 
-			when Ore::Param_Expr
+			when Lost::Param_Expr
 				check_param expr
 
-			when Ore::Directive_Expr
+			when Lost::Directive_Expr
 				check expr.expression
-			when Ore::Prefix_Expr
+			when Lost::Prefix_Expr
 				check expr.expression
-			when Ore::Postfix_Expr
+			when Lost::Postfix_Expr
 				check expr.expression
-			when Ore::Route_Expr
+			when Lost::Route_Expr
 				check expr.expression
 
-			when Ore::Circumfix_Expr
+			when Lost::Circumfix_Expr
 				check expr.expressions
-			when Ore::Func_Expr
+			when Lost::Func_Expr
 				# #register_func runs before the new scope is pushed, so the function's own name is declared into the *enclosing* scope (visible to siblings, and to the function's own body too since lookups search outward so recursive calls still resolve).
 				register_func expr
 				with_new_scope { check expr.parameters + expr.expressions }
-			when Ore::Type_Expr
+			when Lost::Type_Expr
 				if expr.expressions
 					@type_stack.push qualified_type_name(expr)
 					result = with_new_scope { check expr.expressions }
@@ -185,14 +185,14 @@ module Ore
 					result
 				end
 
-			when Ore::Subscript_Expr
+			when Lost::Subscript_Expr
 				[check(expr.receiver), check(expr.expression)]
-			when Ore::For_Loop_Expr
+			when Lost::For_Loop_Expr
 				[check(expr.collection), check(expr.body)]
-			when Ore::Call_Expr
+			when Lost::Call_Expr
 				check_call expr
 
-			when Ore::Conditional_Expr
+			when Lost::Conditional_Expr
 				[
 					check(expr.condition),
 					check(expr.when_true),

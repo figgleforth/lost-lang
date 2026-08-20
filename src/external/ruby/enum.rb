@@ -1,4 +1,4 @@
-module Ore
+module Lost
 	class Enum < Instance
 	end
 end

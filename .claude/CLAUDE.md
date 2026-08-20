@@ -4,20 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working Relationship
 
-User writes the code and **Claude starts in PM/advisor mode**: help maintain `todos.md`, track what's in flight, surface language gaps worth prioritizing, review approach, and act as a sounding board for design decisions — don't jump into implementation unprompted, even when a task looks small or the next step seems obvious. Only write code, run the implementation, or make edits to source/`.ore` files when explicitly asked to act as an assistant for that task. Write a changelog only when asked to.
+User writes the code and **Claude starts in PM/advisor mode**: help maintain `todos.md`, track what's in flight, surface language gaps worth prioritizing, review approach, and act as a sounding board for design decisions — don't jump into implementation unprompted, even when a task looks small or the next step seems obvious. Only write code, run the implementation, or make edits to source/`.tape` files when explicitly asked to act as an assistant for that task. Write a changelog only when asked to.
 
 This is a side project (sometimes PRs — other times commit straight to `main`), and keeping it feeling like one matters: the point is to push the language toward its vision himself, hitting real gaps under real workloads (see the `hockey-sim port` entry in `todos.md`), not delegating that discovery process away.
 
-## About Ore
+## About Lost
 
-Ore is an educational programming language for web development, implemented in Ruby. It features:
+Lost is an educational programming language for web development, implemented in Ruby. It features:
 
 - Naming conventions that replace keywords (Capitalized classes, lowercase functions/variables, UPPERCASE constants)
 - Class composition operators instead of inheritance (|, &, ~, ^)
 - Dot notation for accessing nested structures and scopes (., ..)
 - First-class functions and classes
 - Built-in web server support with routing
-- When writing .ore source, use `#` for single-line comments (with a space after), and triple backtick ` ``` ` fences for multi-line/block comments
+- When writing .tape source, use `#` for single-line comments (with a space after), and triple backtick ` ``` ` fences for multi-line/block comments
 
 ## Common Commands
 
@@ -34,20 +34,20 @@ ruby test/lexer_test.rb
 bundle exec rake
 ```
 
-### Running Ore Programs
+### Running Lost Programs
 
 ```bash
-# Run Ore file with hot reload (watches for changes)
-bin/ore <file.ore>
+# Run Lost file with hot reload (watches for changes)
+bin/lost <file.tape>
 
 # Debug/inspect compilation stages
-bin/ore lex "4 + 8"              # Show lexer tokens for code string
-bin/ore parse "4 + 8"            # Show AST for code string
-bin/ore interp "4 + 8"           # Execute code string
+bin/lost lex "4 + 8"              # Show lexer tokens for code string
+bin/lost parse "4 + 8"            # Show AST for code string
+bin/lost interp "4 + 8"           # Execute code string
 
-bin/ore lexf <file.ore>          # Tokenize file
-bin/ore parsef <file.ore>        # Parse file to AST
-bin/ore interpf <file.ore>       # Execute file
+bin/lost lexf <file.tape>          # Tokenize file
+bin/lost parsef <file.tape>        # Parse file to AST
+bin/lost interpf <file.tape>       # Execute file
 ```
 
 ### Setup
@@ -97,15 +97,15 @@ The AST is executed to produce output:
 
 ### Entry Point
 
-- `src/ore.rb` - Requires all components; exposes convenience methods:
-	- `Ore.lex(source)` / `Ore.lex_file(filepath)` - Tokenize only
-	- `Ore.parse(source)` / `Ore.parse_file(filepath)` - Parse to AST
-	- `Ore.interp(source)` / `Ore.interp_file(filepath)` - Full execution
+- `src/lost.rb` - Requires all components; exposes convenience methods:
+	- `Lost.lex(source)` / `Lost.lex_file(filepath)` - Tokenize only
+	- `Lost.parse(source)` / `Lost.parse_file(filepath)` - Parse to AST
+	- `Lost.interp(source)` / `Lost.interp_file(filepath)` - Full execution
 
 ### Standard Library
 
-- `ore/preload.ore` - Auto-loaded when `load_standard_library` is `true` (default) — lands in its own `Standard_Library` scope added to Global's readable scope, not as direct Global declarations (see Readable and Writable Scopes below)
-- Standard library path defined in `Ore::STANDARD_LIBRARY_PATH`
+- `lost/preload.tape` - Auto-loaded when `load_standard_library` is `true` (default) — lands in its own `Standard_Library` scope added to Global's readable scope, not as direct Global declarations (see Readable and Writable Scopes below)
+- Standard library path defined in `Lost::STANDARD_LIBRARY_PATH`
 
 ## Type Checker
 
@@ -123,7 +123,7 @@ Annotations whose RHS is non-literal (an identifier, a function call, etc.) are 
 
 `Type_Checker` has two core methods:
 
-- `infer_type(expr)` — maps an expression to an Ore type name string (`'String'`, `'Number'`, `'Symbol'`), or looks up `Identifier_Expr` values in `type_by_identifier`. Returns `nil` if unknown.
+- `infer_type(expr)` — maps an expression to an Lost type name string (`'String'`, `'Number'`, `'Symbol'`), or looks up `Identifier_Expr` values in `type_by_identifier`. Returns `nil` if unknown.
 - `check(expr)` — recursive dispatcher; returns `nil` (no error) or a `Type_Mismatch` error. Recurses into all child-bearing expression types.
 
 `type_by_identifier` is a hash built during the walk:
@@ -134,14 +134,14 @@ Call site checking happens in `check_call` — it looks up the receiver name in 
 
 ### Runtime Type Contracts (`:=`)
 
-Separate from the static `Type_Checker` above, `:=` is a runtime-enforced type contract handled entirely in the interpreter (`interp_infix_declaration` in `interpreter.rb`), not the type checker. `:=` is also the general declaration operator — `=` is pure assignment and requires the identifier to already be declared (handled in `interp_infix_assignment`), raising `Ore::Cannot_Assign_Undeclared_Identifier` otherwise:
+Separate from the static `Type_Checker` above, `:=` is a runtime-enforced type contract handled entirely in the interpreter (`interp_infix_declaration` in `interpreter.rb`), not the type checker. `:=` is also the general declaration operator — `=` is pure assignment and requires the identifier to already be declared (handled in `interp_infix_assignment`), raising `Lost::Cannot_Assign_Undeclared_Identifier` otherwise:
 
-```ore
+```lost
 x := 4        # declares x, infers Number, locks x to that type
 x = 8         # ok — same type
-x = 'hello'   # raises Ore::Type_Contract_Violation
+x = 'hello'   # raises Lost::Type_Contract_Violation
 
-y = 4         # raises Ore::Cannot_Assign_Undeclared_Identifier — y was never declared
+y = 4         # raises Lost::Cannot_Assign_Undeclared_Identifier — y was never declared
 
 counter := -1
 increment {;
@@ -156,14 +156,14 @@ counter           # still -1 — the outer `counter` was never touched
 - `:=` always declares on the current scope (`stack.last`), shadowing any identically-named identifier in an enclosing scope, rather than reusing/overwriting it. Plain `=` and compound ops (`+=`, etc.) still resolve through the enclosing scope via `scope_for_identifier`, which is how closures over outer variables keep working
 - Subsequent plain `=` assignments to that identifier are checked against the recorded type on every assignment (not just literal RHS, unlike the static checker)
 - Re-running `:=` on the same identifier re-infers and overwrites the locked type
-- `=` without a prior `:=` (or a `: Type` annotation, or another declaration form — see below) raises `Ore::Cannot_Assign_Undeclared_Identifier`
+- `=` without a prior `:=` (or a `: Type` annotation, or another declaration form — see below) raises `Lost::Cannot_Assign_Undeclared_Identifier`
 - A `: Type` annotation (`x: Number = 4`) and a Class-styled identifier assigned a Scope value (`My_Type = Other {}`) are each themselves self-declaring, so `=` is allowed to introduce those identifiers too
-- A bare annotated identifier with no `=` at all (`x: Number`, or a struct annotation like `thing: <String, Number>`) self-declares to `nil` rather than raising `Ore::Undeclared_Identifier` when later referenced — same as the nil-init idiom (`ident,`), handled in `interp_identifier` via `self_declare_annotated_identifier`
-- Raises `Ore::Type_Contract_Violation` (`errors.rb`), not `Type_Mismatch`
+- A bare annotated identifier with no `=` at all (`x: Number`, or a struct annotation like `thing: <String, Number>`) self-declares to `nil` rather than raising `Lost::Undeclared_Identifier` when later referenced — same as the nil-init idiom (`ident,`), handled in `interp_identifier` via `self_declare_annotated_identifier`
+- Raises `Lost::Type_Contract_Violation` (`errors.rb`), not `Type_Mismatch`
 
 ### Important gotcha
 
-`Type_Checker` lives inside `module Ore`. Bare `Array` inside the module resolves to `Ore::Array` (the built-in scope type), not Ruby's `::Array`. Always use `::Array` when checking Ruby array types (e.g. `signature.is_a? ::Array`).
+`Type_Checker` lives inside `module Lost`. Bare `Array` inside the module resolves to `Lost::Array` (the built-in scope type), not Ruby's `::Array`. Always use `::Array` when checking Ruby array types (e.g. `signature.is_a? ::Array`).
 
 ### Known limitation
 
@@ -171,26 +171,26 @@ Call sites that appear before the function definition are not checked — the si
 
 ### Errors
 
-- `Ore::Type_Mismatch < Ore::Type_Checking_Failed` — carries `expression`, `declared`, and `inferred`
-- `Ore::Type_Checking_Failed` — raised by `output` if any errors were collected
+- `Lost::Type_Mismatch < Lost::Type_Checking_Failed` — carries `expression`, `declared`, and `inferred`
+- `Lost::Type_Checking_Failed` — raised by `output` if any errors were collected
 
 ## Forward Declarations
 
-Top-level function/type declarations are hoisted ahead of the point where they're actually reached in the file, so calling a function (or referencing a type) before its own declaration works — including mutual recursion between two top-level functions declared in either order. Plain variable assignments (`:=`/`=`/`ident,`) are never hoisted this way; reading one before its own line has run still raises `Ore::Undeclared_Identifier`, exactly as if this feature didn't exist:
+Top-level function/type declarations are hoisted ahead of the point where they're actually reached in the file, so calling a function (or referencing a type) before its own declaration works — including mutual recursion between two top-level functions declared in either order. Plain variable assignments (`:=`/`=`/`ident,`) are never hoisted this way; reading one before its own line has run still raises `Lost::Undeclared_Identifier`, exactly as if this feature didn't exist:
 
-```ore
+```lost
 result := main()   # `main` hasn't been reached yet -- works anyway
 main {; helper() }
 helper {; 42 }
 result             # 42
 
-@puts "`a`"        # raises Ore::Undeclared_Identifier -- `a` is a plain variable, not hoistable
+@puts "`a`"        # raises Lost::Undeclared_Identifier -- `a` is a plain variable, not hoistable
 a := 123
 ```
 
 ### `Declarator` (`src/compiler/declarator.rb`)
 
-Walks the whole top-level AST once, before interpretation (invoked from `Interpreter#output`, same spot `Type_Checker` runs from), building `Interpreter#declarations`: `Hash{::String => Ore::Declaration}`. `Ore::Declaration = Data.define(:key, :expr_or_decl, :expr)` — `expr` is always the *original* expression (what would need to be `interpret`ed to actually bring the declaration into being); `expr_or_decl` is a more inspectable rendering (a nested Hash for a `Type_Expr`/`Func_Expr`/`Route_Expr` body, the raw value expression for `:=`/`=`, etc.). Inspect either directly via `bin/ore declare <code>` / `declaref <file>`.
+Walks the whole top-level AST once, before interpretation (invoked from `Interpreter#output`, same spot `Type_Checker` runs from), building `Interpreter#declarations`: `Hash{::String => Lost::Declaration}`. `Lost::Declaration = Data.define(:key, :expr_or_decl, :expr)` — `expr` is always the *original* expression (what would need to be `interpret`ed to actually bring the declaration into being); `expr_or_decl` is a more inspectable rendering (a nested Hash for a `Type_Expr`/`Func_Expr`/`Route_Expr` body, the raw value expression for `:=`/`=`, etc.). Inspect either directly via `bin/lost declare <code>` / `declaref <file>`.
 
 `#declare` dispatches per expression kind:
 
@@ -207,11 +207,11 @@ A bare `@load 'file'` also participates: `#declare`'s `Directive_Expr` branch ha
 
 ### Interpreter (`#resolve_forward_declaration`)
 
-The consuming side lives in `#interp_identifier`'s final `else` branch — the case where ordinary lookup found nothing and `scope` is `nil` — right before it would raise `Ore::Undeclared_Identifier`. It checks `declarations[name]`, and if a hoistable declaration is found, runs its `.expr` immediately (`interpret decl.expr`, pushed against `#global` specifically, not whatever's currently on top of `stack`), then retries the lookup.
+The consuming side lives in `#interp_identifier`'s final `else` branch — the case where ordinary lookup found nothing and `scope` is `nil` — right before it would raise `Lost::Undeclared_Identifier`. It checks `declarations[name]`, and if a hoistable declaration is found, runs its `.expr` immediately (`interpret decl.expr`, pushed against `#global` specifically, not whatever's currently on top of `stack`), then retries the lookup.
 
-- **Hoistable vs. not** — `HOISTABLE_EXPRESSIONS` (`Func_Expr`, `Type_Expr`, `Route_Expr`, `Struct_Expr`, `Func_Signature_Expr`, `Operator_Expr`, `Operator_Overload_Expr`; lives on `Interpreter`, not `constants.rb` — it references `Expression` subclasses, and `constants.rb` loads before `expressions.rb` does) are declarative and order-independent, so running one early changes nothing about what the program means. `#hoistable_declaration_expr?` also unwraps one level of `:=`/`=` to catch `This := That {}` (see Runtime Type Contracts above, "Class-styled identifier assigned a Scope value") — same declarative category as a bare `Type_Expr`, just spelled through an assignment. A *named* `@load` (`Ident := @load 'file'` / `IDENT := @load 'file'`) is checked the same way, but additionally requires a Capitalized/UPPERCASE left-hand name (`Ore.type_of_identifier`) — a lowercase `mod := @load 'file'` stays a plain variable, not hoisted. A *bare* `@load` (no assignment at all) is checked separately, via `#bare_load_directive_expr?` — always hoistable, since there's no left-hand name to apply a casing rule to; kept out of `#hoistable_declaration_expr?`'s own recursive unwrap specifically so it can't leak permissiveness into the named/casing-restricted case. Anything else — a plain `x := 5`, `x := some_call()`, `ident,` — is a step in the program's own imperative order, and reading it before that step runs is a bug in the *program*; forward-resolving it anyway would silently paper over that instead of raising
+- **Hoistable vs. not** — `HOISTABLE_EXPRESSIONS` (`Func_Expr`, `Type_Expr`, `Route_Expr`, `Struct_Expr`, `Func_Signature_Expr`, `Operator_Expr`, `Operator_Overload_Expr`; lives on `Interpreter`, not `constants.rb` — it references `Expression` subclasses, and `constants.rb` loads before `expressions.rb` does) are declarative and order-independent, so running one early changes nothing about what the program means. `#hoistable_declaration_expr?` also unwraps one level of `:=`/`=` to catch `This := That {}` (see Runtime Type Contracts above, "Class-styled identifier assigned a Scope value") — same declarative category as a bare `Type_Expr`, just spelled through an assignment. A *named* `@load` (`Ident := @load 'file'` / `IDENT := @load 'file'`) is checked the same way, but additionally requires a Capitalized/UPPERCASE left-hand name (`Lost.type_of_identifier`) — a lowercase `mod := @load 'file'` stays a plain variable, not hoisted. A *bare* `@load` (no assignment at all) is checked separately, via `#bare_load_directive_expr?` — always hoistable, since there's no left-hand name to apply a casing rule to; kept out of `#hoistable_declaration_expr?`'s own recursive unwrap specifically so it can't leak permissiveness into the named/casing-restricted case. Anything else — a plain `x := 5`, `x := some_call()`, `ident,` — is a step in the program's own imperative order, and reading it before that step runs is a bug in the *program*; forward-resolving it anyway would silently paper over that instead of raising
 - **Guards against double execution** — forcing a declaration marks its `.expr` in `@forced_declarations` (identity-tracked, a plain `Set` — `Expression` doesn't override `hash`/`eql?`); `#output`'s own top-level walk skips any expression already in that set when it reaches it for real, so a forced function/type/`@load` only ever runs once. That skip has to *keep* the running result (`result` in `input.each.inject(nil) { |result, expr| ... }`), not reset it via a bare `next` — otherwise, if the skipped statement happens to be the file's *last* one, the whole program's reported result silently becomes `nil` instead of the true last value
-- **Only fires when Global is actually reachable** — guarded by `stack.any? { |s| s.equal? global }` (identity check, not `#include?`, which is `==` and can hit an Ore type's own overload — e.g. `Ore::Array#==` assumes its operand also has `.values`). A plain `x.y` dot access deliberately excludes Global from its lookup (`#interp_dot_scope`'s `exclude_global_scope: true`, see Scope System below) specifically so a member missing on `x` stays missing — without this guard, forward-resolution would quietly reach past that exclusion and resolve to an unrelated global of the same name. Consequence worth knowing: a plain identifier reference (`This()`) hoists, but a `.method()` call doesn't independently hoist the method it's calling — `sign.warning()` only works once `warning`'s own declaration has actually been reached, even if `sign`'s type was itself forced early (see `learn/forward_declarations.ore`)
+- **Only fires when Global is actually reachable** — guarded by `stack.any? { |s| s.equal? global }` (identity check, not `#include?`, which is `==` and can hit an Lost type's own overload — e.g. `Lost::Array#==` assumes its operand also has `.values`). A plain `x.y` dot access deliberately excludes Global from its lookup (`#interp_dot_scope`'s `exclude_global_scope: true`, see Scope System below) specifically so a member missing on `x` stays missing — without this guard, forward-resolution would quietly reach past that exclusion and resolve to an unrelated global of the same name. Consequence worth knowing: a plain identifier reference (`This()`) hoists, but a `.method()` call doesn't independently hoist the method it's calling — `sign.warning()` only works once `warning`'s own declaration has actually been reached, even if `sign`'s type was itself forced early (see `learn/forward_declarations.tape`)
 - **`#global`** — a dedicated reference set once when Global is created, independent of `stack` (which `#interp_member_access` temporarily swaps out during dot-access resolution — `stack.first` isn't reliably Global during that window)
 - **`declarations` is saved/restored around `#load_file_into_scope`'s recursive `#output` call**, same as `@input` already was — otherwise loading a file (`@load`, especially the `x := @load 'file'` isolated-scope form) would overwrite the outer program's own `declarations` with the loaded file's, and forward-resolution would leak names declared inside an isolated module scope straight onto Global
 
@@ -221,7 +221,7 @@ The consuming side lives in `#interp_identifier`'s final `else` branch — the c
 
 ## Scope System
 
-Ore uses a scope hierarchy, all defined in `src/runtime/scopes.rb`:
+Lost uses a scope hierarchy, all defined in `src/runtime/scopes.rb`:
 
 - **Global** - The global scope; pushed as the bottom of `Interpreter#stack` on first `run`; standard library declarations live here; execution state (routes, servers, loaded files, etc.) lives directly on `Interpreter`
 - **Type** - Class definitions (tracks `@types`, `@expressions`)
@@ -235,7 +235,7 @@ Each scope can also have **readable** and **writable** fallback scopes - additio
 
 ### Scope Operators
 
-Ore provides three scope operators for explicit scope access:
+Lost provides three scope operators for explicit scope access:
 
 - `~/identifier` - Access global scope
 - `./identifier` - Access current instance scope only
@@ -262,19 +262,19 @@ Identifiers starting with `_` are considered private by convention (e.g., `_priv
 
 ### `self` / `Self` Keywords
 
-`self` and `Self` are keyword sugar for `./` and `../` respectively — `self.x` and `./x` (`Self.x` and `../x`) are exactly the same thing, just spelled differently. **The user prefers `self`/`Self` over `./`/`../` in new/edited Ore code** (`.ore` files under `learn/`, `ore/`, `examples/`, and `readme.md`) — `./`/`../` still work and aren't being removed, but default to `self`/`Self` when writing or updating Ore source unless the surrounding code is specifically demonstrating the scope-operator spelling itself (e.g. the Scope Operators section above).
+`self` and `Self` are keyword sugar for `./` and `../` respectively — `self.x` and `./x` (`Self.x` and `../x`) are exactly the same thing, just spelled differently. **The user prefers `self`/`Self` over `./`/`../` in new/edited Lost code** (`.tape` files under `learn/`, `lost/`, `examples/`, and `readme.md`) — `./`/`../` still work and aren't being removed, but default to `self`/`Self` when writing or updating Lost source unless the surrounding code is specifically demonstrating the scope-operator spelling itself (e.g. the Scope Operators section above).
 
-- Bare `self`/`Self` (no trailing `.identifier`) are handled in `#interp_identifier` (`interpreter.rb`): each does the same stack search `./`/`../` already do (`#current_instance`/nearest `Ore::Type`) and returns that Scope object as a real value — so `Self()` constructs the type (`Self() === Type_Name()`), `Self.declaration` reads a static, and passing `self`/`Self` around works like passing any other value
-- `self.x`/`Self.x` as a `:=`/`=` write target is special-cased in `#assign_dot_member` (`interpreter.rb`, `Ore::SELF_KEYWORDS`) to route around the stricter external-`.`-write rules (`Cannot_Reassign_Constant`, `#check_dot_access_permissions!`) that a real dot-write always enforces — `./`/`../` never run those checks either, so this makes both spellings behave identically for both new and already-declared members
+- Bare `self`/`Self` (no trailing `.identifier`) are handled in `#interp_identifier` (`interpreter.rb`): each does the same stack search `./`/`../` already do (`#current_instance`/nearest `Lost::Type`) and returns that Scope object as a real value — so `Self()` constructs the type (`Self() === Type_Name()`), `Self.declaration` reads a static, and passing `self`/`Self` around works like passing any other value
+- `self.x`/`Self.x` as a `:=`/`=` write target is special-cased in `#assign_dot_member` (`interpreter.rb`, `Lost::SELF_KEYWORDS`) to route around the stricter external-`.`-write rules (`Cannot_Reassign_Constant`, `#check_dot_access_permissions!`) that a real dot-write always enforces — `./`/`../` never run those checks either, so this makes both spellings behave identically for both new and already-declared members
 - `self.funk {;}`/`Self.funk {;}` (bare function declarations, no `:=`) are desugared entirely at parse time: `#parse_self_prefixed_func_name` (`parser.rb`) synthesizes the equivalent `./`/`../` scope-operator lexeme onto the function name's `Identifier_Expr`, so every downstream scope-operator-aware check (`#track_static_declaration`, the per-instance re-run skip in `#run_type_body_on_instance`) treats it identically with zero interpreter-side special-casing for this form
 - `#static_var_declaration_expr?` (`interpreter.rb`) recognizes both the `../x := value` AST shape (scope-operator identifier) and the `Self.x := value` shape (dot-target) as static declarations that must run once, not per-instance — these are structurally different ASTs, so `#run_type_body_on_instance`'s skip-check needs to recognize both explicitly
-- `#current_instance` (`interpreter.rb`) is the nearest `Ore::Instance` in the stack (role-based, not positional) — shared by `self`/`./` resolution and `#check_dot_access_permissions!`'s privacy check. This mattered for a real bug: `#interp_func_body` always pushes a fresh per-call `Func` frame on top of the instance, so `stack.last` during any method body is never the instance itself — a privacy check that compared against `stack.last` directly would (and did) wrongly reject `self.some_private_member` read from inside that very instance's own method, until fixed to compare against `#current_instance` instead
+- `#current_instance` (`interpreter.rb`) is the nearest `Lost::Instance` in the stack (role-based, not positional) — shared by `self`/`./` resolution and `#check_dot_access_permissions!`'s privacy check. This mattered for a real bug: `#interp_func_body` always pushes a fresh per-call `Func` frame on top of the instance, so `stack.last` during any method body is never the instance itself — a privacy check that compared against `stack.last` directly would (and did) wrongly reject `self.some_private_member` read from inside that very instance's own method, until fixed to compare against `#current_instance` instead
 
 ## Reopening a Scope
 
 `@push_scope scope` pushes a `Type` or `Instance` directly onto the interpreter's stack, so its members become reachable without a prefix, and any bare declaration made while "inside" lands on the pushed scope itself — this actually mutates the target, unlike the readable/writable scopes described below. `@pop_scope scope` pops back out; it asserts (by identity) that `scope` is exactly what `@push_scope` last pushed, raising a plain `RuntimeError` instead of silently popping the wrong thing.
 
-```ore
+```lost
 Button {
 	label := 'default'
 }
@@ -293,7 +293,7 @@ Reopening a `Type` extends every instance (past and future); reopening a specifi
 
 Type-level (static) members are declared using the `Self.` scope operator (keyword sugar for `../` — see `self` / `Self` Keywords above):
 
-```ore
+```lost
 Person {
     Self.count := 0      # Static variable shared across all instances
 
@@ -323,22 +323,22 @@ Person.increment()   # Call static method on type => 3 (2 from init(), 1 more fr
 
 A member must be declared in a type's own body — including via `./member := value` inside any of its own methods — before it can be written to from outside. `.` (external dot access) never creates a member:
 
-```ore
+```lost
 Thing { new {; ./member := 123 } }   # self-declaration via ./ inside a method -- legitimate,
                                      # equivalent to declaring `member,` in the body directly
 t := Thing()
 t.member = 5                         # fine -- member already exists
-t.missing = 5                       # raises Ore::Cannot_Assign_Undeclared_Identifier
+t.missing = 5                       # raises Lost::Cannot_Assign_Undeclared_Identifier
 ```
 
-- `./`/`../` self-declaration (`:=`) is only allowed while the instance is still under construction — the class body's own declarations, or `new{;}` itself (and anything it calls). A later method self-declaring a brand-new member this way also raises `Ore::Cannot_Assign_Undeclared_Identifier`, so an instance's shape can't keep growing after it's built. Detected via `instance.has?('new')` — `#interp_type_call` deletes the `new` declaration the moment construction finishes, so that check is true for exactly the construction window
+- `./`/`../` self-declaration (`:=`) is only allowed while the instance is still under construction — the class body's own declarations, or `new{;}` itself (and anything it calls). A later method self-declaring a brand-new member this way also raises `Lost::Cannot_Assign_Undeclared_Identifier`, so an instance's shape can't keep growing after it's built. Detected via `instance.has?('new')` — `#interp_type_call` deletes the `new` declaration the moment construction finishes, so that check is true for exactly the construction window
 - Not yet covered: the equivalent restriction for `../` creating a brand-new *static* member from outside the type's original body walk — no "still being defined" signal exists for `Type` the way `has?('new')` does for `Instance`
-- A constant-named member (`X.SOME_CONST = ...`) can never be reassigned via `.`, raising `Ore::Cannot_Reassign_Constant`
+- A constant-named member (`X.SOME_CONST = ...`) can never be reassigned via `.`, raising `Lost::Cannot_Reassign_Constant`
 - All three `.`-write forms — plain `=`, plain `:=`, and destructuring dot-targets (see Destructuring below) — share one implementation, `#assign_dot_member` in `interpreter.rb`. `:=` onto an *existing* member re-infers/overwrites its recorded type (same as re-running `:=` on a plain identifier); `=` checks the new value against any previously recorded type instead
 
 ## Class Composition Operators
 
-Ore uses composition operators instead of inheritance. Applied as `Class | Other { body }`:
+Lost uses composition operators instead of inheritance. Applied as `Class | Other { body }`:
 
 - `|` **Union** - merge all declarations; left side wins conflicts
 - `&` **Intersection** - keep only declarations shared by both sides
@@ -349,7 +349,7 @@ Multiple operators can be chained: `Admin | Read_Permissions | Write_Permissions
 
 Built-in types like `Server`, `Table`, and `Dom` are composed this way:
 
-```ore
+```lost
 Web_App | Server { get:// {; "Hello" } }
 Post | Table { Self.database := ~/db; table_name := 'posts' }
 Layout | Dom { render {; Html([Body("Hello")]) } }
@@ -367,7 +367,7 @@ Five operators compare the *composed-type sets* of Types and Instances (a type's
 
 Only `=>=` (superset) carries genuinely new information — `=<=` is `=>=` with swapped operands, and `===` is mutual `=>=` in both directions (`(A =>= B) && (B =>= A)`); `=!=` is just `!(A === B)`. The other three exist purely for readability at the call site, the same reason most languages ship both `<=`/`>=` alongside `==`/`!=` despite one being derivable from the other.
 
-```ore
+```lost
 Flying { can_fly := true }
 Swimming { can_swim := true }
 
@@ -388,9 +388,9 @@ Struct members (see below) factor into all five: `===`/`=!=` require both the co
 
 ### `Any` is a universal wildcard
 
-`Any` (`ore/preload.ore`) is a real declared type, but `==`/`!=`/`===`/`=!=` special-case it: any value or type that isn't `nil` counts as equal to `Any`, in either operand position, with no composition required — you don't need `Thing | Any {}` for `Thing` to satisfy it.
+`Any` (`lost/preload.tape`) is a real declared type, but `==`/`!=`/`===`/`=!=` special-case it: any value or type that isn't `nil` counts as equal to `Any`, in either operand position, with no composition required — you don't need `Thing | Any {}` for `Thing` to satisfy it.
 
-```ore
+```lost
 Thing { x := 1 }
 
 String === Any      #=> true
@@ -403,13 +403,13 @@ Implemented once in `#interp_comparison_infix` (`interpreter.rb`), checked up fr
 
 ## Structs
 
-`<...>` attaches runtime-inspectable metadata (a "struct") to a type declaration, a standalone value, or a reference to an existing type. Parsed by `parse_struct` in `parser.rb` into `Ore::Struct_Expr`; interpreted by `interp_struct`/`interp_type` in `interpreter.rb` into an `Ore::Struct` instance (`src/external/ruby/struct.rb` — no paired `.ore` file; `ore/struct.ore` + `ore/member.ore` are a separate, higher-level `Member`/`Struct` layer built on top of it, loaded by default via `ore/preload.ore`).
+`<...>` attaches runtime-inspectable metadata (a "struct") to a type declaration, a standalone value, or a reference to an existing type. Parsed by `parse_struct` in `parser.rb` into `Lost::Struct_Expr`; interpreted by `interp_struct`/`interp_type` in `interpreter.rb` into an `Lost::Struct` instance (`src/external/ruby/struct.rb` — no paired `.tape` file; `lost/struct.tape` + `lost/member.tape` are a separate, higher-level `Member`/`Struct` layer built on top of it, loaded by default via `lost/preload.tape`).
 
-```ore
+```lost
 Abc<Number> {}             # declaration — Number becomes part of Abc's structure_declaration
 x := Abc<Number>            # reference — dup of the existing Abc type, structured; doesn't mutate the original
 x: Abc<Number>              # same, as a type annotation
-thing: <String, Number>     # bare struct, no type name at all — a standalone Ore::Struct value
+thing: <String, Number>     # bare struct, no type name at all — a standalone Lost::Struct value
 z := Abc<4815>              # a reference structured with an actual value rather than a type
 z()                         # constructs Abc, with .structure bound before new{;} runs
 Abc<4815>()                 # same, in one step
@@ -417,8 +417,8 @@ Def {}
 Def()                       # unstructured types are completely unaffected
 ```
 
-- A member is any expression (`Abc<1+2+3/123>`, `Abc<this, that>`), not just a type name — evaluated normally at interpret time, so an identifier like `Number` resolves to the actual `Ore::Type`
-- Named members (`Type<some_string: String, num: Number> {}`) reuse `parse_identifier_expr`'s existing `: Type` annotation parsing for each member — no separate grammar needed. Only two named forms exist: `name: Type` and `name := value` — there's no general `name: value` the way Dictionaries have one. `:` immediately after a bare identifier, followed by anything that isn't a capitalized type name or `<...>` (almost always a lowercase value, mistaken for Dictionary-style `key: value`), raises `Ore::Invalid_Struct_Member_Annotation` at parse time in `#parse_struct` — without that check, `#parse_identifier_expr`'s own `: Type` lookahead just declines to consume the `:` (it can never be a type), leaving it to be reparsed on the next loop iteration as an unrelated `:symbol` prefix literal starting a whole new member, since commas are optional between struct members same as any other list — `<columns: cols>` would otherwise silently become the two members `columns, :cols` instead of erroring anywhere
+- A member is any expression (`Abc<1+2+3/123>`, `Abc<this, that>`), not just a type name — evaluated normally at interpret time, so an identifier like `Number` resolves to the actual `Lost::Type`
+- Named members (`Type<some_string: String, num: Number> {}`) reuse `parse_identifier_expr`'s existing `: Type` annotation parsing for each member — no separate grammar needed. Only two named forms exist: `name: Type` and `name := value` — there's no general `name: value` the way Dictionaries have one. `:` immediately after a bare identifier, followed by anything that isn't a capitalized type name or `<...>` (almost always a lowercase value, mistaken for Dictionary-style `key: value`), raises `Lost::Invalid_Struct_Member_Annotation` at parse time in `#parse_struct` — without that check, `#parse_identifier_expr`'s own `: Type` lookahead just declines to consume the `:` (it can never be a type), leaving it to be reparsed on the next loop iteration as an unrelated `:symbol` prefix literal starting a whole new member, since commas are optional between struct members same as any other list — `<columns: cols>` would otherwise silently become the two members `columns, :cols` instead of erroring anywhere
 - A struct is only ever reachable via `.structure` (`.structure.types`, `.structure.some_string` for named members) — never auto-unpacked into `./`
 - A bare identifier immediately followed by `,` inside `<...>` (`<String, Number>`) is special-cased in `parse_struct` to parse as a plain identifier rather than the nil-init idiom (`ident,` ⇒ `ident = ident or nil`), which would otherwise misfire on the exact same shape
 - Reference forms (`x := Abc<Number>`) `dup` the matched variant (see below) rather than mutating it in place — `Object#dup` is shallow, so `@declarations`/`@static_declarations` are explicitly re-forked too, otherwise structuring one reference would silently mutate every other reference sharing that variant
@@ -427,13 +427,13 @@ Def()                       # unstructured types are completely unaffected
 
 ### Each declared structure is its own type
 
-`Abc<Number> {}` and `Abc<String> {}` are independent `Ore::Type` objects, not one shared type with two structures bolted on — declaring a structure creates a fresh type seeded from a copy of the *bare* type's own body (if one exists at declaration time), so one structure's `new`/methods can never clobber another's. This is handled by `#interp_structured_type_declaration` (`interpreter.rb`), a sibling of `#interp_bare_type_declaration` (used for plain, unstructured `Type { ... }`, which still reopens/extends one shared object as before). Both share a common tail, `#finish_type_declaration` (Ore:: Ruby-class linking, `@types` bookkeeping, running the body) — reopening an existing variant (bare or structured) only re-runs its *new* expressions, not ones already run on an earlier declaration.
+`Abc<Number> {}` and `Abc<String> {}` are independent `Lost::Type` objects, not one shared type with two structures bolted on — declaring a structure creates a fresh type seeded from a copy of the *bare* type's own body (if one exists at declaration time), so one structure's `new`/methods can never clobber another's. This is handled by `#interp_structured_type_declaration` (`interpreter.rb`), a sibling of `#interp_bare_type_declaration` (used for plain, unstructured `Type { ... }`, which still reopens/extends one shared object as before). Both share a common tail, `#finish_type_declaration` (Lost:: Ruby-class linking, `@types` bookkeeping, running the body) — reopening an existing variant (bare or structured) only re-runs its *new* expressions, not ones already run on an earlier declaration.
 
-Each variant is kept in a per-scope list (`Scope#structured_type_variants`, keyed by base name — e.g. every declared structure of `String`) rather than a single mangled-string-keyed member, so `String<dict: Dictionary> {}` and `String<other: Dictionary> {}` are two distinct variants instead of colliding on a shared `"String<Dictionary>"` key. Matching is by real structure equality (`Ore::Struct#structure_declaration_equal?`, `struct.rb`) — both `names` and resolved `type_names`, positionally — mirroring the language's own `===` operator on Type/Instance (exact set equality, not a string compare).
+Each variant is kept in a per-scope list (`Scope#structured_type_variants`, keyed by base name — e.g. every declared structure of `String`) rather than a single mangled-string-keyed member, so `String<dict: Dictionary> {}` and `String<other: Dictionary> {}` are two distinct variants instead of colliding on a shared `"String<Dictionary>"` key. Matching is by real structure equality (`Lost::Struct#structure_declaration_equal?`, `struct.rb`) — both `names` and resolved `type_names`, positionally — mirroring the language's own `===` operator on Type/Instance (exact set equality, not a string compare).
 
-A reference resolves by inferring a type name for each supplied value and matching that against the declared variants for that base name — but the match isn't exact-name-only: `#member_candidate_type_names` returns every type a value composes (its own name first, then everything it composes), so e.g. a `Div` satisfies a member declared `Dom` even though nothing in `ore/html.ore` is literally named `Dom`. `Ore::Struct#satisfied_by_candidates?` checks a declared variant against those candidates (mirroring the language's own `=>=` superset operator), and `#find_structured_type_variant` prefers an exact match before falling back to a compositional one. A reference with no matching declared variant raises `Ore::Undeclared_Type_Structure` — there's no fallback to untyped/ad-hoc structuring.
+A reference resolves by inferring a type name for each supplied value and matching that against the declared variants for that base name — but the match isn't exact-name-only: `#member_candidate_type_names` returns every type a value composes (its own name first, then everything it composes), so e.g. a `Div` satisfies a member declared `Dom` even though nothing in `lost/html.tape` is literally named `Dom`. `Lost::Struct#satisfied_by_candidates?` checks a declared variant against those candidates (mirroring the language's own `=>=` superset operator), and `#find_structured_type_variant` prefers an exact match before falling back to a compositional one. A reference with no matching declared variant raises `Lost::Undeclared_Type_Structure` — there's no fallback to untyped/ad-hoc structuring.
 
-```ore
+```lost
 String<Dictionary> { to_s {; "I'm a dict-structured string" } }
 String<Number>     { to_s {; "I'm a number-structured string" } }
 
@@ -443,7 +443,7 @@ String<5>().to_s()       # "I'm a number-structured string" -- 5 is a Number
 
 ### Confirmed example
 
-```ore
+```lost
 String<dict: Dictionary> {
     new { str: String = "";
         value = str
@@ -465,10 +465,10 @@ b.to_s()   # "My dict: {x::0, y::1, z::2, }"
 
 ### Runtime wiring
 
-- `Ore::Struct < Instance`, not `Scope` — the `enclosing_scope` method-lookup fallback used for `arr.push(...)`-style calls (see `#interp_identifier`) is gated on `is_a?(Ore::Instance)`, and `Struct` needs that same fallback for `ore/struct.ore`'s own declarations (`==`, `include?`) to be reachable at all. Note: `ore/struct.ore`/`ore/member.ore` are the separate, higher-level `Member`/`Struct` layer, loaded by default (`ore/preload.ore`) but still reachable with `Ore.interp(code, load_standard_library: false)` — distinct from this low-level `Ore::Struct` Ruby class, which every `<...>` struct literal goes through regardless of whether that layer is loaded
-- Every `Ore::Struct.new` call site also calls `link_instance_to_type(struct, 'Struct')`, linking it to whichever `Struct` type is currently declared — either the bare Ruby-backed fallback (no standard library loaded), or `ore/struct.ore`'s own `Struct { }` otherwise (see `#build_struct`)
+- `Lost::Struct < Instance`, not `Scope` — the `enclosing_scope` method-lookup fallback used for `arr.push(...)`-style calls (see `#interp_identifier`) is gated on `is_a?(Lost::Instance)`, and `Struct` needs that same fallback for `lost/struct.tape`'s own declarations (`==`, `include?`) to be reachable at all. Note: `lost/struct.tape`/`lost/member.tape` are the separate, higher-level `Member`/`Struct` layer, loaded by default (`lost/preload.tape`) but still reachable with `Lost.interp(code, load_standard_library: false)` — distinct from this low-level `Lost::Struct` Ruby class, which every `<...>` struct literal goes through regardless of whether that layer is loaded
+- Every `Lost::Struct.new` call site also calls `link_instance_to_type(struct, 'Struct')`, linking it to whichever `Struct` type is currently declared — either the bare Ruby-backed fallback (no standard library loaded), or `lost/struct.tape`'s own `Struct { }` otherwise (see `#build_struct`)
 - `.structure` is exposed on `Type`/`Instance` via `declare_structure` (`interpreter.rb`) — only added when a scope actually has a structure, and marked as a static declaration so it's readable straight off a bare `Type`, not just an instance
-- `Type` (and therefore `Instance`, which subclasses it) carries two separate accessors, both holding an `Ore::Struct`:
+- `Type` (and therefore `Instance`, which subclasses it) carries two separate accessors, both holding an `Lost::Struct`:
   - `.structure` — what a specific reference or instance was actually structured with (`Abc<4815>`). Only ever set on an explicit `Abc<...>` reference, never on the bare declared type — its mere presence is what distinguishes "explicitly referenced" from "just the declared type" for `===`/`=!=`/etc. and for whether construction binds `.structure` at all
   - `.structure_declaration` — the type's own declared structure (`Abc<dict: Dictionary = {}> {}`): named/positional members, annotations, and defaults. A structured reference looks here to re-associate positional call-site values with names and fall back to defaults
   - Both live on `Type`, not `Scope`, because a structured reference is a `dup` of the type (same Ruby class as the type itself), so a `Type`-vs-`Instance` check can't stand in for the "declared" vs "supplied" distinction — see the comments on `Type#structure_instance`/`Type#structure_declaration` in `scopes.rb`
@@ -477,7 +477,7 @@ b.to_s()   # "My dict: {x::0, y::1, z::2, }"
 
 `Ident<...>` where `Ident` has nothing declared under it anywhere (no bare `Type`, no structured variant, no alias to one) isn't an error — it builds a plain `Struct`, same as `<...>` alone, except with `.name` set from the identifier:
 
-```ore
+```lost
 Thing := <String, Number>   # anonymous -- .name is nil; only reachable via the variable Thing
 Named <String, Number>      # named -- .name == 'Named'
 
@@ -487,16 +487,16 @@ n.name                      # 'Named'
 
 **Type lookup always takes priority.** This only kicks in when `Ident` is genuinely undeclared — a name that collides with something real still behaves exactly as it always has:
 
-```ore
+```lost
 Abc<Number> {}
-Abc<String>          # raises Ore::Undeclared_Type_Structure -- Abc IS declared, just not with this structure
+Abc<String>          # raises Lost::Undeclared_Type_Structure -- Abc IS declared, just not with this structure
 ```
 
-Implemented in `#interp_type` (`interpreter.rb`): the existing bare-reference branch (`Abc<Number>`, no `{}` body) already raised `Ore::Undeclared_Type_Structure` whenever nothing matched — it just never distinguished "nothing declared under this name at all" from "something's declared, this structure doesn't match it". Now it checks both `find_in_stack(expr.name)` (a bare Type or a local alias) and `structured_variants_for(lookup_name)` (any structured variant, matching or not) before falling through to a named struct — either one being non-empty means something real is declared under that name, so the original error still applies.
+Implemented in `#interp_type` (`interpreter.rb`): the existing bare-reference branch (`Abc<Number>`, no `{}` body) already raised `Lost::Undeclared_Type_Structure` whenever nothing matched — it just never distinguished "nothing declared under this name at all" from "something's declared, this structure doesn't match it". Now it checks both `find_in_stack(expr.name)` (a bare Type or a local alias) and `structured_variants_for(lookup_name)` (any structured variant, matching or not) before falling through to a named struct — either one being non-empty means something real is declared under that name, so the original error still applies.
 
 ## Enums (not finalized — don't rely on yet)
 
-`TYPE_IDENT :: (OPTIONAL_FORCED_TYPE) { ... }` declares an `Ore::Enum` (`Ore::Enum_Expr` in the parser, `#parse_enum_expr`; `#interp_enum`/`#build_enum`/`#build_enum_member` in `interpreter.rb`; backing Ore body in `ore/enum.ore`, Ruby class in `src/external/ruby/enum.rb`). Members can be bare (`TODO`), bare with a trailing comma (`BUG,`), type-annotated only (`DONE: Priority`), type-annotated with a value (`CANCELLED: Priority = 99`), self-declared with a value (`ARCHIVED := 'archived'`), or a nested enum (`Nested :: { A, B }`, reachable only as `Outer.Nested`). A bare/annotated-only member's value is a Symbol matching its own name. The enum exposes `.type` (the forced type, or `nil`), `.keys`/`.values`/`.types` (parallel Arrays), and `.count`.
+`TYPE_IDENT :: (OPTIONAL_FORCED_TYPE) { ... }` declares an `Lost::Enum` (`Lost::Enum_Expr` in the parser, `#parse_enum_expr`; `#interp_enum`/`#build_enum`/`#build_enum_member` in `interpreter.rb`; backing Lost body in `lost/enum.tape`, Ruby class in `src/external/ruby/enum.rb`). Members can be bare (`TODO`), bare with a trailing comma (`BUG,`), type-annotated only (`DONE: Priority`), type-annotated with a value (`CANCELLED: Priority = 99`), self-declared with a value (`ARCHIVED := 'archived'`), or a nested enum (`Nested :: { A, B }`, reachable only as `Outer.Nested`). A bare/annotated-only member's value is a Symbol matching its own name. The enum exposes `.type` (the forced type, or `nil`), `.keys`/`.values`/`.types` (parallel Arrays), and `.count`.
 
 **Syntactically present, but the type system isn't enforced yet**: the forced type after `::` and each member's own `: Type` annotation are stored but never checked against anything — `Task_Type :: Number { BUG: String = 'oops' }` declares and constructs without error. See the todos.md entry for finalizing this. Don't build real functionality on top of Enum type annotations until that's resolved.
 
@@ -504,7 +504,7 @@ Implemented in `#interp_type` (`interpreter.rb`): the existing bare-reference br
 
 `(a, b) := <tuple-or-struct-valued expr>` extracts a Tuple's or Struct's values positionally into fresh locals or existing members:
 
-```ore
+```lost
 (a, b) := (1, 2)              # Tuple source
 (a, b) := <1, 2>              # Struct source
 (x: Number, y) := (1, 2)      # per-target type check against the extracted value
@@ -512,17 +512,17 @@ Implemented in `#interp_type` (`interpreter.rb`): the existing bare-reference br
 ```
 
 - A plain-identifier target always declares fresh on the current scope, same shadowing behavior as any other `:=` — even if that name is already declared elsewhere
-- Extracting fewer values than the source has is fine (extras discarded); asking for *more targets than the source has values* raises `Ore::Destructuring_Arity_Mismatch`
+- Extracting fewer values than the source has is fine (extras discarded); asking for *more targets than the source has values* raises `Lost::Destructuring_Arity_Mismatch`
 - A target can also be an existing member (`thing.member`) instead of a fresh local — this reassigns rather than declares, going through the same `#assign_dot_member` path as plain `thing.member = value` (see Member Creation Is Strict above): the member must already exist, can't be a constant, and (if it has a previously recorded type) the extracted value must match it
-- Only `Ore::Tuple`/`Ore::Struct` sources are supported (`Ore::Invalid_Destructuring_Source` otherwise); a target that's neither a plain identifier nor an existing-member dot-expression raises `Ore::Invalid_Destructuring_Target`
+- Only `Lost::Tuple`/`Lost::Struct` sources are supported (`Lost::Invalid_Destructuring_Source` otherwise); a target that's neither a plain identifier nor an existing-member dot-expression raises `Lost::Invalid_Destructuring_Target`
 - Implementation: `#interp_destructuring_declaration` in `interpreter.rb`, dispatched from `#interp_infix_declaration` when `expr.left` is a `()`-grouped `Circumfix_Expr`
 - Not implemented: the bare (no-parens) form `a, b := ...` — needs lookahead past the whole comma-run to distinguish it from N independent nil-init declarations, deferred as not urgent
 
 ## Percent Literals
 
-`%kind(...)` turns a space-separated list of bare items into a real `Array` of String or Symbol literals, without quoting each one individually. Parsed by `#parse_percent_literal_expr` (`parser.rb`) into `Ore::Percent_Literal_Expr`; interpreted by `#interp_percent_literal` (`interpreter.rb`).
+`%kind(...)` turns a space-separated list of bare items into a real `Array` of String or Symbol literals, without quoting each one individually. Parsed by `#parse_percent_literal_expr` (`parser.rb`) into `Lost::Percent_Literal_Expr`; interpreted by `#interp_percent_literal` (`interpreter.rb`).
 
-```ore
+```lost
 %string(boo Hoo COOL)      # [boo, Hoo, COOL] — preserves each item's own casing
 %symbol(BOO hoo Cool)      # [:BOO, :hoo, :Cool]
 
@@ -536,15 +536,15 @@ cool := 2342
 ```
 
 - Eight kinds total: `string`/`str`/`Str`/`STR` (String), `symbol`/`sym`/`Sym`/`SYM` (Symbol) — see `PERCENT_LITERALS` in `constants.rb`
-- Items can be identifiers, numbers, operators, or `` `expr` `` (Statement) literals; anything else (a string literal, `[1, 2]`, ...) raises `Ore::Invalid_Percent_Literal_Expression`
+- Items can be identifiers, numbers, operators, or `` `expr` `` (Statement) literals; anything else (a string literal, `[1, 2]`, ...) raises `Lost::Invalid_Percent_Literal_Expression`
 - **Parsing**: items are parsed one bare token at a time (`curr? :operator`/`:number`/identifier-kind dispatch inside `#parse_percent_literal_expr`), never via the general `#parse_expression` — a symbolic operator item like `+`/`-` is also a valid PREFIX operator, and `#parse_expression` would happily reparse it as a prefix/infix expression that swallows the *next* item as its operand (`%str(+ - ^)` used to collapse into one nested `Prefix_Expr` instead of three separate items); a run like `^^^ + - * /` would similarly get glommed into one compound infix expression by ordinary expression parsing, since nothing else marks item boundaries besides whitespace
 - The one remaining `else -> #parse_expression` branch exists purely so an *invalid* item still consumes at least one token — without it, the parser looped forever re-checking the same un-consumed token instead of raising `Invalid_Percent_Literal_Expression`
 
 ## Statement Expressions
 
-`` `expr` `` wraps any expression without running it — an `Ore::Statement`, callable later with `()`. Parsed by `#parse_statement_expr` (`parser.rb`) into `Ore::Statement_Expr`; interpreted by `#interp_statement` (`interpreter.rb`) into an `Ore::Statement` instance (`src/external/ruby/statement.rb` + `ore/statement.ore`).
+`` `expr` `` wraps any expression without running it — an `Lost::Statement`, callable later with `()`. Parsed by `#parse_statement_expr` (`parser.rb`) into `Lost::Statement_Expr`; interpreted by `#interp_statement` (`interpreter.rb`) into an `Lost::Statement` instance (`src/external/ruby/statement.rb` + `lost/statement.tape`).
 
-```ore
+```lost
 `1+2`()                    # 3 — written and called in the same place, evaluates immediately
 
 x := `1+2`
@@ -559,9 +559,9 @@ increment()
 counter                    # 3 — each call actually re-runs the wrapped expression; not memoized by default
 ```
 
-**Scope: captured by default, opt into the caller's.** A Statement remembers the single scope it was on top of the stack when *built* (`captured_scope`, mirroring how `Ore::Func#enclosing_scope` already gives ordinary functions real closures) — calling it later, from anywhere, resolves free identifiers as if it were still running where it was written, not wherever `()` happens to be called from.
+**Scope: captured by default, opt into the caller's.** A Statement remembers the single scope it was on top of the stack when *built* (`captured_scope`, mirroring how `Lost::Func#enclosing_scope` already gives ordinary functions real closures) — calling it later, from anywhere, resolves free identifiers as if it were still running where it was written, not wherever `()` happens to be called from.
 
-```ore
+```lost
 Slacker {
 	count := 0
 	statement: Statement
@@ -580,22 +580,22 @@ dynamic.use_caller_scope = true
 Slacker(dynamic).live_count()    # 4 — resolves Slacker's *own* count member instead (0 -> 4); outer count untouched
 ```
 
-- `.use_caller_scope = true` switches a Statement from captured (predictable, closure-like) to dynamic (resolves fresh at every call site) — see `learn/advanced_statements.ore`
+- `.use_caller_scope = true` switches a Statement from captured (predictable, closure-like) to dynamic (resolves fresh at every call site) — see `learn/advanced_statements.tape`
 - `.memoize = true` caches the first `()` result and returns it on every call after that, instead of re-running — `Memoized_Statement`/`Memoizer` no longer exist as separate types, this replaced them
-- `Statement(other)` adopts `other`'s wrapped expression, `captured_scope`, and settings rather than re-capturing "wherever this `Statement(...)` call happens to be written" — `Statement(\`x+1\`)` behaves exactly like writing `` `x+1` `` directly (`Ore::Statement#proxy_from`, called from `ore/statement.ore`'s `new{;}`)
+- `Statement(other)` adopts `other`'s wrapped expression, `captured_scope`, and settings rather than re-capturing "wherever this `Statement(...)` call happens to be written" — `Statement(\`x+1\`)` behaves exactly like writing `` `x+1` `` directly (`Lost::Statement#proxy_from`, called from `lost/statement.tape`'s `new{;}`)
 
-**Two construction paths, and why it matters.** Every Ruby-backed Ore type (`Ore::String`, `Ore::Array`, `Ore::Statement`, ...) can be built two different ways, and Statement's `captured_scope` makes the distinction concrete:
+**Two construction paths, and why it matters.** Every Ruby-backed Lost type (`Lost::String`, `Lost::Array`, `Lost::Statement`, ...) can be built two different ways, and Statement's `captured_scope` makes the distinction concrete:
 
 1. A backtick literal (`` `expr` ``) — `#interp_statement` builds the Ruby object directly and is the *only* place that can set `captured_scope`, since it's interpreter-side code with a live `stack` to read from; Ruby's `#initialize` has no reference to the running `Interpreter` at all.
-2. An explicit `Statement(...)` call — goes through the normal Type-construction path (`#interp_type_call` -> `#build_instance_of_type`), which calls `Ore::Statement.new` with no meaningful constructor argument. Real argument binding happens afterward, separately, once `new{;}`'s own body (`ore/statement.ore`) runs. Ruby's `#initialize` only ever needs to set harmless defaults it can't get wrong.
+2. An explicit `Statement(...)` call — goes through the normal Type-construction path (`#interp_type_call` -> `#build_instance_of_type`), which calls `Lost::Statement.new` with no meaningful constructor argument. Real argument binding happens afterward, separately, once `new{;}`'s own body (`lost/statement.tape`) runs. Ruby's `#initialize` only ever needs to set harmless defaults it can't get wrong.
 
-`use_caller_scope`/`memoize`/`_memoized`/`_memoized_value` are declared as ordinary Ore members in `ore/statement.ore` (not Ruby `attr_accessor`s) so plain dot-assignment (`s.memoize = true`) works with no extra plumbing; `#invoke_statement` reads/writes them from Ruby via `Scope#[]`/`#[]=`. `captured_scope` couldn't take that route — it holds a live Ruby `Scope` object, not an Ore-representable value — so it stays a Ruby `attr_accessor` instead.
+`use_caller_scope`/`memoize`/`_memoized`/`_memoized_value` are declared as ordinary Lost members in `lost/statement.tape` (not Ruby `attr_accessor`s) so plain dot-assignment (`s.memoize = true`) works with no extra plumbing; `#invoke_statement` reads/writes them from Ruby via `Scope#[]`/`#[]=`. `captured_scope` couldn't take that route — it holds a live Ruby `Scope` object, not an Lost-representable value — so it stays a Ruby `attr_accessor` instead.
 
-A bare backtick literal builds the Ruby object directly and skips the normal Type-construction path entirely, so `#interp_statement` has to *also* run the type's own Ore-level body on the instance (`#run_type_body_on_instance`) — otherwise `use_caller_scope`/`memoize`/etc. would only ever exist on instances built the `Statement(...)` way, and `s.memoize = true` on a bare `` `expr` `` would raise `Cannot_Assign_Undeclared_Identifier`.
+A bare backtick literal builds the Ruby object directly and skips the normal Type-construction path entirely, so `#interp_statement` has to *also* run the type's own Lost-level body on the instance (`#run_type_body_on_instance`) — otherwise `use_caller_scope`/`memoize`/etc. would only ever exist on instances built the `Statement(...)` way, and `s.memoize = true` on a bare `` `expr` `` would raise `Cannot_Assign_Undeclared_Identifier`.
 
-**Where scope-aware invocation is (and isn't) enforced.** `#invoke_statement` is the single place `use_caller_scope`/`memoize` are enforced, called from `#interp_call`'s `Ore::Statement` branch (an already-*constructed* instance being called via `()`). It doesn't apply to:
-- A bare `` `expr`() `` written and called in the same place (`#interp_call`'s earlier `Ore::Statement_Expr` check) — always immediate, in whatever scope it's written in
-- A `` `expr` `` item inside a percent literal (`#interp_percent_literal`) or array literal (`#interp_circumfix`) — neither ever builds a real `Ore::Statement`, so there's no instance to hold these settings on
+**Where scope-aware invocation is (and isn't) enforced.** `#invoke_statement` is the single place `use_caller_scope`/`memoize` are enforced, called from `#interp_call`'s `Lost::Statement` branch (an already-*constructed* instance being called via `()`). It doesn't apply to:
+- A bare `` `expr`() `` written and called in the same place (`#interp_call`'s earlier `Lost::Statement_Expr` check) — always immediate, in whatever scope it's written in
+- A `` `expr` `` item inside a percent literal (`#interp_percent_literal`) or array literal (`#interp_circumfix`) — neither ever builds a real `Lost::Statement`, so there's no instance to hold these settings on
 
 Pushing the captured scope back on top (rather than swapping the whole stack) is deliberate: identifier lookup searches innermost-first, so one scope pushed via `#push_then_pop` wins the search over the caller's own frames underneath, without needing to hide/replace them — the same trick `#interp_func_body` already uses for ordinary `Func` closures.
 
@@ -611,7 +611,7 @@ The language enforces naming conventions through the helper functions:
 
 Lowercase identifier, followed by a `{}` grouped block which contains `;` which separates the params and body.
 
-```ore
+```lost
 <identifier> { <args>; <body> }
 ```
 
@@ -619,14 +619,14 @@ Lowercase identifier, followed by a `{}` grouped block which contains `;` which 
 
 Swift/ObjC-style: a param declared with two identifiers in a row (`label name`) can be called with `label: value` at the call site.
 
-```ore
+```lost
 send_greeting { to person; person }
 send_greeting(to: 42)      # matches the label declared at that position
 send_greeting(42)          # labels are opt-in -- a bare positional call still works
 ```
 
 - Matching is purely positional — a labeled argument's label must match whatever's declared at that same param index; labels are never used to reorder arguments
-- A supplied label that doesn't match the declared one at that position (including "labeled when none was declared") raises `Ore::Argument_Label_Mismatch`
+- A supplied label that doesn't match the declared one at that position (including "labeled when none was declared") raises `Lost::Argument_Label_Mismatch`
 - Two params can share the same label (`new { at x, at y; ... }` then `Point(at: 3, at: 4)`) — matching Swift, labels aren't required to be unique
 - Implementation: `label: value` parses as an ordinary `:` `Infix_Expr` (same production named struct members use) — `#interp_func_body` unwraps it via `#classify_argument` before interpreting, rather than letting `#interpret` try to resolve the label as an identifier
 
@@ -634,17 +634,17 @@ send_greeting(42)          # labels are opt-in -- a bare positional call still w
 
 `name := value` at a call site binds by the callee's declared param *name*, order-independent — a separate mechanism from labels (which check a *position*'s declared label, never reorder). Works for any call, including construction (`new{;}` params).
 
-```ore
+```lost
 sub { a, b; a - b }
 sub(a := 1, b := 2)  #=> -1
 sub(b := 2, a := 1)  #=> -1, same result -- order doesn't matter
 sub(1, b := 2)       #=> -1, positional then named is fine
 ```
 
-- **Ordering rule**: positional arguments (bare or labeled) must come before all named arguments in a call — once you switch to naming, every argument after that has to be named too. Reverting to positional after a named argument raises `Ore::Positional_Argument_After_Named`
-- The same name used twice in one call raises `Ore::Duplicate_Named_Argument`
-- A param supplied both positionally *and* by name (e.g. `add(1, a := 2)` where `a` is the first param) raises `Ore::Argument_Given_By_Name_And_Position`
-- A named argument whose name doesn't match any declared param raises `Ore::Unknown_Named_Argument` — checked up front, before param binding, so a typo'd name is reported directly rather than surfacing as a confusing `Ore::Missing_Argument` on some unrelated param the typo incidentally starved of a value
+- **Ordering rule**: positional arguments (bare or labeled) must come before all named arguments in a call — once you switch to naming, every argument after that has to be named too. Reverting to positional after a named argument raises `Lost::Positional_Argument_After_Named`
+- The same name used twice in one call raises `Lost::Duplicate_Named_Argument`
+- A param supplied both positionally *and* by name (e.g. `add(1, a := 2)` where `a` is the first param) raises `Lost::Argument_Given_By_Name_And_Position`
+- A named argument whose name doesn't match any declared param raises `Lost::Unknown_Named_Argument` — checked up front, before param binding, so a typo'd name is reported directly rather than surfacing as a confusing `Lost::Missing_Argument` on some unrelated param the typo incidentally starved of a value
 - A named argument bypasses label-checking entirely for that param — it's matched by declared name, not position, so there's no positional label to compare against
 - Implementation: `name := value` parses as an ordinary `:=` `Infix_Expr` (same production a struct member's bare default uses) — `#classify_argument` distinguishes it from a labeled (`:`) or plain positional argument; `#interp_func_body` builds a `named_args` hash alongside the existing positional `arg_values` array, consulting it first when binding each declared param
 
@@ -652,13 +652,13 @@ sub(1, b := 2)       #=> -1, positional then named is fine
 
 A function param can be typed with an inline struct (`: <...>`) instead of a plain type name — structural, not nominal: any argument that has each named member, with a compatible type, satisfies it, regardless of what type the argument itself is actually named.
 
-```ore
+```lost
 f { right: <name: String, type: Any, value: Any>; right.name }
 
 m := Member('x', String, 4)
 f(m)          #=> 'x' -- Member has all three, so it satisfies the struct annotation without being named "Member" in the annotation itself
 
-f(nil)        # raises Ore::Type_Contract_Violation -- nil has none of the required members
+f(nil)        # raises Lost::Type_Contract_Violation -- nil has none of the required members
 ```
 
 - `Any` is a wildcard within a struct annotation's member types — `type: Any` matches regardless of the member's actual type (including a declared-but-nil member)
@@ -670,13 +670,13 @@ f(nil)        # raises Ore::Type_Contract_Violation -- nil has none of the requi
 
 A capitalized identifier followed by a `{}` grouped block
 
-```ore
+```lost
 <Identifier> { <body> }
 ```
 
 The `new` method is the constructor and is called when instantiating a class:
 
-```ore
+```lost
 Point {
     x,
     y,
@@ -700,7 +700,7 @@ Both are held **weakly** — adding an instance doesn't keep it alive. Once ever
 
 `@readable`/`@writable` are shorthand for `@add_readable_scope`/`@add_writable_scope`, meant specifically for function param lists, where the longer names get noisy fast.
 
-```ore
+```lost
 add { @readable vec;
 	x + y   # Access vec.x and vec.y directly
 }
@@ -711,7 +711,7 @@ add(v)   # Returns 7
 
 `@writable` unpacks the same way, but a plain write inside the body to a name the argument already has lands on that member directly instead of declaring a fresh local:
 
-```ore
+```lost
 double { @writable vec;
 	x *= 2   # writes straight through to vec.x
 	y *= 2
@@ -723,7 +723,7 @@ double { @writable vec;
 
 `@add_readable_scope instance` / `@add_writable_scope instance` (medium alias: `@add_readable`/`@add_writable`) do the same unpacking by hand, in any scope, not just a function's param list. `@remove_readable_scope`/`@remove_writable_scope` (medium alias: `@remove_readable`/`@remove_writable`) take an instance back out.
 
-```ore
+```lost
 Island {
 	name,
 }
@@ -745,15 +745,15 @@ thingy { @readable island;
 - Adding/removing goes through `Scope#add_readable_scope`/`#add_writable_scope`/`#remove_readable_scope`/`#remove_writable_scope` — the only code that touches the WeakMaps directly. `#interp_directive`'s `'add_readable_scope'`/`'add_writable_scope'`/`'remove_readable_scope'`/`'remove_writable_scope'` cases (and their aliases) call these, as does `param.add_to_readable`/`param.add_to_writable` handling in `#interp_func_body` for the `@readable`/`@writable` param shorthand
 - Lookup order, for both reads and writes, is `[self, writable, readable]`: own `@declarations` first, then `@writable_scopes` (most-recently-added first), then `@readable_scopes`. `Scope#get`/`#[]=`/`#delete` all check own declarations before falling back to `@writable_scopes` — an own declaration always wins over a same-named member reachable through a writable scope, for both reads and writes
 - "Most-recently-added first" (`test_multiple_unpacks`) means lookups walk `@writable_scopes.keys.reverse_each`/`@readable_scopes.keys.reverse_each` — `WeakMap#keys` does preserve insertion order in practice, but unlike `Hash`/`Set`, Ruby doesn't document that as a guarantee
-- Only works with `Type`/`Instance` values for the param shorthand (silently skipped for anything else); the directive forms run the target through `#maybe_instance` first (so a raw primitive like `4` becomes a real `Ore::Number`, which counts as a `Scope`) and then raise `Ore::Invalid_Scope_Directive_Argument` if it still isn't one. Because `#maybe_instance` also turns Ore `nil`/`false` into the real, Ruby-truthy `Ore::Nil.shared`/`Ore::Bool::FALSE` singletons, the `if target` truthiness guard those directives use to detect "nothing was passed" never actually fires for `nil`/`false` — they're silently accepted rather than rejected (`test_add_readable_scope_with_nil_argument_is_silently_accepted`/`..._with_false_argument_is_silently_accepted`, `scopes_test.rb`) — harmless in practice, since ordinary dot-write rules already prevent mutating those singletons regardless of what scope they end up sitting in
+- Only works with `Type`/`Instance` values for the param shorthand (silently skipped for anything else); the directive forms run the target through `#maybe_instance` first (so a raw primitive like `4` becomes a real `Lost::Number`, which counts as a `Scope`) and then raise `Lost::Invalid_Scope_Directive_Argument` if it still isn't one. Because `#maybe_instance` also turns Lost `nil`/`false` into the real, Ruby-truthy `Lost::Nil.shared`/`Lost::Bool::FALSE` singletons, the `if target` truthiness guard those directives use to detect "nothing was passed" never actually fires for `nil`/`false` — they're silently accepted rather than rejected (`test_add_readable_scope_with_nil_argument_is_silently_accepted`/`..._with_false_argument_is_silently_accepted`, `scopes_test.rb`) — harmless in practice, since ordinary dot-write rules already prevent mutating those singletons regardless of what scope they end up sitting in
 - Renamed and split from the older combined `@ += instance`/`@ -= instance`/`@param` "sibling scope" mechanism, which had no readable/writable distinction and used a strong-reference `Set`
-- `ore/preload.ore` is loaded into its own `Standard_Library` scope (`Interpreter#run`), added to Global's readable scope rather than merged into Global's own declarations — so `String`/`Array`/etc. are reachable but not directly declared on Global (`global.declarations.key?('Array')` is `false`; `global.has?('Array')` is `true`, via the fallback). `global` is pushed onto `stack` *before* this load (rather than being the load's own target) so `~/` still resolves to real Global throughout the stdlib's own loading. Reassigning a built-in (`Array = Mine`) can never mutate the real one — `Scope#[]=` only redirects through `writable_scopes`, never `readable_scopes` — it just creates a new entry directly in Global's own declarations, shadowing the readable fallback for the rest of that `Global`'s lifetime. If `Mine` composes the original (`Mine | Array {}`), everything keeps working afterward, since proxy-method dispatch (`.length()` etc.) finds its owning type by looking up the type name in the stack, and `Mine` has those declarations composed in — and reassigning this way is a real, working way to extend every array literal in the rest of a program, not just a safe no-op
+- `lost/preload.tape` is loaded into its own `Standard_Library` scope (`Interpreter#run`), added to Global's readable scope rather than merged into Global's own declarations — so `String`/`Array`/etc. are reachable but not directly declared on Global (`global.declarations.key?('Array')` is `false`; `global.has?('Array')` is `true`, via the fallback). `global` is pushed onto `stack` *before* this load (rather than being the load's own target) so `~/` still resolves to real Global throughout the stdlib's own loading. Reassigning a built-in (`Array = Mine`) can never mutate the real one — `Scope#[]=` only redirects through `writable_scopes`, never `readable_scopes` — it just creates a new entry directly in Global's own declarations, shadowing the readable fallback for the rest of that `Global`'s lifetime. If `Mine` composes the original (`Mine | Array {}`), everything keeps working afterward, since proxy-method dispatch (`.length()` etc.) finds its owning type by looking up the type name in the stack, and `Mine` has those declarations composed in — and reassigning this way is a real, working way to extend every array literal in the rest of a program, not just a safe no-op
 
 ## Operator Overloading
 
 Custom operators are declared with `@operator`, a fixity directive, a precedence number, and a function body. Parsed specially in `parser.rb` (`scan_and_register_operator_overloads_before_parsing` pre-scans and registers precedence before the main parse, since fixity/precedence affects how the rest of the file parses):
 
-```ore
+```lost
 @operator -> @infix 300 { left, right;
     right(left)
 }
@@ -765,33 +765,33 @@ double { n; n * 2 }
 - Fixities: `@infix`, `@prefix`, `@postfix`, and `@circumfix` (only `infix`/`prefix`/`postfix` are documented in `readme.md`; `circumfix` is accepted by the parser but undocumented there)
 - The operator symbol can be any symbol sequence or identifier (`->`, `!!`, `pm`, `$`)
 - Overloads are stored as regular functions in the declaring scope — they don't leak outside it
-- Represented internally as `Ore::Operator_Overload_Expr` (fixity, precedence, operator lexeme, `Func_Expr` body)
-- **Precedence**: a type's own overload for an operator always wins over a same-named one declared anywhere else. Dispatch (`#find_operator_overload` in `interpreter.rb`) checks the left operand's own declarations first, then its `enclosing_scope` (for shorthand-constructed instances that never got the type's declarations copied onto themselves — see `#interp_type_call`), and only falls back to a lexically/dynamically-scoped global operator (found by searching `stack.reverse_each`, deliberately excluding `Ore::Type`/`Ore::Instance` scopes) if the operand doesn't declare its own
+- Represented internally as `Lost::Operator_Overload_Expr` (fixity, precedence, operator lexeme, `Func_Expr` body)
+- **Precedence**: a type's own overload for an operator always wins over a same-named one declared anywhere else. Dispatch (`#find_operator_overload` in `interpreter.rb`) checks the left operand's own declarations first, then its `enclosing_scope` (for shorthand-constructed instances that never got the type's declarations copied onto themselves — see `#interp_type_call`), and only falls back to a lexically/dynamically-scoped global operator (found by searching `stack.reverse_each`, deliberately excluding `Lost::Type`/`Lost::Instance` scopes) if the operand doesn't declare its own
 - That stack search is scope-based, not global-only — an operator declared inside a function body shadows a same-named one declared outside it, for the duration of that call, with no leakage back out once the call returns
-- `Ore::Type`/`Ore::Instance` scopes are excluded from that stack search specifically to prevent infinite recursion: a Type merely being on the call stack (because one of its methods is currently executing) says nothing about whether the *current* operands belong to it — without the exclusion, an overload whose body reuses its own operator symbol on unrelated operands (even plain `1 == 1`) would recurse into itself forever, since the declaring Type never leaves the stack while its own body runs
+- `Lost::Type`/`Lost::Instance` scopes are excluded from that stack search specifically to prevent infinite recursion: a Type merely being on the call stack (because one of its methods is currently executing) says nothing about whether the *current* operands belong to it — without the exclusion, an overload whose body reuses its own operator symbol on unrelated operands (even plain `1 == 1`) would recurse into itself forever, since the declaring Type never leaves the stack while its own body runs
 
 ## Ranges
 
 Four range operators, all built on the same `...`/`..<`/`>..`/`>.<` family (`RANGE_OPERATORS` in `constants.rb`, handled by `#interp_range_infix` in `interpreter.rb`, dispatched from `#interp_infix`):
 
-```ore
+```lost
 1...5  # inclusive:         1, 2, 3, 4, 5
 1..<5  # exclusive end:     1, 2, 3, 4
 1>..5  # exclusive start:      2, 3, 4, 5
 1>.<5  # exclusive both:       2, 3, 4
 ```
 
-`..<` trims the end, `>..`/`>.<` bump the start by 1 — implemented as `Ore::Range.new(start, finish, exclude_end: bool)` with `start`/`start + 1` depending on operator.
+`..<` trims the end, `>..`/`>.<` bump the start by 1 — implemented as `Lost::Range.new(start, finish, exclude_end: bool)` with `start`/`start + 1` depending on operator.
 
 ## Built-in Types and Intrinsic Methods
 
-Ore's built-in types (String, Array, Dictionary, Number) have ruby methods that delegate to Ruby's native implementations. These methods are declared using a `proxy_` prefix (see src/shared/ruby_proxies.rb)
+Lost's built-in types (String, Array, Dictionary, Number) have ruby methods that delegate to Ruby's native implementations. These methods are declared using a `proxy_` prefix (see src/shared/ruby_proxies.rb)
 
 ### Intrinsic Method Implementation Pattern
 
-**In Ore** (`.ore` files):
+**In Lost** (`.tape` files):
 
-```ore
+```lost
 String {
     upcase {; @ruby }
     downcase {; @ruby }
@@ -820,8 +820,8 @@ def proxy_concat other_array
 end
 ```
 
-**Methods implemented in Ore** (not as Ruby proxies):
-Some methods like `find`, `any?`, and `all?` are implemented directly in Ore using for loops rather than Ruby proxies, as they need to execute Ore functions.
+**Methods implemented in Lost** (not as Ruby proxies):
+Some methods like `find`, `any?`, and `all?` are implemented directly in Lost using for loops rather than Ruby proxies, as they need to execute Lost functions.
 
 ### String
 
@@ -829,23 +829,23 @@ Properties: `length`, `ord`
 
 Methods: `upcase()`, `downcase()`, `split(delimiter)`, `slice(substr)`, `trim()`, `trim_left()`, `trim_right()`, `chars()`, `index(substr)`, `to_i()`, `to_f()`, `empty?()`, `include?(substr)`, `reverse()`, `replace(new)`, `start_with?(prefix)`, `end_with?(suffix)`, `gsub(pattern, replacement)`
 
-Defined in: `ore/string.ore`, implemented in `scopes.rb` as `Ore::String`
+Defined in: `lost/string.tape`, implemented in `scopes.rb` as `Lost::String`
 
 ### Array
 
 Properties: `values`
 
-Methods: `push(item)`, `pop()`, `shift()`, `unshift(item)`, `length()`, `first(count)`, `last(count)`, `slice(from, to)`, `reverse()`, `join(separator)`, `map(func)`, `filter(func)`, `reduce(func, init)`, `concat(other)`,`flatten()`, `sort()`, `uniq()`, `include?(item)`, `empty?()`, `find(func)` *(Ore)*, `any?(func)` *(Ore)*, `all?(func)`*(Ore)*, `each(func)`
+Methods: `push(item)`, `pop()`, `shift()`, `unshift(item)`, `length()`, `first(count)`, `last(count)`, `slice(from, to)`, `reverse()`, `join(separator)`, `map(func)`, `filter(func)`, `reduce(func, init)`, `concat(other)`,`flatten()`, `sort()`, `uniq()`, `include?(item)`, `empty?()`, `find(func)` *(Lost)*, `any?(func)` *(Lost)*, `all?(func)`*(Lost)*, `each(func)`
 
-Defined in: `ore/array.ore`, implemented in `scopes.rb` as `Ore::Array`
+Defined in: `lost/array.tape`, implemented in `scopes.rb` as `Lost::Array`
 
-**Note:** Methods marked *(Ore)* are implemented in Ore using for loops, not as Ruby proxies.
+**Note:** Methods marked *(Lost)* are implemented in Lost using for loops, not as Ruby proxies.
 
 ### Dictionary
 
 Methods: `keys()`, `values()`, `has_key?(key)`, `delete(key)`, `merge(other)`, `count()`, `empty?()`, `clear()`, `fetch(key, default)`
 
-```ore
+```lost
 dict := {x: 4, y: 8}
 dict[:x]           # Access by key => 4
 dict[:z] = 15      # Assignment
@@ -859,7 +859,7 @@ dict.count()       # 3
 
 - Symbol, string, or identifier keys
 - Subscript access via `dict[key]`
-- Defined in: `ore/dictionary.ore`, implemented in `scopes.rb` as `Ore::Dictionary`
+- Defined in: `lost/dictionary.tape`, implemented in `scopes.rb` as `Lost::Dictionary`
 
 ### Number
 
@@ -867,24 +867,24 @@ Properties: `numerator`, `denominator`, `type`
 
 Methods: `to_s()`, `abs()`, `floor()`, `ceil()`, `round()`, `sqrt()`, `even?()`, `odd?()`, `to_i()`, `to_f()`, `clamp(min, max)`
 
-Defined in: `ore/number.ore`, implemented in `scopes.rb` as `Ore::Number`
+Defined in: `lost/number.tape`, implemented in `scopes.rb` as `Lost::Number`
 
 ### File_System (File I/O)
 
 Static methods for reading and writing files:
 
-```ore
+```lost
 content := File_System.read('./path/to/file.txt')  # Read file contents as string
 File_System.write_string_to_file('./path/to/file.txt', 'Hello, World!')  # Write string to file
 ```
 
-Defined in: `ore/file_system.ore`, implemented in `scopes.rb` as `Ore::File_System`
+Defined in: `lost/file_system.tape`, implemented in `scopes.rb` as `Lost::File_System`
 
 ## Loop Control Flow
 
 ### For Loops
 
-```ore
+```lost
 for [1, 2, 3, 4, 5]
     result << it
 end
@@ -907,7 +907,7 @@ end
 
 For loops support transformation verbs that return values: `map`, `select`, `reject`, `count`.
 
-```ore
+```lost
 `Transform each element
 doubled := for [1, 2, 3, 4, 5] map
     it * 2
@@ -931,7 +931,7 @@ end  # => 3
 
 **With stride:**
 
-```ore
+```lost
 `Map chunks of 2
 sums := for [1, 2, 3, 4, 5, 6] map by 2
     it.0 + it.1
@@ -940,7 +940,7 @@ end  # => [3, 7, 11]
 
 **With stop (partial results):**
 
-```ore
+```lost
 `Stop returns partial results for map/select/reject
 partial := for [1, 2, 3, 4, 5] map
     stop if it == 4
@@ -950,7 +950,7 @@ end  # => [2, 4, 6]
 
 ### Loop Control Keywords
 
-```ore
+```lost
 for items
     if condition
         skip  # Continue to next iteration
@@ -967,7 +967,7 @@ end
 
 ### While and Until Loops
 
-```ore
+```lost
 while x < 4
     x += 1
 end
@@ -979,7 +979,7 @@ end
 
 Both support `elwhile`/`else` chaining (like `elif` for loops):
 
-```ore
+```lost
 while x < 4
     x += 1
 elwhile y > -8
@@ -993,7 +993,7 @@ end
 
 `unless condition` is equivalent to `if !condition`. All control flows (`if`, `unless`, `while`, `until`) are expressions and return values:
 
-```ore
+```lost
 x := unless condition
     4
 else
@@ -1007,7 +1007,7 @@ end
 
 The `return` keyword exits a function and returns a value. It properly propagates even when used inside loops:
 
-```ore
+```lost
 find { func;
     for values
         if func(it)
@@ -1024,7 +1024,7 @@ find { func;
 
 **Implementation:**
 
-- `return value` creates an `Ore::Return` object wrapping the value
+- `return value` creates an `Lost::Return` object wrapping the value
 - For loops detect `Return` objects and propagate them up to the function
 - Functions unwrap the `Return` object and return the inner value
 - Without `return`, functions return the last expression evaluated
@@ -1060,12 +1060,12 @@ The base test class provides `refute_raises` helper for asserting no exceptions.
 
 ## Database and ORM
 
-Ore includes built-in database support with an ActiveRecord-style ORM using Sequel and SQLite.
+Lost includes built-in database support with an ActiveRecord-style ORM using Sequel and SQLite.
 
 ### Database Connection
 
-```ore
-@load 'ore/database.ore'
+```lost
+@load 'lost/database.tape'
 
 db := Sqlite('./data/myapp.db')
 @connect db  # Establishes connection
@@ -1077,9 +1077,9 @@ db := Sqlite('./data/myapp.db')
 - `table_exists?(name)` - Check if table exists
 - `tables()` - List all tables
 
-A table's schema is a named Struct: one member per column, its own type deciding the column type. `Primary_Key` is a standard/provided marker type (`ore/database.ore`, same as `String`/`Bool`/etc) that marks a member as the table's primary key.
+A table's schema is a named Struct: one member per column, its own type deciding the column type. `Primary_Key` is a standard/provided marker type (`lost/database.tape`, same as `String`/`Bool`/etc) that marks a member as the table's primary key.
 
-```ore
+```lost
 Users_Schema <
     id: Primary_Key
     name: String
@@ -1094,10 +1094,10 @@ db.tables()                # => ['users']
 
 ### Record ORM
 
-The `Table` type (`ore/table.ore`) provides ActiveRecord-style ORM functionality:
+The `Table` type (`lost/table.tape`) provides ActiveRecord-style ORM functionality:
 
-```ore
-@load 'ore/table.ore'
+```lost
+@load 'lost/table.tape'
 
 User | Table {
     Self.database := ~/db     # Set database (static declaration)
@@ -1114,9 +1114,9 @@ User | Table {
 - `update(id, attributes)` - Update record by ID
 - `delete(id)` - Delete record by ID
 
-`attributes`/a returned record is a Dictionary for the plain `User | Table { Self.database := ~/db }` pattern; for a model composed with a structured `Table` reference (`Tasks | Table<'tasks', Task> {}`, see `ore/2nd/task_app/main.ore`), `create`/`find`/`find_by`/`where`/`all` return a real `Task`-shaped Struct instead (`Ore::Table#record_struct`, `table.rb`), read off the model's own `.structure.columns`.
+`attributes`/a returned record is a Dictionary for the plain `User | Table { Self.database := ~/db }` pattern; for a model composed with a structured `Table` reference (`Tasks | Table<'tasks', Task> {}`, see `lost/2nd/task_app/main.tape`), `create`/`find`/`find_by`/`where`/`all` return a real `Task`-shaped Struct instead (`Lost::Table#record_struct`, `table.rb`), read off the model's own `.structure.columns`.
 
-```ore
+```lost
 `Create records
 User.create({name: "Alice", email: "alice@example.com"})
 User.create({name: "Bob", email: "bob@example.com"})
@@ -1134,9 +1134,9 @@ User.delete(1)
 
 ### Full Example
 
-```ore
-@load 'ore/database.ore'
-@load 'ore/table.ore'
+```lost
+@load 'lost/database.tape'
+@load 'lost/table.tape'
 
 db := Sqlite('./temp/blog.db')
 @connect db
@@ -1167,12 +1167,12 @@ end
 **Implementation:**
 - Database operations use Ruby's Sequel gem
 - Table methods are proxy methods (see `src/external/ruby/table.rb`)
-- Table methods return `Ore::Dictionary` instances, not typed model instances (see `table.rb`'s own `# todo: Convert this to a Record instance`)
+- Table methods return `Lost::Dictionary` instances, not typed model instances (see `table.rb`'s own `# todo: Convert this to a Record instance`)
 - Static declarations (`Self.database`) link models to database
 
 ## Web Server Features
 
-Ore has built-in web server support:
+Lost has built-in web server support:
 
 - **Server class composition** - Create servers by composing with the built-in `Server` class using `|` operator
 - **Route syntax** - Routes defined as `method://path` (e.g., `get://`, `post://users/:id`)
@@ -1192,7 +1192,7 @@ Ore has built-in web server support:
 - `response.headers[key] = value` - Set response headers
 - `response.body = content` - Set response body
 
-```ore
+```lost
 post://login {;
     if authenticate(request.body.username, request.body.password)
         response.redirect("/dashboard")
@@ -1205,10 +1205,10 @@ post://login {;
 
 ## HTML Rendering
 
-Ore supports HTML rendering via the built-in `Dom` type (load `ore/html.ore`). Any class composing with `Dom` that defines a `render` method will auto-render to HTML when returned from a server route.
+Lost supports HTML rendering via the built-in `Dom` type (load `lost/html.tape`). Any class composing with `Dom` that defines a `render` method will auto-render to HTML when returned from a server route.
 
-```ore
-@load 'ore/html.ore'
+```lost
+@load 'lost/html.tape'
 
 Layout | Dom {
     title,
@@ -1228,7 +1228,7 @@ Layout | Dom {
 
 **HTML and CSS attributes** use `html_` and `css_` prefixes on declarations:
 
-```ore
+```lost
 Styled_Div | Dom {
     html_element := 'p'
     html_class := 'my_class'
@@ -1239,7 +1239,7 @@ Styled_Div | Dom {
 # => <p class='my_class' id='my_id' style='background-color:black;color:white;'></p>
 ```
 
-**Predefined elements** in `ore/html.ore`: `Html`, `Head`, `Body`, `Title`, `H1`–`H6`, `P`, `Span`, `A`, `Div`, `Form`, `Input`, `Button`, `Ul`, `Ol`, `Li`, `Table`, `Tr`, `Td`, `Th`, and more.
+**Predefined elements** in `lost/html.tape`: `Html`, `Head`, `Body`, `Title`, `H1`–`H6`, `P`, `Span`, `A`, `Div`, `Form`, `Input`, `Button`, `Ul`, `Ol`, `Li`, `Table`, `Tr`, `Td`, `Th`, and more.
 
 - Routes returning a `Dom` instance automatically render to HTML string
 - HTML rendering only works when `render{;}` is called by a Server instance
@@ -1248,12 +1248,12 @@ Styled_Div | Dom {
 
 ## File Loading
 
-The `@load` directive allows importing Ore files:
+The `@load` directive allows importing Lost files:
 
 - Interpreter caches parsed expressions in `@cached_expressions_by_filepath` to prevent duplicate parsing
 - Files are loaded into a specified scope via `Interpreter#load_file_into_scope`
 - Expressions are cached keyed by resolved filepath
 - Comment lexemes are filtered out before parsing, matching `#run`'s top-level behavior — otherwise a trailing comment at the end of a loaded file's function/program body would silently become that body's return value
 - The target scope depends on the call form:
-  - Bare `@load 'file'` merges the file's top-level declarations directly into the current scope (`stack.last`) — `ore/preload.ore` uses this same mechanism, but `Interpreter#run`'s bootstrap passes a fresh `Standard_Library` scope as the target (not `global` itself), so e.g. `String` lands there, not as a direct Global declaration — see Readable and Writable Scopes below
-  - `some_lib := @load 'file'` instead creates a fresh `Ore::Scope` named after the left-hand identifier, loads the file into *that*, and assigns it — giving real namespace isolation, e.g. `some_lib.square(5)`
+  - Bare `@load 'file'` merges the file's top-level declarations directly into the current scope (`stack.last`) — `lost/preload.tape` uses this same mechanism, but `Interpreter#run`'s bootstrap passes a fresh `Standard_Library` scope as the target (not `global` itself), so e.g. `String` lands there, not as a direct Global declaration — see Readable and Writable Scopes below
+  - `some_lib := @load 'file'` instead creates a fresh `Lost::Scope` named after the left-hand identifier, loads the file into *that*, and assigns it — giving real namespace isolation, e.g. `some_lib.square(5)`
