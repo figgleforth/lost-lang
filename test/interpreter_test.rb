@@ -3486,4 +3486,25 @@ class Interpreter_Test < Base_Test
 		CODE
 		assert_equal 99, out
 	end
+
+	def test_block_comments_are_ignored
+		out = Lost.interp <<~CODE
+		    ###
+		    this whole block, including this fake declaration, is discarded
+		    x := 999
+		    ###
+		    4 + 8
+		CODE
+		assert_equal 12, out
+
+		# a block comment as the very last expression shouldn't leak its text out as the return value, same as a trailing # comment
+		out = Lost.interp <<~CODE
+		    add { a, b;
+		        a + b
+		        ### sum me ###
+		    }
+		    add(4, 8)
+		CODE
+		assert_equal 12, out
+	end
 end

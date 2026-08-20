@@ -86,3 +86,4 @@
 - Struct type annotations now work on function params, not just variables: `right: <name: String, ...>` is structural -- any argument with those members, compatibly typed, satisfies it (`Any` is a wildcard), enforced at every call.
 - `Any` is a universal wildcard type: any non-nil value/type is `==`/`===` to it and back, no composition required.
 - `Table`'s CRUD methods return a real, model-shaped `Struct` instead of a `Dictionary` when the model has a structured `Table` reference (`Tasks | Table<'tasks', Task> {}`); falls back to `Dictionary` otherwise. `create` also now returns the created record itself, not just the id (docs/tests updated to match).
+- Added real `###`/`###` block comments (were secretly faked with unused ` ``` ` fences before); both `###` and ` ``` ` now nest via a longer outer marker, Markdown-fence-style. Swept every `.tape` file off the old fence-as-comment hack, added lexer/parser/interpreter test coverage, updated CLAUDE.md/readme.md.

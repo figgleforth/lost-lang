@@ -28,6 +28,17 @@ class Lexer_Test < Base_Test
 		out = Lost.lex "###\n# not a real comment\n## still not\n###"
 		assert_equal :comment, out.first.type
 		assert_equal 1, out.length
+
+		# nesting: a same-length ### inside closes the outer block early, same as an unnested one would
+		out = Lost.lex "###\nouter\n### inner ###\nouter again\n###"
+		assert_equal :identifier, out[1].type # `inner` leaks out as real code
+		assert_equal 'inner', out[1].value
+
+		# a longer run of #s on the outer marker safely swallows a same-length (or shorter) ### inside, uncommenting nothing early
+		out = Lost.lex "####\nouter\n### inner ###\nouter again\n####"
+		assert_equal :comment, out.first.type
+		assert_equal 1, out.length
+		assert out.first.value.include? '### inner ###'
 	end
 
 	def test_fence_blocks
@@ -43,6 +54,12 @@ class Lexer_Test < Base_Test
 		assert_equal :fence, out.first.type
 		assert out.first.value.start_with? 'multi'
 		assert_kind_of Lost::Lexeme, out.first
+
+		# a longer run of backticks on the outer marker safely nests a same-length (or shorter) ``` inside, mirroring Markdown's own fence-nesting rule
+		out = Lost.lex "`````\nouter\n```\ninner-looking, but shorter than the outer marker\n```\nouter again\n`````"
+		assert_equal :fence, out.first.type
+		assert_equal 1, out.length
+		assert out.first.value.include? '```'
 	end
 
 	def test_identifiers

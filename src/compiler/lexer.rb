@@ -146,25 +146,34 @@ module Lost
 			it
 		end
 
+		# Reads a run of consecutive occurrences of `char`, however long -- used for both the opening and closing markers of a block comment/fence, so a longer run on the outer wrapper can safely swallow a same-length (or shorter) inner one without closing early. Mirrors Markdown's own rule for nesting code fences: a marker only closes a block opened by a marker of equal or greater length; a shorter run of the same char is just literal content.
+		def lex_repeated_char_run char
+			it = ::String.new
+			it << eat while chars? && curr == char
+			it
+		end
+
 		def lex_block_comment
-			lex_many Lost::BLOCK_COMMENT_CHARS.length, Lost::BLOCK_COMMENT_CHARS
+			char          = curr
+			marker_length = lex_repeated_char_run(char).length
 
 			it = ::String.new
-			while chars? && peek(0, Lost::BLOCK_COMMENT_CHARS.length) != Lost::BLOCK_COMMENT_CHARS
+			while chars? && peek(0, marker_length) != char * marker_length
 				it << eat
 			end
 
-			lex_many Lost::BLOCK_COMMENT_CHARS.length, Lost::BLOCK_COMMENT_CHARS
+			lex_repeated_char_run char
 			it
 		end
 
 		def lex_fence_block
-			marker = lex_many Lost::FENCE_CHARS.length, Lost::FENCE_CHARS
-			it     = ::String.new
+			char          = curr
+			marker_length = lex_repeated_char_run(char).length
+			it            = ::String.new
 
 			eat while whitespace? || newline?
 
-			while chars? && peek(0, 3) != marker
+			while chars? && peek(0, marker_length) != char * marker_length
 				it << eat
 				if newline? # preserve one newline
 					it << eat
@@ -172,7 +181,7 @@ module Lost
 				end
 			end
 
-			lex_many Lost::FENCE_CHARS.length, Lost::FENCE_CHARS
+			lex_repeated_char_run char
 			it
 		end
 

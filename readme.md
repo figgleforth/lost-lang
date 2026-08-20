@@ -235,6 +235,14 @@ APP_NAME := 'My App'
 Or wrap a whole block in ###/### -- everything in between is discarded,
 including lines of code, so it doubles as a way to comment out code.
 ###
+
+####
+A longer run of #s on the outer marker can safely nest a same-length
+or shorter ### inside it, since only a marker at least as long as the
+opening one closes the block -- the same rule ``` fences use to nest.
+### this looks like a comment but it's just text in here ###
+still inside the outer comment
+####
 ```
 
 ## String Interpolation

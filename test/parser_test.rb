@@ -780,6 +780,22 @@ class Parser_Test < Base_Test
 		assert out.first != out.last
 	end
 
+	def test_block_comments
+		out = Lost.parse '###abc###'
+		assert_instance_of Lost::Comment_Expr, out.first
+
+		out = Lost.parse '###abc
+		def###'
+		assert_instance_of Lost::Comment_Expr, out.first
+		assert_instance_of Lost::Comment_Expr, out.last
+		assert out.first == out.last
+
+		out = Lost.parse '###abc### ###def###'
+		assert_instance_of Lost::Comment_Expr, out.first
+		assert_instance_of Lost::Comment_Expr, out.last
+		assert out.first != out.last
+	end
+
 	def test_fence_blocks
 		out = Lost.parse '```abc```'
 		assert_instance_of Lost::Fence_Expr, out.first
