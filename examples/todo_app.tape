@@ -3,7 +3,7 @@
 @load 'lost/Table.tape'
 @load 'lost/server.tape'
 
-```Page components```
+### Page components ###
 Page_Layout | Html {
 	css_filter := 'invert()'
 	css_font_size := '1.6em'
@@ -82,7 +82,7 @@ Submit_Button | Button {
 	render {; 'Add Task' }
 }
 
-```Database```
+### Database ###
 db := Sqlite('./temp/task_app.db') # Sqlite composes with Database
 
 # db = @connect Sqlite(...) is also valid
@@ -116,7 +116,7 @@ Task.create({text: "Add file upload feature"})
 Task.create({text: "Create RESTful API endpoints"})
 Task.create({text: "Build admin dashboard"})
 
-```Server```
+### Server ###
 Tasks_Controller {
 	Self.home {;
 		tasks := Task.all()

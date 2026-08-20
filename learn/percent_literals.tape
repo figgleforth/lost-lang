@@ -1,15 +1,15 @@
-``` Introduction
+### Introduction
 
 A percent literal turns a space-separated list of bare words into an Array of String or Symbol literals in one shot, without quoting each one individually. `%string(...)`/`%symbol(...)` preserve each word's own casing exactly as written.
-```
+###
 @assert %string(boo Hoo COOL) == ['boo', 'Hoo', 'COOL'], '%string should preserve each word\'s own casing'
 @assert %symbol(BOO hoo Cool) == [:BOO, :hoo, :Cool], '%symbol should preserve each word\'s own casing'
 
 
-``` Forcing casing
+### Forcing casing
 
 Six more variants force every word to a particular casing rather than preserving what was written -- lowercase (`str`/`sym`), Capitalcase (`Str`/`Sym`), and UPPERCASE (`STR`/`SYM`). The result is still a real Array either way.
-```
+###
 @assert %str(Boo hOO cOOl) == ['boo', 'hoo', 'cool'], '%str should force lowercase'
 @assert %Str(boo HOO cOOl) == ['Boo', 'Hoo', 'Cool'], '%Str should force Capitalcase'
 @assert %STR(boo Hoo cool) == ['BOO', 'HOO', 'COOL'], '%STR should force UPPERCASE'
@@ -19,34 +19,34 @@ Six more variants force every word to a particular casing rather than preserving
 @assert %SYM(boo Hoo cool) == [:BOO, :HOO, :COOL], '%SYM should force UPPERCASE'
 
 
-``` It's a real Array
+### It's a real Array
 
 Every percent literal is a genuine `Lost::Array`, not just something that prints like one -- `.values` gives the underlying Ruby-side values, and any Array method works on it.
-```
+###
 letters := %string(a b c)
 @assert letters == ['a', 'b', 'c'], 'a percent literal should compare equal to an equivalent Array literal'
 @assert letters.length() == 3, 'any Array method should work on a percent literal'
 
 
-``` Numbers are allowed too
+### Numbers are allowed too
 
 A percent literal's items don't have to be identifiers -- bare numbers work as well, since both identifiers and numbers can be turned into text. A forced-casing variant only affects letters; digits pass through unchanged.
-```
+###
 @assert %string(boo 4815 Hoo) == ['boo', '4815', 'Hoo'], 'a bare number should pass through as text'
 @assert %STR(boo 4815 hoo) == ['BOO', '4815', 'HOO'], 'forced casing should only affect letters, not digits'
 
 
-``` Interpolating a Statement
+### Interpolating a Statement
 
 A `` `expr` `` item (see learn/statement_expressions.tape) is evaluated immediately, right where it sits, then folded through the same to_s + casing treatment as every other item -- not deferred the way a bare `` `expr` `` normally is elsewhere.
-```
+###
 cool := 2342
 @assert %string(481516 `cool`) == ['481516', '2342'], 'a backtick item should be interpolated immediately'
 @assert %STR(boo `cool`) == ['BOO', '2342'], 'a backtick item should still go through the same casing treatment'
 
 
-``` What goes wrong
+### What goes wrong
 
 Anything besides a plain identifier, number, operator, or `` `expr` `` item inside the parens -- a string literal, `[1, 2]`, any other bracketed/quoted expression -- raises `Lost::Invalid_Percent_Literal_Expression`.
-```
+###
 # %str('foo')  -- raises Lost::Invalid_Percent_Literal_Expression: %str(Lost::String_Expr) expects %str(Lost::Identifier_Expr or Lost::Number_Expr or Lost::Operator_Expr)

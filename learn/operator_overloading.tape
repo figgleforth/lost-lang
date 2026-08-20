@@ -1,7 +1,7 @@
-``` Introduction
+### Introduction
 
 `@operator` declares a custom operator: a symbol, a fixity (`@infix`/`@prefix`/`@postfix`), a precedence number, and a function body. Overloads are stored as regular functions in whatever scope declares them -- so one declared inside a function only exists for the duration of that call, and never leaks out:
-```
+###
 scoped := compute {;
 	@operator + @infix 700 { left, right;
 		left * right
@@ -13,10 +13,10 @@ scoped := compute {;
 @assert scoped() == 12, '+ should mean multiplication only inside compute'
 
 
-``` Building a pipeline operator
+### Building a pipeline operator
 
 `@infix` takes a left and right operand. Charlie feeds a value through a chain of functions, left to right, each one receiving what came before it:
-```
+###
 @operator -> @infix 300 { left, right;
 	right(left)
 }
@@ -28,10 +28,10 @@ piped := 4 -> double -> add_fifteen
 @assert piped == 23, 'the pipeline operator should chain left to right'
 
 
-``` Inventing new literal-like syntax
+### Inventing new literal-like syntax
 
 `@infix` and `@postfix` can combine to make something that reads like a brand new literal. Here `:` builds a `Time` from two numbers, and `pm` tags it afterward:
-```
+###
 Time { hour, minute, period, }
 
 @operator : @infix 700 { hour, minute;
@@ -50,10 +50,10 @@ t := 11:22pm
 @assert t.hour == 11 && t.minute == 22 && t.period == 'pm', 'the combined infix/postfix operators should build a Time and tag it'
 
 
-``` Prefix operators
+### Prefix operators
 
 `@prefix` takes just a right operand -- here `$` builds a `Currency` straight out of a bare number, reading like a literal.
-```
+###
 Currency { amount, name, code, }
 
 @operator $ @prefix 900 { amount;
@@ -68,10 +68,10 @@ price := $42
 @assert price.name == 'US Dollar' && price.code == 'USD' && price.amount == 42, '$ should build a Currency straight from a bare number'
 
 
-``` A type's own overload wins over a global one
+### A type's own overload wins over a global one
 
 Dispatch checks the left operand's own declarations first, before falling back to whatever's in scope -- so a type can override an operator for just its own instances without disturbing the global meaning everywhere else:
-```
+###
 @operator ~> @infix 300 { left, right; 999 }
 
 Wrapped {

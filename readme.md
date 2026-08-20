@@ -229,7 +229,12 @@ APP_NAME := 'My App'
 
 ```lost
 # This is a single-line comment
-# It's now a multi-line comment
+# Stack a few of these for a multi-line comment
+
+###
+Or wrap a whole block in ###/### -- everything in between is discarded,
+including lines of code, so it doubles as a way to comment out code.
+###
 ```
 
 ## String Interpolation

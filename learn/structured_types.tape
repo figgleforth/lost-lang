@@ -1,7 +1,7 @@
-``` Introduction
+### Introduction
 
 Put `<...>` right after a Type name, instead of on its own, and you get something different from a plain Struct value: an independent variant of that type -- its own `new`, its own methods, completely separate from the bare type and from every other variant. This file assumes you already know what a Struct is -- see learn/structs.tape first if `<...>` alone is new to you.
-```
+###
 String<Dictionary> { to_s {; "I'm a dict-structured string" } }
 String<Number>     { to_s {; "I'm a number-structured string" } }
 
@@ -12,10 +12,10 @@ String<Number>     { to_s {; "I'm a number-structured string" } }
 # declared, not just if it IS that type by name. No matching variant raises Undeclared_Type_Structure.
 
 
-``` Disambiguating variants by name
+### Disambiguating variants by name
 
 When two variants would otherwise match by type alone, name the member at the reference site (reusing the same bare `:=` idiom a plain Struct literal uses) to disambiguate:
-```
+###
 Table_With_Opts<dict: Dictionary>  { to_s {; "dict-named" } }
 Table_With_Opts<other: Dictionary> { to_s {; "other-named" } }
 
@@ -23,7 +23,7 @@ Table_With_Opts<other: Dictionary> { to_s {; "other-named" } }
 @assert Table_With_Opts<other := {x=1}>().to_s() == 'other-named', 'naming the member at the reference site should pick the "other" variant'
 
 
-``` Reference vs. declaration
+### Reference vs. declaration
 
 `<...>` after a Type name means something different depending on what follows it:
 
@@ -32,7 +32,7 @@ Table_With_Opts<other: Dictionary> { to_s {; "other-named" } }
   Abc<Number>()       -- construct: binds .structure onto the instance BEFORE new{;} runs
 
 A structured reference is a dup of the variant it matched, so structuring it can never leak back and mutate the shared declaration (or any other reference sharing that variant). `.structure` is readable inside `new{;}` itself, but member values are never forwarded as constructor arguments -- whatever you pass to `(...)` still just binds to new's own declared params, entirely separately.
-```
+###
 Abc<Number> {
 	new {;}
 }
@@ -41,10 +41,10 @@ zz := z()
 @assert zz.structure.types.first() == 4815, '.structure should carry the value the reference was structured with'
 
 
-``` Reusing a struct: the spread rule
+### Reusing a struct: the spread rule
 
 A lone, unnamed member whose value is itself a Struct gets spread when declaring a variant -- its own members become the declaration's own members, instead of nesting as one opaque value.
-```
+###
 DEFAULT_COLUMNS := <id: Number, created_at: Number>
 
 Thing<DEFAULT_COLUMNS> {}   # same as writing: Thing<id: Number, created_at: Number> {}
@@ -54,10 +54,10 @@ t := Thing<5, 1234>()
 @assert t.structure.created_at == 1234, 'a spread member should land on the declaration by its own name'
 
 
-``` References never spread
+### References never spread
 
 The spread rule above only applies when declaring -- a reference never spreads. A bare reference to a Struct-valued identifier is always treated as ONE opaque value, exactly like a reference to any other type:
-```
+###
 Options := <a: String, b: Number>
 
 Widget<opts: Options> {

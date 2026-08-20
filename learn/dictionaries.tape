@@ -1,22 +1,22 @@
-``` Introduction
+### Introduction
 
 Dictionaries are `{}` literals of key-value pairs. Backed by `Lost::Dictionary`, wrapping a real Ruby hash in `.hash`. Keys can be symbols, strings, or identifiers referencing those. Subscript access reads by key. Dot-access also reads by key.
-```
+###
 survivor := {name: 'Jack', number: 23}
 @assert survivor[:name] == 'Jack', 'subscript should read by key'
 @assert survivor.number == 23, 'dot-access should read by key'
 
-``` Subscript assignment
+### Subscript assignment
 
 An existing dictionary accepts new keys the same way it reads them -- through the subscript.
-```
+###
 survivor[:status] = 'alive'
 @assert survivor == {name: 'Jack', number: 23, status: 'alive'}, 'subscript assignment should add a new key'
 
 
-``` keys, values, count, empty?
+### keys, values, count, empty?
 
-```
+###
 @assert survivor.keys() == [:name, :number, :status], 'keys should list every key'
 @assert survivor.values() == ['Jack', 23, 'alive'], 'values should list every value'
 @assert survivor.count() == 3, 'count should tally the pairs'
@@ -24,10 +24,10 @@ survivor[:status] = 'alive'
 @assert {}.empty?() == true, 'an empty dictionary should report empty?'
 
 
-``` has_key?, delete, merge, fetch
+### has_key?, delete, merge, fetch
 
 `merge` returns a new dictionary rather than changing the receiver. `fetch` looks up a key and falls back to a given default instead of raising when it's missing.
-```
+###
 @assert survivor.has_key?(:number) == true, 'has_key? should find a present key'
 
 survivor.delete(:status)

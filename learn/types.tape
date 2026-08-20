@@ -1,7 +1,7 @@
-``` Introduction
+### Introduction
 
 Capitalization tells Lost what something is, instead of a keyword. UPPERCASE is a constant (`ISLAND`), Capitalized is a type (`Survivor`), lowercase is a variable or function (`name`, `push_button`). A type is declared with `Identifier { body }` -- no `class` keyword needed, the capital letter already said it.
-```
+###
 Survivor {
 	name,
 	number,
@@ -20,10 +20,10 @@ jack := Survivor('Jack Shephard', 23)
 @assert jack.to_s() == 'Jack Shephard (23)', 'a type declaration should build real instances'
 
 
-``` Static declarations: the hatch
+### Static declarations: the hatch
 
 `Self.` declares (and accesses) a STATIC member -- shared across every instance of the type, instead of one copy per instance. `Self.presses` is one single counter, not one per Hatch.
-```
+###
 Hatch {
 	Self.presses := 0
 
@@ -42,12 +42,12 @@ Hatch().enter()
 @assert Hatch.presses == 3, 'every Hatch() should share the same static counter'
 
 
-``` Scope operators
+### Scope operators
 
 Three operators reach into a specific scope explicitly, rather than searching outward through everything in reach: `self` is the current instance only, `Self` is the current type (static members) only, `~/` is the global scope only. All three skip the normal "search everything in reach" fallback a bare identifier gets -- each looks in exactly one place, so a name collision elsewhere can't quietly shadow the one you meant.
 
 `self`/`Self` are keyword sugar for the older `./`/`../` scope operators -- `self.x` and `./x` are exactly the same thing, just spelled differently. `./`/`../` still work (and `Self` alone even calls the type as a constructor, `Self() === Type_Name()`), but `self`/`Self` read better and are the preferred spelling now.
-```
+###
 ISLAND := 'The Island'
 
 Dharma_Station {
@@ -70,10 +70,10 @@ orchid := Dharma_Station('The Orchid')
 @assert orchid.describe() == 'The Orchid on The Island (station #2)', 'both instances should see the same shared counter'
 
 
-``` Privacy convention
+### Privacy convention
 
 An identifier starting with `_` is private by convention -- reachable from inside the type's own methods, but calling it from outside raises `Cannot_Call_Private_Instance_Member`.
-```
+###
 Smoke_Monster {
 	_true_agenda,
 	name,
@@ -94,10 +94,10 @@ monster := Smoke_Monster('Smoke Monster', 'control the Island')
 # monster._true_agenda would raise Cannot_Call_Private_Instance_Member -- outsiders don't get to ask directly
 
 
-``` Composition: | union
+### Composition: | union
 
 Lost has no inheritance -- types compose instead, with four operators borrowed from set theory. `|` (union) merges every declaration from the right side into the left, with the LEFT side winning any name conflicts. Multiple operators chain freely:
-```
+###
 Castaway {
 	survived_815 := true
 }
@@ -123,14 +123,14 @@ s := Steve()
 @assert s.survivor == false, 'a union should merge in declarations from every composed type -- from Other'
 
 
-``` Composition: & intersection, ~ difference, ^ symmetric difference
+### Composition: & intersection, ~ difference, ^ symmetric difference
 
 The other three operators only make sense once two sides might disagree. `Castaway` and `Other` both declare a `faction` method (with different bodies) here, alongside their own unique members, to show how each operator treats a genuine name collision differently:
 
   &  keeps only what BOTH sides declare (here: just `faction` -- the shared name)
   ~  removes the right side's declarations from the left (drops `faction`, keeps `survived_815`)
   ^  keeps only what's unique to each side (drops the shared `faction`, keeps everything else)
-```
+###
 Castaway {
 	survived_815 := true
 
@@ -158,16 +158,16 @@ unique := (Castaway ^ Other)()
 @assert unique.survivor == false, '^ should keep what is unique to Other'
 
 
-``` A composition chain needs no name at all
+### A composition chain needs no name at all
 
 Any of the four operators can stand alone with no `{ }` body and no name -- `(Castaway & Other)()` above already did exactly this. It builds an anonymous type on the spot by applying the chain, exactly as if you'd written `X | Castaway | Other { }` for some unnamed `X` -- usable immediately, assignable, comparable, instantiable, without ever needing a name of its own.
-```
+###
 Survivors_And_Others := Castaway & Other   # a Type value, just like any named one -- not an instance yet
 survivor             := Survivors_And_Others()
 @assert survivor.faction() == 'Survivors', 'an anonymous composition chain should be usable immediately, just like a named type'
 
 
-``` Type comparison operators
+### Type comparison operators
 
 Five operators compare the composed-type SET two types or instances carry -- every type a value's own type composes, via any of the four operators above, plus its own name. All five share the `=X=` shape:
 
@@ -178,7 +178,7 @@ Five operators compare the composed-type SET two types or instances carry -- eve
   =/=  disjoint -- the two share no composed type at all
 
 Only `=>=` carries genuinely new information; the rest are readability sugar built on it, the same reason most languages ship both `<=`/`>=` alongside `==`/`!=`.
-```
+###
 @assert (Jack === Jack) == true, '=== should be true for identical composed-type sets'
 @assert (Jack === Richard) == false, '=== should be false -- Jack composes Castaway, Richard composes Other'
 @assert (Jack =!= Richard) == true, '=!= should be the negation of ==='

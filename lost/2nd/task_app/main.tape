@@ -38,16 +38,16 @@ task: Task = Tasks.create(<type := Task_Type.DESIGN, done := false, text := "Fin
 
 
 
-```
+###
 @puts tasks.name
 @puts tasks.types
 @puts tasks.table_name
 @puts tasks.schema
 @puts tasks.database.connection
 @puts "task: `task`"
-```
+###
 
-``` Vision
+### Vision
 # 1: Create a struct representing your table columns and name (by name Task)
 Todo := <text: String, done: Bool, id: Primary_Key>
 
@@ -57,4 +57,4 @@ Table<columns: Struct> {}                   # shorthand with named struct whose 
 
 Todos | Table<'todos', Todo> {}       # declares table with explicit name
 Todos | Table<Todo> {}                # declares table with inferred name from Todo struct
-```
+###

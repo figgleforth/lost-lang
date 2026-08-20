@@ -1,7 +1,7 @@
-``` Introduction
+### Introduction
 
 `:=` declares a variable and infers a type from its right-hand side, then locks that identifier to the inferred type. Every later plain `=` assignment is checked against the locked type, raising `Lost::Type_Contract_Violation` on a mismatch -- this is a runtime check, separate from the static type checker's own `Type_Mismatch`.
-```
+###
 survivors := 48   # locks survivors to Number
 survivors = 47     # ok -- still a Number
 
@@ -10,27 +10,27 @@ survivors = 47     # ok -- still a Number
 # survivors = 'forty-seven'  -- raises Lost::Type_Contract_Violation
 
 
-``` Reusing := on the same variable redeclares it, and relocks the type
+### Reusing := on the same variable redeclares it, and relocks the type
 
 Declaring the same identifier again with `:=`, instead of `=`, re-infers its type from whatever's on the right this time and overwrites the lock -- no error, even though the type actually changed.
-```
+###
 status := 48
 status := 'stranded'   # fine -- := re-infers and re-locks
 
 @assert status == 'stranded', 're-declaring with := should relock the type to the new value'
 
 
-``` = requires a prior declaration
+### = requires a prior declaration
 
 Plain `=` can only assign to an identifier that's already been declared -- by `:=`, by a `: Type` annotation, or by one of the other self-declaring forms. Assigning to a name that's never been declared at all raises `Lost::Cannot_Assign_Undeclared_Identifier`.
-```
+###
 # raft_ready = true  -- raises Lost::Cannot_Assign_Undeclared_Identifier, raft_ready was never declared
 
 
-``` := always declares fresh on the current scope
+### := always declares fresh on the current scope
 
 Unlike `=`, which resolves outward to find where an identifier already lives, `:=` always declares on the scope it's written in -- shadowing any identically-named identifier further out, rather than reusing it.
-```
+###
 counter := 0
 
 increment {;

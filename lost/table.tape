@@ -13,7 +13,7 @@ Table {
 	Self.update { id, dict; @ruby }
 	Self.delete { id; @ruby }
 
-```
+###
 	@operator -> @infix { left,right; left has_one right }
 	@operator ->> @infix { left,right; left has_many right }
 	@operator <- @infix { left,right; right belongs_to left }
@@ -21,5 +21,5 @@ Table {
 	User -> Profile     # user has_one profile
 	User ->> Post       # user has_many profiles
 	Post <- User        # user belongs_to post
-```
+###
 }

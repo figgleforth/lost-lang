@@ -1,10 +1,10 @@
 @load 'lost/member.tape'
 
-``` Valid members syntax:
+### Valid members syntax:
 
 m := Member()
 <Member, mem1: Member, mem2 := Member(), mem3: Member = Member(), m>
-```
+###
 
 Struct {
 	members: Array<Member>    = []

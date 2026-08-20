@@ -1,7 +1,7 @@
-``` Introduction
+### Introduction
 
 `Table` (`lost/table.tape`) is an ActiveRecord-style ORM on top of `lost/database.tape` -- see learn/database.tape first if `Sqlite`/`@connect` are new to you. Compose a type with `Table`, point its static `Self.database` at a connected database, and give it a `table_name`.
-```
+###
 @load 'lost/database.tape'
 @load 'lost/table.tape'
 
@@ -21,19 +21,19 @@ Survivor | Table {
 }
 
 
-``` infer_table_name_from_class!
+### infer_table_name_from_class!
 
 Instead of writing `table_name` out by hand, an instance can derive it from its own composed type name -- `Survivor` becomes `'survivors'`.
-```
+###
 s := Survivor()
 s.infer_table_name_from_class!()
 @assert s.table_name == 'survivors', 'infer_table_name_from_class! should derive the table name from the composed type name'
 
 
-``` create and all
+### create and all
 
 `create` inserts a row and returns the created record. `all` fetches every row back as an Array of Dictionaries.
-```
+###
 jack := Survivor.create({name: 'Jack'})
 Survivor.create({name: 'Kate'})
 
@@ -41,18 +41,18 @@ Survivor.create({name: 'Kate'})
 @assert Survivor.all() == [{id: 1, name: 'Jack'}, {id: 2, name: 'Kate'}], 'all should fetch every row as an Array of Dictionaries'
 
 
-``` find, find_by, where
+### find, find_by, where
 
 `find` looks up by id. `find_by` returns the first row matching a Dictionary of conditions, or nil. `where` returns every matching row.
-```
+###
 @assert Survivor.find(jack.id) == {id: 1, name: 'Jack'}, 'find should look up a row by id'
 @assert Survivor.find_by({name: 'Kate'}) == {id: 2, name: 'Kate'}, 'find_by should return the first row matching the conditions'
 @assert Survivor.where({name: 'Jack'}) == [{id: 1, name: 'Jack'}], 'where should return every matching row'
 
 
-``` update and delete
+### update and delete
 
-```
+###
 Survivor.update(jack.id, {name: 'Jack Shephard'})
 @assert Survivor.find(jack.id) == {id: 1, name: 'Jack Shephard'}, 'update should change the row in place'
 

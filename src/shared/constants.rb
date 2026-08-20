@@ -11,6 +11,7 @@ module Lost
 	BROWSER_VIEW_SIZE                 = 'browser_view_size'
 	INTERPOLATE_CHAR                  = '`' # easily distinguishable betwen ```
 	COMMENT_CHAR                      = '#'
+	BLOCK_COMMENT_CHARS               = '###'
 	FENCE_CHARS                       = '```'
 	PREFIX                            = %w(! - + ~ not return)
 	INFIX                             = %w(

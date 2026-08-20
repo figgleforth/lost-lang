@@ -1,17 +1,17 @@
-``` Introduction
+### Introduction
 
 `lost/html.tape` isn't part of the default preload -- it needs an explicit `@load`. It declares one generic `Dom` type plus a predefined element for each common tag (`Div`, `P`, `H1`, `A`, ...), each just `Dom` composed with its own `html_element` tag name. Calling `.to_s()` renders an element (and its `children`) straight to an HTML string.
-```
+###
 @load 'lost/html.tape'
 
 sign := Div([P('Welcome to the beach')])
 @assert sign.to_s() == '<div><p>Welcome to the beach</p></div>', 'to_s() should render the element and its children'
 
 
-``` Nesting and render{;}
+### Nesting and render{;}
 
 A `Dom` type's `render{;}` returns what belongs inside its tag -- by default that's just `children`, but overriding it lets a type build its own inner structure instead of taking children at all.
-```
+###
 Camp_Sign | Dom {
 	message,
 
@@ -25,10 +25,10 @@ Camp_Sign | Dom {
 @assert Camp_Sign('Do not drink the water').to_s() == '<div><p>Do not drink the water</p></div>', "a custom render{;} should replace children entirely"
 
 
-``` html_* and css_* prefixes
+### html_* and css_* prefixes
 
 An `html_*` declaration becomes an HTML attribute (`html_class` -> `class`); a `css_*` declaration becomes an inline style property (`css_padding` -> `padding`). Both are just regular declarations underneath, readable like any other -- but they're only actually folded into attribute/style output by the server's own rendering pipeline when a `Dom` instance comes back from a route (see learn/web_server.tape). Calling `.to_s()` directly, like above, ignores them entirely and only wraps `children` in the tag.
-```
+###
 Card | Div {
 	css_padding := '1rem'
 	css_background_color := '#f5deb3'

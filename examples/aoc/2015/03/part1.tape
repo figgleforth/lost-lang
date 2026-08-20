@@ -1,4 +1,4 @@
-```
+###
 --- Day 3: Perfectly Spherical Houses in a Vacuum ---
 
 Santa is delivering presents to an infinite two-dimensional grid of houses.
@@ -12,7 +12,7 @@ For example:
 - > delivers presents to 2 houses: one at the starting location, and one to the east.
 - ^>v< delivers presents to 4 houses in a square, including twice to the house at his starting/ending location.
 - ^v^v^v^v^v delivers a bunch of presents to some very lucky children at only 2 houses.
-```
+###
 
 input := File_System.read('examples/aoc/2015/03/input.txt')
 

@@ -1,7 +1,7 @@
-``` Introduction
+### Introduction
 
 A parameter declared as two identifiers in a row -- `label name` -- can be called either positionally or with `label: value` at the call site. Matching is purely positional: the label just has to match whatever's declared at that same param index, it's never used to reorder arguments.
-```
+###
 send_message { to person, body text;
 	"To `person`: `text`"
 }
@@ -10,25 +10,25 @@ send_message { to person, body text;
 @assert send_message('Sayid', 'Meet at the caves') == 'To Sayid: Meet at the caves', 'labels are opt-in -- a bare positional call should still work'
 
 
-``` Labels are opt-in per call, per argument
+### Labels are opt-in per call, per argument
 
 Nothing forces every call to use labels -- a labeled param can still be called positionally.
-```
+###
 @assert send_message('Kate', body: 'Watch the fire') == 'To Kate: Watch the fire', 'positional and labeled arguments can mix in one call'
 @assert send_message(to: 'Hurley', ':)') == 'To Hurley: :)', 'either argument can be labeled independently of the other'
 
 
-``` A wrong label raises
+### A wrong label raises
 
 Supplying a label that doesn't match what's declared at that position raises `Lost::Argument_Label_Mismatch`, including using a label where none was declared at all.
-```
+###
 # send_message(from: 'Jack', body: 'oops')  -- raises Lost::Argument_Label_Mismatch: Expected to:, got from:
 
 
-``` The same label can repeat
+### The same label can repeat
 
 Two params can share one label -- nothing requires labels to be unique, matching the Swift convention this feature borrows from.
-```
+###
 Point {
 	x, y,
 

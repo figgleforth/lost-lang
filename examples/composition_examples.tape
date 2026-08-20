@@ -1,14 +1,14 @@
-```Composition Operators Example
+###Composition Operators Example
 This file demonstrates the four class composition operators in Lost:
   | (Union)               - Combine all properties from both classes
   & (Intersection)        - Keep only shared properties
   ~ (Removal)             - Remove properties from one class
   ^ (Symmetric Difference) - Keep only unique properties from each
-```
+###
 
-```
+###
 Example 1: User Roles and Permissions
-```
+###
 
 # Basic permission sets
 Read_Permissions {
@@ -33,9 +33,9 @@ Audit_Permissions {
 	can_export_data := true
 }
 
-```
+###
 # Using | (Union) - Combine permissions
-```
+###
 
 # A viewer can read but not write
 Viewer | Read_Permissions {
@@ -52,9 +52,9 @@ Administrator | Read_Permissions | Write_Permissions | Admin_Permissions {
 	user_type := 'admin'
 }
 
-```
+###
 # Using ~ (Removal) - Restrict permissions
-```
+###
 
 # A limited editor can create and update but not delete
 # First define what to remove
@@ -72,9 +72,9 @@ Read_Only_Admin | Admin_Permissions | Read_Permissions ~ Write_Permissions {
 	user_type := 'read_only_admin'
 }
 
-```
+###
 # Using & (Intersection) - Find common permissions
-```
+###
 
 # An auditor only has the overlapping permissions between Admin and Audit
 Auditor | Admin_Permissions & Audit_Permissions {
@@ -82,9 +82,9 @@ Auditor | Admin_Permissions & Audit_Permissions {
 	# Only has: can_view_logs (the shared property)
 }
 
-```
+###
 # Using ^ (Symmetric Difference) - Get unique permissions
-```
+###
 
 # A specialist has unique perms from both Admin and Audit (but not shared ones)
 Specialist | Admin_Permissions ^ Audit_Permissions {
@@ -93,9 +93,9 @@ Specialist | Admin_Permissions ^ Audit_Permissions {
 	# Does NOT have: can_view_logs (because it's shared)
 }
 
-```
+###
 Example 2: Vehicle Features
-```
+###
 
 Basic_Car {
 	has_engine := true
@@ -151,9 +151,9 @@ Luxury_Electric | Basic_Car | Luxury_Features | Electric_Features {
 	has_engine := false
 }
 
-```
+###
 Example 3: API Response Formats
-```
+###
 
 Base_Response {
 	status := 200

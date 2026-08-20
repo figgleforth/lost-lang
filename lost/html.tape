@@ -1,4 +1,4 @@
-```Generic Dom element, set `html_element=` to the element you want to render```
+### Generic Dom element, set `html_element=` to the element you want to render ###
 Dom {
 	html_element := 'div'
 	children,
@@ -26,7 +26,7 @@ Dom {
 	}
 }
 
-```Predefined Dom elements```
+### Predefined Dom elements ###
 Html | Dom {
 	html_element := 'html'
 }

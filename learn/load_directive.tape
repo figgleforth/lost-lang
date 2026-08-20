@@ -1,19 +1,19 @@
-``` Introduction
+### Introduction
 
 `@load 'file'` reads another `.tape` file and merges its top-level declarations directly into the current scope, as ordinary members of whatever scope you load it into. `lost/preload.tape` (the standard library) uses this same mechanism, but with a twist: the interpreter's own bootstrap loads it into a separate scope, then adds *that* to Global's readable scope, rather than merging it into Global directly -- so `String`/`Array`/etc. are reachable but aren't Global's own declarations (see learn/readable_scopes.tape). An ordinary bare `@load` you write yourself, like the one below, still merges straight into the current scope, no special-casing:
 
 You may omit .tape from filenames, they're added automatically upon file lookup.
-```
+###
 @load 'lost/string'
 
 s := String('shipwrecked')
 @assert s.upcase() == 'SHIPWRECKED', 'a bare @load should merge declarations straight into the current scope'
 
 
-``` Scoping a load into its own namespace
+### Scoping a load into its own namespace
 
 `name := @load 'file'` instead creates a fresh scope named after the identifier, loads the file into THAT, and assigns it -- giving real namespace isolation instead of dumping everything into the current scope:
-```
+###
 strings := @load 'lost/string.tape'
 
 t := strings.String('the island')

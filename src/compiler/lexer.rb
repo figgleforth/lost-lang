@@ -146,6 +146,18 @@ module Lost
 			it
 		end
 
+		def lex_block_comment
+			lex_many Lost::BLOCK_COMMENT_CHARS.length, Lost::BLOCK_COMMENT_CHARS
+
+			it = ::String.new
+			while chars? && peek(0, Lost::BLOCK_COMMENT_CHARS.length) != Lost::BLOCK_COMMENT_CHARS
+				it << eat
+			end
+
+			lex_many Lost::BLOCK_COMMENT_CHARS.length, Lost::BLOCK_COMMENT_CHARS
+			it
+		end
+
 		def lex_fence_block
 			marker = lex_many Lost::FENCE_CHARS.length, Lost::FENCE_CHARS
 			it     = ::String.new
@@ -258,6 +270,7 @@ module Lost
 
 			while chars?
 				single = curr == Lost::COMMENT_CHAR
+				blocked = peek(0, Lost::BLOCK_COMMENT_CHARS.length) == Lost::BLOCK_COMMENT_CHARS
 				fenced = peek(0, Lost::FENCE_CHARS.length) == Lost::FENCE_CHARS
 
 				token = Lost::Lexeme.new.tap do
@@ -274,6 +287,9 @@ module Lost
 							else
 								:fence
 							end
+						elsif blocked
+							it.type  = :comment
+							it.value = lex_block_comment
 						else
 							it.type  = :comment
 							it.value = lex_oneline_comment

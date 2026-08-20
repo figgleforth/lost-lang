@@ -1,4 +1,4 @@
-```
+###
 --- Part Two ---
 
 Realizing the error of his ways, Santa has switched to a better model of determining whether a string is naughty or nice. None of the old rules apply, as they are all clearly ridiculous.
@@ -14,7 +14,7 @@ For example:
 - xxyxx is nice because it has a pair that appears twice and a letter that repeats with one between, even though the letters used by each rule overlap.
 - uurcxstgmygtbstg is naughty because it has a pair (tg) but no repeat with a single letter between them.
 - ieodomkazucvgmuy is naughty because it has a repeating letter with one between (odo), but no pair that appears twice.
-```
+###
 
 # NO aaa (overlapping)
 # OK xyxy (xy at positions 0 and 2)

@@ -1,4 +1,4 @@
-```
+###
 --- Day 1: Not Quite Lisp ---
 
 Santa was hoping for a white Christmas, but his weather machine's "snow" function is powered by stars, and he's fresh out! To save Christmas, he needs you to collect fifty stars by December 25th.
@@ -23,7 +23,7 @@ For example:
 To what floor do the instructions take Santa?
 
 Your puzzle answer was 74.
-```
+###
 
 floor := 0
 input := File_System.read('examples/aoc/2015/01/input.txt')

@@ -9,7 +9,7 @@ Page_Body | Body {
   css_margin := '0'
 }
 
-```Layout component```
+### Layout component ###
 Layout | Html {
 	title,
 	body_content,
@@ -51,7 +51,7 @@ Code_Example | Pre {
 	css_display := 'inline-block'
 }
 
-```Feature section component```
+### Feature section component ###
 Feature_Section | Dom {
 	heading,
 	items,
@@ -69,7 +69,7 @@ Feature_Section | Dom {
 	}
 }
 
-```Individual feature item```
+### Individual feature item ###
 Feature_Item | Dom {
 	text,
 
@@ -82,7 +82,7 @@ Feature_Item | Dom {
 	}
 }
 
-```Main content container```
+### Main content container ###
 Page_Content | Div {
 	snippet,
 
@@ -171,7 +171,7 @@ readme_snippet := "Hello {
 Hello().output()        # Hi, !
 Hello('World').output() # Hi, World!"
 
-```The app serving this HTML```
+### The app serving this HTML ###
 App | Server {
 	get:// {;
 		Layout("Lost - Programming Language", Page_Content(readme_snippet))

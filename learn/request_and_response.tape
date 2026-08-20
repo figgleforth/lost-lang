@@ -1,7 +1,7 @@
-``` Introduction
+### Introduction
 
 Every route body gets `request` and `response` for free, no parameter needed -- see learn/web_server.tape first if routes themselves are new. `request.body` is a Dictionary of submitted form fields.
-```
+###
 @load 'lost/server.tape'
 
 Camp | Server {
@@ -16,10 +16,10 @@ Camp | Server {
 }
 
 
-``` response.status
+### response.status
 
 Set it to change the HTTP status code of the reply.
-```
+###
 Camp | Server {
 	get://restricted {;
 		response.status = 401
@@ -28,10 +28,10 @@ Camp | Server {
 }
 
 
-``` response.headers
+### response.headers
 
 A Dictionary of outgoing headers -- set one by key.
-```
+###
 Camp | Server {
 	get://manifest {;
 		response.headers['Content-Type'] = 'application/json'
@@ -40,10 +40,10 @@ Camp | Server {
 }
 
 
-``` response.redirect
+### response.redirect
 
 Sends the client to a different path instead of returning a body directly.
-```
+###
 Camp | Server {
 	post://signal_fire {;
 		response.redirect('/camp')
@@ -51,10 +51,10 @@ Camp | Server {
 }
 
 
-``` Putting it together
+### Putting it together
 
 A typical POST handler checks the submitted body, then either redirects on success or sets a status and returns an error body on failure.
-```
+###
 Camp | Server {
 	post://register {;
 		name := request.body[:name]

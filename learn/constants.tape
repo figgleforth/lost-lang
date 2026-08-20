@@ -1,7 +1,7 @@
-``` Introduction
+### Introduction
 
 A constant's name must be UPPERCASE, and once declared it can never be reassigned -- attempting to `=` a new value onto it raises `Lost::Cannot_Reassign_Constant`.
-```
+###
 TOTAL_SURVIVORS := 48
 FLIGHT_NUMBER := 815
 @assert "survivors: `TOTAL_SURVIVORS`" == "survivors: 48"
@@ -10,10 +10,9 @@ FLIGHT_NUMBER := 815
 # TOTAL_SURVIVORS = 47  -- raises Lost::Cannot_Reassign_Constant
 
 
-``` The rule applies to any declaration form
-
+### The rule applies to any declaration form
 The same protection holds whether the constant was declared with `:=` or `: Type =` -- what matters is that the identifier itself is UPPERCASE, not how it was declared.
-```
+###
 MAX_RAFT_CAPACITY: Number = 4
 
 @assert MAX_RAFT_CAPACITY === Number

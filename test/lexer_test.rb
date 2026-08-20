@@ -10,6 +10,26 @@ class Lexer_Test < Base_Test
 		assert_kind_of Lost::Lexeme, out.first
 	end
 
+	def test_block_comment
+		out = Lost.lex '###single line block comment###'
+		assert_equal :comment, out.first.type
+		assert_equal 'single line block comment', out.first.value
+		assert_kind_of Lost::Lexeme, out.first
+
+		out = Lost.lex '###multi
+		line
+		block
+		comment###'
+		assert_equal :comment, out.first.type
+		assert out.first.value.start_with? 'multi'
+		assert_kind_of Lost::Lexeme, out.first
+
+		# a lone `#` or `##` inside a block comment's body shouldn't close it early -- only a real ### does
+		out = Lost.lex "###\n# not a real comment\n## still not\n###"
+		assert_equal :comment, out.first.type
+		assert_equal 1, out.length
+	end
+
 	def test_fence_blocks
 		out = Lost.lex '```single line fence block```'
 		assert_equal :fence, out.first.type

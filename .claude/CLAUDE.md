@@ -17,7 +17,7 @@ Lost is an educational programming language for web development, implemented in 
 - Dot notation for accessing nested structures and scopes (., ..)
 - First-class functions and classes
 - Built-in web server support with routing
-- When writing .tape source, use `#` for single-line comments (with a space after), and triple backtick ` ``` ` fences for multi-line/block comments
+- When writing .tape source, use `#` for single-line comments (with a space after), and `###`/`###` for multi-line/block comments
 
 ## Common Commands
 
