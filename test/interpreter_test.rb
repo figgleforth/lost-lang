@@ -616,8 +616,18 @@ class Interpreter_Test < Base_Test
 		out = Ore.interp 'Vector2 { x := 0, y := 1 }
 		pos := Vector2()'
 		assert_instance_of Ore::Instance, out
-		data = { 'x' => 0, 'y' => 1, 'name' => 'Vector2' }
+		data = { 'x' => 0, 'y' => 1, 'name' => 'Vector2', 'types' => Ore::Array.new(['Vector2']) }
 		assert_equal data, out.declarations
+	end
+
+	# `.name =`/`.types =` (set during construction) are plain Ruby attr writes; when the backing Ruby class is shared with a *composed* type (`Tasks | Table {}` resolves to Ore::Table, a Ruby-backed builtin), that class's own Type#initialize already baked its own name ("Table") into @declarations['name'] at construction, which an Ore-level `instance.name` dot-read used to stay stuck on instead of the real composed type's name.
+	def test_composed_instance_reports_its_own_name_not_the_backing_ruby_class_regression
+		out = Ore.interp "@load 'ore/table'
+			Tasks | Table {}
+			t := Tasks()
+			(t.name, t.types)"
+		assert_equal 'Tasks', out.values.first
+		assert_equal %w(Tasks Table), out.values.last.values
 	end
 
 	def test_dot_slash
@@ -2626,6 +2636,52 @@ class Interpreter_Test < Base_Test
 		assert_equal [true, false, false, false, true, false, false], out.values
 	end
 
+	# `Any` (ore/preload.ore) is a universal wildcard -- everything except nil counts as Any via `==`/`===`, with no composition required (`Thing | Any {}` isn't needed).
+	def test_any_type_is_universally_equal_via_double_and_triple_equals
+		out = Ore.interp <<~CODE
+			Thing { x := 1 }
+			t := Thing()
+			(String == Any, Any == String, Number == Any, Thing == Any, t == Any, Any == t, 4 == Any, 'hi' == Any)
+		CODE
+		assert_equal [true, true, true, true, true, true, true, true], out.values
+
+		out = Ore.interp <<~CODE
+			Thing { x := 1 }
+			t := Thing()
+			(String === Any, Any === String, t === Any, Any === t)
+		CODE
+		assert_equal [true, true, true, true], out.values
+	end
+
+	# nil is the one thing that doesn't count as Any -- "if you're not nil, you're Any at the very least" stops short of nil itself.
+	def test_nil_is_not_any
+		out = Ore.interp '(nil == Any, Any == nil, nil === Any, Any === nil)'
+		assert_equal [false, false, false, false], out.values
+	end
+
+	# != / =!= are the natural negation, kept consistent with == / === above rather than falling through to identity-based comparison.
+	def test_any_type_negated_comparisons_stay_consistent
+		out = Ore.interp '(String != Any, Any != String, String =!= Any, Any =!= String)'
+		assert_equal [false, false, false, false], out.values
+
+		out = Ore.interp '(nil != Any, Any != nil, nil =!= Any, Any =!= nil)'
+		assert_equal [true, true, true, true], out.values
+	end
+
+	# `===` is documented as "mutual `=>=`" -- Any wouldn't actually be a universal supertype if `X === Any` were true while `X =>= Any` stayed false, so `=>=`/`=<=`/`=/=` get the same wildcard treatment as `==`/`===` above, not just the two operators the feature originally shipped with.
+	def test_any_type_is_universal_via_superset_and_disjoint_operators
+		out = Ore.interp '(String =>= Any, Any =>= String, String =<= Any, Any =<= String)'
+		assert_equal [true, true, true, true], out.values
+
+		# Any is never disjoint from anything non-nil -- the same "you're Any at the very least" rule.
+		out = Ore.interp '(String =/= Any, Any =/= String)'
+		assert_equal [false, false], out.values
+
+		# nil stays the one exception here too: not a superset relationship, and disjoint (shares nothing).
+		out = Ore.interp '(nil =>= Any, Any =>= nil, nil =<= Any, Any =<= nil, nil =/= Any, Any =/= nil)'
+		assert_equal [false, false, false, false, true, true], out.values
+	end
+
 	def test_regex_match_operators
 		# =~ behaves like Ruby's String#=~: returns the match index, or nil.
 		assert_equal 5, Ore.interp("'hello123' =~ '\\d+'")
@@ -2764,6 +2820,28 @@ class Interpreter_Test < Base_Test
 		end
 		assert_equal 'Number', error.contract
 		assert_equal 'String', error.actual
+	end
+
+	# The return-type check used to compare only the value's own primary type name, not its full composed-type set -- a value composed with (not literally named) the declared return type was wrongly rejected as a mismatch, even though returning it is exactly the safe, covariant case (every Task IS a Table).
+	def test_function_return_type_enforcement_accepts_composed_types
+		out = Ore.interp <<~CODE
+		    Table {}
+		    Task | Table {}
+		    make { -> Table; Task() }
+		    make().types
+		CODE
+		assert_equal %w(Task Table), out.values
+
+		error = assert_raises Ore::Type_Contract_Violation do
+			Ore.interp <<~CODE
+			    Table {}
+			    Unrelated {}
+			    make { -> Table; Unrelated() }
+			    make()
+			CODE
+		end
+		assert_equal 'Table', error.contract
+		assert_equal 'Unrelated', error.actual
 	end
 
 	def test_function_signature_matching
@@ -2956,6 +3034,28 @@ class Interpreter_Test < Base_Test
 		    s.members.0.value == "Alice"
 		CODE
 		assert out
+	end
+
+	# `!=` derives from a declared `==` (see the `!=` note two entries up) -- ore/string.ore's own `==` overload used to assume its right operand was always another String and crashed reading `.value` off anything else. `!= nil` is the common case this broke (a String compared against something that turned out not to exist).
+	def test_string_not_equal_to_nil_regression
+		refute_raises do
+			assert Ore.interp("String('hi') != nil")
+			refute Ore.interp("String('hi') == nil")
+			refute Ore.interp("String('hi') == 5")
+		end
+	end
+
+	# Same class of bug in ore/member.ore/ore/struct.ore's own `==` overloads -- each assumed its right operand was already Member/Struct-shaped.
+	def test_member_and_struct_not_equal_to_nil_regression
+		refute_raises do
+			out = Ore.interp <<~CODE
+			    @load 'ore/struct.ore'
+			    m := Member('x', String, 4)
+			    s := <1, 2>
+			    (m != nil, m == nil, s != nil, s == nil)
+			CODE
+			assert_equal [true, false, true, false], out.values
+		end
 	end
 
 	def test_self_declaration_during_construction_works_but_external_dot_does_not_regression

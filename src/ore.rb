@@ -30,6 +30,7 @@ require_relative 'external/ruby/table'
 require_relative 'external/ruby/member'
 require_relative 'external/ruby/struct'
 require_relative 'external/ruby/statement'
+require_relative 'external/ruby/enum'
 
 require_relative 'runtime/return'
 require_relative 'runtime/interpreter'

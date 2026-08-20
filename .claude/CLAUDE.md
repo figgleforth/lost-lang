@@ -351,7 +351,7 @@ Built-in types like `Server`, `Table`, and `Dom` are composed this way:
 
 ```ore
 Web_App | Server { get:// {; "Hello" } }
-Post | Table { ../database := ~/db; table_name := 'posts' }
+Post | Table { Self.database := ~/db; table_name := 'posts' }
 Layout | Dom { render {; Html([Body("Hello")]) } }
 ```
 
@@ -385,6 +385,21 @@ Flying =/= Swimming    #=> true  (share nothing)
 ```
 
 Struct members (see below) factor into all five: `===`/`=!=` require both the composed-type-sets *and* the structures (`left.structure&.types == right.structure&.types`) to match; `=>=`/`=<=` additionally require the member-poor side's members to be entirely present in the member-rich side's; `=/=` additionally requires the members to share nothing either. An unstructured side is treated as having no members, so `Abc === Abc` (neither side structured) is unaffected and stays `true`. Two types still sharing a composed type (e.g. both being `Abc`) always blocks `=/=` regardless of their members — disjointness means sharing *nothing*, composed types included.
+
+### `Any` is a universal wildcard
+
+`Any` (`ore/preload.ore`) is a real declared type, but `==`/`!=`/`===`/`=!=` special-case it: any value or type that isn't `nil` counts as equal to `Any`, in either operand position, with no composition required — you don't need `Thing | Any {}` for `Thing` to satisfy it.
+
+```ore
+Thing { x := 1 }
+
+String === Any      #=> true
+Thing() == Any       #=> true
+4 == Any             #=> true
+nil == Any           #=> false -- the one exception
+```
+
+Implemented once in `#interp_comparison_infix` (`interpreter.rb`), checked up front before the normal composed-type-set/overload-lookup logic — a new `#any_type?` helper identifies the literal `Any` type (by name, not by composed types), and the check covers `==`/`!=`/`===`/`=!=` together so the negations stay consistent with their positive forms.
 
 ## Structs
 
@@ -478,6 +493,12 @@ Abc<String>          # raises Ore::Undeclared_Type_Structure -- Abc IS declared,
 ```
 
 Implemented in `#interp_type` (`interpreter.rb`): the existing bare-reference branch (`Abc<Number>`, no `{}` body) already raised `Ore::Undeclared_Type_Structure` whenever nothing matched — it just never distinguished "nothing declared under this name at all" from "something's declared, this structure doesn't match it". Now it checks both `find_in_stack(expr.name)` (a bare Type or a local alias) and `structured_variants_for(lookup_name)` (any structured variant, matching or not) before falling through to a named struct — either one being non-empty means something real is declared under that name, so the original error still applies.
+
+## Enums (not finalized — don't rely on yet)
+
+`TYPE_IDENT :: (OPTIONAL_FORCED_TYPE) { ... }` declares an `Ore::Enum` (`Ore::Enum_Expr` in the parser, `#parse_enum_expr`; `#interp_enum`/`#build_enum`/`#build_enum_member` in `interpreter.rb`; backing Ore body in `ore/enum.ore`, Ruby class in `src/external/ruby/enum.rb`). Members can be bare (`TODO`), bare with a trailing comma (`BUG,`), type-annotated only (`DONE: Priority`), type-annotated with a value (`CANCELLED: Priority = 99`), self-declared with a value (`ARCHIVED := 'archived'`), or a nested enum (`Nested :: { A, B }`, reachable only as `Outer.Nested`). A bare/annotated-only member's value is a Symbol matching its own name. The enum exposes `.type` (the forced type, or `nil`), `.keys`/`.values`/`.types` (parallel Arrays), and `.count`.
+
+**Syntactically present, but the type system isn't enforced yet**: the forced type after `::` and each member's own `: Type` annotation are stored but never checked against anything — `Task_Type :: Number { BUG: String = 'oops' }` declares and constructs without error. See the todos.md entry for finalizing this. Don't build real functionality on top of Enum type annotations until that's resolved.
 
 ## Destructuring
 
@@ -626,6 +647,24 @@ sub(1, b := 2)       #=> -1, positional then named is fine
 - A named argument whose name doesn't match any declared param raises `Ore::Unknown_Named_Argument` — checked up front, before param binding, so a typo'd name is reported directly rather than surfacing as a confusing `Ore::Missing_Argument` on some unrelated param the typo incidentally starved of a value
 - A named argument bypasses label-checking entirely for that param — it's matched by declared name, not position, so there's no positional label to compare against
 - Implementation: `name := value` parses as an ordinary `:=` `Infix_Expr` (same production a struct member's bare default uses) — `#classify_argument` distinguishes it from a labeled (`:`) or plain positional argument; `#interp_func_body` builds a `named_args` hash alongside the existing positional `arg_values` array, consulting it first when binding each declared param
+
+## Struct-Typed Function Parameters
+
+A function param can be typed with an inline struct (`: <...>`) instead of a plain type name — structural, not nominal: any argument that has each named member, with a compatible type, satisfies it, regardless of what type the argument itself is actually named.
+
+```ore
+f { right: <name: String, type: Any, value: Any>; right.name }
+
+m := Member('x', String, 4)
+f(m)          #=> 'x' -- Member has all three, so it satisfies the struct annotation without being named "Member" in the annotation itself
+
+f(nil)        # raises Ore::Type_Contract_Violation -- nil has none of the required members
+```
+
+- `Any` is a wildcard within a struct annotation's member types — `type: Any` matches regardless of the member's actual type (including a declared-but-nil member)
+- Checked at every call — unlike a plain `: Type` param annotation (never runtime-enforced except by the static checker on literal args), a struct annotation is a real, always-checked contract
+- Implementation: `Param_Expr` gained a `type_struct` field (parser.rb, mirroring the existing `Identifier_Expr#type_struct` used for `x: <String, Number>`-style variable annotations); `#check_struct_type_contract` (interpreter.rb) runs on every bound argument that has one, reusing `#member_candidate_type_names` (the same compositional matching `Ident<...>` structured-type references already use) to check each named member
+- Found and fixed a real, previously-undiscovered lexer bug while building this: `>` immediately followed by `,`/`;` with no space (`<String>;`) lexed as one bogus combined operator token instead of two, silently breaking any struct annotation directly followed by either character
 
 ## Class Conventions
 
@@ -1033,17 +1072,21 @@ db := Sqlite('./data/myapp.db')
 ```
 
 **Database methods:**
-- `create_table(name, columns)` - Create table from schema dictionary
+- `create_table(name, schema)` - Create table from a named Struct schema
 - `delete_table(name)` - Drop table
 - `table_exists?(name)` - Check if table exists
 - `tables()` - List all tables
 
+A table's schema is a named Struct: one member per column, its own type deciding the column type. `Primary_Key` is a standard/provided marker type (`ore/database.ore`, same as `String`/`Bool`/etc) that marks a member as the table's primary key.
+
 ```ore
-db.create_table('users', {
-    id: 'primary_key',
-    name: 'String',
-    email: 'String'
-})
+Users_Schema <
+    id: Primary_Key
+    name: String
+    email: String
+>
+
+db.create_table('users', Users_Schema)
 
 db.table_exists?('users')  # => true
 db.tables()                # => ['users']
@@ -1057,19 +1100,21 @@ The `Table` type (`ore/table.ore`) provides ActiveRecord-style ORM functionality
 @load 'ore/table.ore'
 
 User | Table {
-    ../database := ~/db     # Set database (static declaration)
-    table_name := 'users'   # or call ../infer_table_name_from_class!() instead — derives it from the composed type name, e.g. "User" -> "users"
+    Self.database := ~/db     # Set database (static declaration)
+    table_name := 'users'   # or call self.infer_table_name_from_class!() instead — derives it from the composed type name, e.g. "User" -> "users"
 }
 ```
 
 **Table class methods (static):**
-- `all()` - Fetch all records as Array of Dictionaries
-- `find(id)` - Find record by ID, returns Dictionary or nil
-- `find_by(attributes)` - Find first record matching a Dictionary of conditions, returns Dictionary or nil
-- `where(attributes)` - Find all records matching a Dictionary of conditions, returns Array of Dictionaries
-- `create(attributes)` - Insert new record, returns the inserted ID
+- `all()` - Fetch all records as an Array of records
+- `find(id)` - Find record by ID, returns a record or nil
+- `find_by(attributes)` - Find first record matching a Dictionary of conditions, returns a record or nil
+- `where(attributes)` - Find all records matching a Dictionary of conditions, returns an Array of records
+- `create(attributes)` - Insert new record, returns the created record
 - `update(id, attributes)` - Update record by ID
 - `delete(id)` - Delete record by ID
+
+`attributes`/a returned record is a Dictionary for the plain `User | Table { Self.database := ~/db }` pattern; for a model composed with a structured `Table` reference (`Tasks | Table<'tasks', Task> {}`, see `ore/2nd/task_app/main.ore`), `create`/`find`/`find_by`/`where`/`all` return a real `Task`-shaped Struct instead (`Ore::Table#record_struct`, `table.rb`), read off the model's own `.structure.columns`.
 
 ```ore
 `Create records
@@ -1077,8 +1122,8 @@ User.create({name: "Alice", email: "alice@example.com"})
 User.create({name: "Bob", email: "bob@example.com"})
 
 `Query records
-users := User.all()        # => Array of Dictionary instances
-user := User.find(1)       # => Dictionary with {id: 1, name: "Alice", ... }
+users := User.all()        # => Array of records
+user := User.find(1)       # => a record, {id: 1, name: "Alice", ... }
 User.find_by({email: "alice@example.com"})
 User.where({name: "Alice"})
 
@@ -1097,15 +1142,16 @@ db := Sqlite('./temp/blog.db')
 @connect db
 
 # Create schema
-db.create_table('posts', {
-    id: 'primary_key',
-    title: 'String',
-    body: 'String'
-})
+Posts_Schema <
+    id: Primary_Key
+    title: String
+    body: String
+>
+db.create_table('posts', Posts_Schema)
 
 # Define model
 Post | Table {
-    ../database := ~/db
+    Self.database := ~/db
     table_name := 'posts'
 }
 
@@ -1122,7 +1168,7 @@ end
 - Database operations use Ruby's Sequel gem
 - Table methods are proxy methods (see `src/external/ruby/table.rb`)
 - Table methods return `Ore::Dictionary` instances, not typed model instances (see `table.rb`'s own `# todo: Convert this to a Record instance`)
-- Static declarations (`..database`) link models to database
+- Static declarations (`Self.database`) link models to database
 
 ## Web Server Features
 

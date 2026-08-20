@@ -271,6 +271,68 @@ class Structs_Test < Base_Test
 		assert_equal 'Number', out
 	end
 
+	# Re-declaring the exact same bare named struct a second time used to raise Undeclared_Type_Structure -- `aliased` (the struct from the first declaration) being non-nil blocked the bare-named-struct fallback, even though the shape hadn't actually changed.
+	def test_redeclaring_same_bare_named_struct_is_a_no_op
+		refute_raises do
+			out = Ore.interp <<~CODE
+			    Task <
+			    	id: Number
+			    	done := false
+			    >
+			    Task <
+			    	id: Number
+			    	done := false
+			    >
+			    Task.name
+			CODE
+			assert_equal 'Task', out
+		end
+	end
+
+	# A genuinely different shape under the same name still raises, unchanged.
+	def test_redeclaring_bare_named_struct_with_a_different_shape_still_raises
+		assert_raises Ore::Undeclared_Type_Structure do
+			Ore.interp <<~CODE
+			    Task <id: Number>
+			    Task <id: String>
+			CODE
+		end
+	end
+
+	# A name, not position, identifies a named member everywhere it's actually used -- reordering named members is still the same declaration, not a different one.
+	def test_redeclaring_bare_named_struct_with_reordered_members_is_a_no_op
+		out = Ore.interp <<~CODE
+		    Task <id: Number, done: Bool>
+		    Task <done: Bool, id: Number>
+		    Task.name
+		CODE
+		assert_equal 'Task', out
+	end
+
+	# Not just "doesn't raise" -- the actual member set is unchanged by the reorder, before and after.
+	def test_redeclaring_bare_named_struct_with_reordered_members_keeps_the_same_members
+		out = Ore.interp <<~CODE
+		    before := Task <id: Number, done: Bool>
+		    after := Task <done: Bool, id: Number>
+		    (before.names, before.type_names, after.names, after.type_names)
+		CODE
+		before_members = out.values[0].values.zip(out.values[1].values).sort
+		after_members  = out.values[2].values.zip(out.values[3].values).sort
+
+		assert_equal [%w(done Bool), %w(id Number)], before_members
+		assert_equal before_members, after_members
+	end
+
+	# Unnamed members have no such identity besides position -- reordering those still counts as a different structure and raises, same as any other shape mismatch.
+	def test_redeclaring_unnamed_structured_type_with_reordered_members_still_raises
+		assert_raises Ore::Undeclared_Type_Structure do
+			Ore.interp <<~CODE
+			    Abc<Number, String> {}
+			    Abc<String, Number>
+			CODE
+		end
+	end
+
 	def test_reference_to_mismatched_declared_structure_raises
 		assert_raises Ore::Undeclared_Type_Structure do
 			Ore.interp <<~CODE
@@ -278,6 +340,20 @@ class Structs_Test < Base_Test
 			    Abc<String>
 			CODE
 		end
+	end
+
+	# Undeclared_Type_Structure's own message-rendering used to crash (NoMethodError inside Struct_Expr#to_s) when the mismatched struct had a named member with no `: Type` annotation (`done := false` -- `.type` is nil, unlike `.type.value` this code blindly read). assert_raises here would surface that NoMethodError instead of the real error if this regressed.
+	def test_mismatched_structure_error_message_renders_untyped_member_without_crashing
+		error = assert_raises Ore::Undeclared_Type_Structure do
+			Ore.interp <<~CODE
+			    Task <id: String>
+			    Task <
+			    	id: Number
+			    	done := false
+			    >
+			    CODE
+		end
+		assert_includes error.message, 'done: false'
 	end
 
 	def test_reference_matches_structure_by_composed_type_not_just_own_name
@@ -398,6 +474,29 @@ class Structs_Test < Base_Test
 		assert_equal %w(first second), out.values
 	end
 
+	# A structured type declaration never bound its own bare name in @declarations the way a bare `Type { }` does -- only `Abc<Number>()` (a full reference) resolved it. When exactly one variant is declared under a name, the bare name is unambiguous, so it's reachable too now.
+	def test_structured_type_reachable_by_bare_name_when_unambiguous
+		out = Ore.interp <<~CODE
+		    Abc<Number> {
+		    	greet {; 'hi' }
+		    }
+		    x := Abc()
+		    x.greet()
+		CODE
+		assert_equal 'hi', out
+	end
+
+	# A genuinely ambiguous name (2+ declared variants) still can't resolve on its own -- there'd be no way to know which variant a bare `X()` should build.
+	def test_structured_type_bare_name_stays_unreachable_when_ambiguous
+		assert_raises Ore::Undeclared_Identifier do
+			Ore.interp <<~CODE
+			    X<a: Number> {}
+			    X<b: String> {}
+			    X()
+			CODE
+		end
+	end
+
 	def test_string_structured_with_a_dictionary
 		src = <<~CODE
 		    String<dict: Dictionary> {
@@ -420,6 +519,12 @@ class Structs_Test < Base_Test
 		out = Ore.interp src
 		assert_equal '{x::0, y::1, z::2, }', out.values[0]
 		assert_equal 'My dict: {x::0, y::1, z::2, }', out.values[1]
+	end
+
+	# Member#to_s used to check `if value`/`elif not value` (truthy) to mean "has a value" -- `false` is a legitimate value that's also falsy in Ore, so a member holding it looked exactly like one holding nothing at all (`<done: Bool>` instead of `<done: Bool = false>`).
+	def test_member_display_shows_a_real_false_value_not_as_unset
+		out = Ore.interp '<done := false>.to_s()'
+		assert_equal '<done: Bool = false>', out
 	end
 
 	def test_bare_default_member_infers_type_from_value
@@ -506,5 +611,106 @@ class Structs_Test < Base_Test
 		out = Ore.interp 'cols := <name: String>
 			<columns := cols>'
 		assert_kind_of Ore::Struct, out.values.first
+	end
+
+	def test_struct_typed_param_parses
+		out = Ore.parse 'f { right: <name: String, type: Any, value: Any>; right }'
+		param = out.first.parameters.first
+		assert_kind_of Ore::Struct_Expr, param.type_struct
+		assert_equal %w(name type value), param.type_struct.names
+		assert_equal %w(String Any Any), param.type_struct.types.map { |member| member.type.value }
+	end
+
+	def test_struct_typed_param_accepts_structurally_compatible_argument
+		refute_raises do
+			out = Ore.interp "@load 'ore/member.ore'
+				f { right: <name: String, type: Any, value: Any>; right.name }
+				m := Member('x', String, 4)
+				f(m)"
+			assert_equal 'x', out
+		end
+	end
+
+	def test_struct_typed_param_raises_for_missing_member
+		error = assert_raises Ore::Type_Contract_Violation do
+			Ore.interp 'f { right: <name: String, type: Any, value: Any>; right }
+				f(nil)'
+		end
+		assert_equal '<name, type, value>', error.contract
+	end
+
+	def test_struct_typed_param_raises_for_wrong_member_type
+		error = assert_raises Ore::Type_Contract_Violation do
+			Ore.interp 'Thing { name := 4 }
+				f { right: <name: String>; right }
+				f(Thing())'
+		end
+		assert_equal 'String', error.contract
+		assert_equal 'Number', error.actual
+	end
+
+	def test_struct_typed_param_any_matches_anything
+		refute_raises do
+			out = Ore.interp "f { right: <value: Any>; right.value }
+				Thing { value := 4815 }
+				f(Thing())"
+			assert_equal 4815, out
+		end
+	end
+
+	def test_struct_typed_param_works_on_operator_overloads
+		refute_raises do
+			out = Ore.interp "@load 'ore/member.ore'
+				Thing {
+					@operator ~ @infix { left, right: <name: String>; right.name }
+				}
+				t := Thing()
+				t ~ Member('x', String, 4)"
+			assert_equal 'x', out
+		end
+
+		assert_raises Ore::Type_Contract_Violation do
+			Ore.interp "Thing {
+				@operator ~ @infix { left, right: <name: String>; right.name }
+			}
+			t := Thing()
+			t ~ nil"
+		end
+	end
+
+	# A struct annotation with only unnamed members (`<String, Number>`, no names to check anything by) enforces nothing at all on a param -- there's no name on the argument to look up. Documenting the current, if surprising, behavior rather than letting it go unnoticed.
+	def test_struct_typed_param_with_only_unnamed_members_enforces_nothing
+		refute_raises do
+			out = Ore.interp 'f { x: <String, Number>; x }
+				f(nil)'
+			assert_nil out
+		end
+	end
+
+	# `x: Abc<Number>` (a named type plus a structure) parses the same way it already does for plain identifiers/variables.
+	def test_named_type_plus_struct_param_parses
+		out = Ore.parse 'f { x: Abc<Number>; x }'
+		param = out.first.parameters.first
+		assert_equal 'Abc', param.type.value
+		assert_kind_of Ore::Struct_Expr, param.type_struct
+		assert_equal 'Abc', param.type_struct.name
+	end
+
+	# --- `<>` immediately followed by `;`/`,` (no space) -- lexer regression ---
+
+	def test_struct_close_immediately_followed_by_semicolon_lexes_correctly
+		out = Ore.lex '<String>;'
+		values = out.map(&:value)
+		assert_includes values, '>'
+		assert_includes values, ';'
+		refute_includes values, '>;'
+	end
+
+	def test_struct_close_immediately_followed_by_comma_lexes_correctly
+		out = Ore.lex '<String>,X'
+		values = out.map(&:value)
+		assert_includes values, '>'
+		assert_includes values, ','
+		refute_includes values, '>,'
 	end
 end

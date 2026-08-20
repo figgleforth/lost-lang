@@ -75,6 +75,16 @@ sub(1, b := 2)        # -1 positional then named is fine
 # sub(1, a := 2)       raises Argument_Given_By_Name_And_Position
 ```
 
+**Struct-typed params** — `: <...>` instead of a plain type name checks *structurally*, not by name: any argument that has each listed member, with a compatible type, is accepted. `Any` matches any member type. Checked on every call, raising `Type_Contract_Violation` on a mismatch.
+
+```ore
+f { right: <name: String, type: Any, value: Any>; right.name }
+
+m := Member('x', String, 4)
+f(m)     # 'x' -- Member isn't named in the annotation, it just has all three members
+f(nil)   # raises Type_Contract_Violation
+```
+
 ## Recursion
 
 A named function is registered in its enclosing scope as it's declared, so it can call itself.
@@ -752,6 +762,29 @@ my_mod.Some_Type()
 @puts "Value: `expression`"
 ```
 
+### Telling printed values apart
+
+Ore's built-in collection types each wrap their printed contents in a different bracket, so you can tell what you're looking at at a glance:
+
+```ore
+@puts [1, 2, 3]      # [1, 2, 3]      -- Array
+@puts (1, 2, 3)      # (1, 2, 3)      -- Tuple
+@puts {x: 1, y: 2}   # {x: 1, y: 2}   -- Dictionary
+@puts <1, 2, 3>      # <1, 2, 3>      -- Struct
+```
+
+A custom type prints as raw internals until it defines its own `to_s{;}` — see [Classes](#classes):
+
+```ore
+Point {
+    x := 1
+    greet {; 'hi' }
+}
+@puts Point()   # #<Ore::Instance name="Point" declarations=["name", "types", "x", "greet"]>
+```
+
+Nothing enforces a bracket convention for your own types, but picking one that doesn't collide with the built-ins above keeps output easy to scan.
+
 ## @declare Directive
 
 1. Declares an identifier on the current scope from a runtime String name, rather than a literal identifier written in the source (what `:=` needs)
@@ -881,7 +914,7 @@ User | Table {
 }
 
 # CRUD operations
-User.create({name: 'Alice', email: 'alice@example.com'})
+User.create({name: 'Alice', email: 'alice@example.com'})   # returns the created record
 users := User.all()                          # Array of Dictionaries
 user := User.find(1)                         # Dictionary
 User.find_by({email: 'alice@example.com'})   # Dictionary, or nil
@@ -889,6 +922,8 @@ User.where({name: 'Alice'})                  # Array of Dictionaries
 User.update(1, {name: 'Alicia'})
 User.delete(1)
 ```
+
+Records come back as Dictionaries for this plain pattern. Compose `Table` with a structured reference instead (`Tasks | Table<'tasks', Task> {}`) and every CRUD method returns a real `Task`-shaped Struct instead.
 
 ## HTML Elements
 
@@ -976,6 +1011,14 @@ All five comparison operators also take [Structs](#structs) into account. An uns
 Abc<Number> {}
 Abc<Number> === Abc<String>   # false — same composed type, different structure
 Abc === Abc                   # true  — neither side structured
+```
+
+`Any` is a universal wildcard for `==`/`!=`/`===`/`=!=`: anything that isn't `nil` counts as equal to it, no composition needed.
+
+```ore
+String === Any    # true
+4 == Any          # true
+nil == Any        # false — the one exception
 ```
 
 ### Logical
@@ -1146,6 +1189,24 @@ Thing := <String, Number>   # anonymous struct -- .name is nil
 n := Named<String, Number>
 n.name                      # 'Named'
 ```
+
+## Enums (not finalized — don't rely on yet)
+
+```ore
+Task_Type :: {
+	TODO
+	BUG,
+	DONE: Priority             # type-annotated -- still Symbol-valued, annotation is metadata only
+	CANCELLED: Priority = 99   # type-annotated with an explicit value
+	ARCHIVED := 'archived'     # self-declared value, no annotation
+}
+
+Task_Type.TODO      # :TODO
+Task_Type.keys      # [TODO, BUG, DONE, CANCELLED, ARCHIVED]
+Task_Type.count     # 5
+```
+
+Enums are syntactically present but not finalized: the forced type (`Task_Type :: Number { ... }`) and each member's `: Type` annotation are parsed and stored, but not enforced — nothing raises if a value doesn't match its declared type. Don't rely on Enum type-checking yet.
 
 ## Shorthand Nil-Initialization
 

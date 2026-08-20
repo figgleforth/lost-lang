@@ -99,8 +99,10 @@ class Database_Test < Base_Test
 		    db := Sqlite('#{@filepath}')
 			@connect db
 
+			Users_Schema <id: Primary_Key>
+
 			pre_tables := db.tables()
-			db.create_table('users' { id: 'primary_key' })
+			db.create_table('users', Users_Schema)
 			post_tables := db.tables()
 
 			(pre_tables, post_tables)
@@ -113,7 +115,11 @@ class Database_Test < Base_Test
 		    #{DATABASE}, #{RECORD}
 		    db := @connect Sqlite('#{@filepath}')
 
-			db.create_table('users' { id: 'primary_key', name: 'String' })
+			Users_Schema <
+				id: Primary_Key
+				name: String
+			>
+			db.create_table('users', Users_Schema)
 
 			User | Table {
 				Self.database := db
@@ -121,11 +127,9 @@ class Database_Test < Base_Test
 			}
 
 			none := User.all()
-			cooper_id := User.create({name: 'Cooper'})
-			cooper := User.find(cooper_id)
+			cooper := User.create({name: 'Cooper'})
 
-			luna_id := User.create({name: 'Luna'})
-			luna := User.find(luna_id)
+			luna := User.create({name: 'Luna'})
 
 			users := User.all()
 			(none, users, cooper, luna, db.table_exists?('users'))
@@ -143,14 +147,14 @@ class Database_Test < Base_Test
 			Ore.interp <<~ORE
 			    #{DATABASE}
 			    db := @connect Sqlite('#{@filepath}')
-				db.create_table('things', {
-					id: 'primary_key',
-					label: 'String',
-					note: 'Text',
-					count: 'Integer',
-					score: 'Float',
-					active: 'Boolean'
-				})
+
+				Things_Schema <
+					id: Primary_Key
+					label: String
+					count: Int
+					active: Bool
+				>
+				db.create_table('things', Things_Schema)
 			ORE
 		end
 	end
@@ -160,16 +164,20 @@ class Database_Test < Base_Test
 		    #{DATABASE}, #{RECORD}
 		    db := @connect Sqlite('#{@filepath}')
 
-			db.create_table('users', { id: 'primary_key', name: 'String' })
+			Users_Schema <
+				id: Primary_Key
+				name: String
+			>
+			db.create_table('users', Users_Schema)
 
 			User | Table {
 				Self.database := db
 				table_name := 'users'
 			}
 
-			id := User.create({name: 'Cooper'})
-			User.update(id, {name: 'Cooper Updated'})
-			User.find(id)
+			created := User.create({name: 'Cooper'})
+			User.update(created.id, {name: 'Cooper Updated'})
+			User.find(created.id)
 		ORE
 		assert_equal 'Cooper Updated', out.hash[:name]
 	end
@@ -179,7 +187,11 @@ class Database_Test < Base_Test
 		    #{DATABASE}, #{RECORD}
 		    db := @connect Sqlite('#{@filepath}')
 
-			db.create_table('users', { id: 'primary_key', name: 'String' })
+			Users_Schema <
+				id: Primary_Key
+				name: String
+			>
+			db.create_table('users', Users_Schema)
 
 			User | Table {
 				Self.database := db
@@ -198,7 +210,11 @@ class Database_Test < Base_Test
 		    #{DATABASE}, #{RECORD}
 		    db := @connect Sqlite('#{@filepath}')
 
-			db.create_table('users', { id: 'primary_key', name: 'String' })
+			Users_Schema <
+				id: Primary_Key
+				name: String
+			>
+			db.create_table('users', Users_Schema)
 
 			User | Table {
 				Self.database := db
@@ -215,7 +231,12 @@ class Database_Test < Base_Test
 		    #{DATABASE}, #{RECORD}
 		    db := @connect Sqlite('#{@filepath}')
 
-			db.create_table('items', { id: 'primary_key', name: 'String', kind: 'String' })
+			Items_Schema <
+				id: Primary_Key
+				name: String
+				kind: String
+			>
+			db.create_table('items', Items_Schema)
 
 			Item | Table {
 				Self.database := db

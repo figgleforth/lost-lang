@@ -1,16 +1,15 @@
 Table {
-	table_name,
-	database: Database,
-	columns: Struct,
+	database: Database
+	schema: Struct
+	table_name: String
 
 	infer_table_name_from_class! {; @ruby }
 
-	Self.database,
 	Self.all {; @ruby }
 	Self.find { id; @ruby }
 	Self.find_by { dict; @ruby }
 	Self.where { dict; @ruby }
-	Self.create { dict; @ruby }
+	Self.create { dict_or_struct; @ruby }
 	Self.update { id, dict; @ruby }
 	Self.delete { id; @ruby }
 

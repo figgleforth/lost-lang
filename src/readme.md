@@ -1,6 +1,6 @@
 ### What's here?
 
-This [`src`](/src) folder contains the implementation of Ore in Ruby. Source code moves through five phases: **Lexer → Parser → Type Checker → Declarator → Interpreter.** `Interpreter` (`src/runtime/interpreter.rb`) is the entry point: it owns a `Lexer` and `Parser`, drives all five phases via `run(source)`, and holds all execution state.
+This [`src`](.) folder contains the implementation of Ore in Ruby. Source code moves through five phases: **Lexer → Parser → Type Checker → Declarator → Interpreter.** `Interpreter` (`src/runtime/interpreter.rb`) is the entry point: it owns a `Lexer` and `Parser`, drives all five phases via `run(source)`, and holds all execution state.
 
 Rather than listing individual files here (they move around; check the directory itself for the current contents), here's what each one is for:
 

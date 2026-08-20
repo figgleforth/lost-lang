@@ -33,7 +33,7 @@ Task_Item | Li {
 
 	new { task;
 		self.text = task[:text]
-		self.id   = task[:id]
+		self.id   = task.id
 	}
 
 	render {;
@@ -93,11 +93,16 @@ Task | Table {
 	table_name := 'tasks'
 }
 
+Tasks_Schema <
+	id: Primary_Key
+	text: String
+>
+
 if db.table_exists?('tasks')
 	db.delete_table('tasks')
-	db.create_table('tasks', { id: 'primary_key', text: 'String' })
+	db.create_table('tasks', Tasks_Schema)
 else
-	db.create_table('tasks', { id: 'primary_key', text: 'String' })
+	db.create_table('tasks', Tasks_Schema)
 end
 
 Task.create({text: "Make Databases work"})
@@ -124,10 +129,10 @@ Tasks_Controller {
 	}
 
 	Self.create_task {;
-		id := Task.create({text: request.body.task })
+		created := Task.create({text: request.body.task })
 		# You can call response.redirect("/") to manually set the destination, or call the named route functions:
 		# home()
-		get_task(id)
+		get_task(created.id)
 	}
 
 	get_task { id;

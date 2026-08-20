@@ -1,19 +1,19 @@
 module Ore
-	BUILTIN_OPERATOR            = '@'
-	NIL_INIT_POSTFIX            = ','
-	FUNCTION_DELIMITER          = ';'
-	PERCENT_LITERALS            = %w(string symbol str Str STR sym Sym SYM)
-	FOR_VERBS                   = %w(each map select reject count)
-	HTML_ATTRS                  = %w(id class href)
-	HTTP_VERBS                  = %w(get put patch post delete head options connect trace)
-	VOID_HTML_TAGS              = %w(area base br col command embed hr img input keygen link meta param source track wbr)
-	HTTP_VERB_SEPARATOR         = '://'
-	BROWSER_VIEW_SIZE           = 'browser_view_size'
-	INTERPOLATE_CHAR            = '`' # easily distinguishable betwen ```
-	COMMENT_CHAR                = '#'
-	FENCE_CHARS                 = '```'
-	PREFIX                      = %w(! - + ~ not return)
-	INFIX                       = %w(
+	BUILTIN_OPERATOR                  = '@'
+	NIL_INIT_POSTFIX                  = ','
+	FUNCTION_DELIMITER                = ';'
+	PERCENT_LITERALS                  = %w(string symbol str Str STR sym Sym SYM)
+	FOR_VERBS                         = %w(each map select reject count)
+	HTML_ATTRS                        = %w(id class href)
+	HTTP_VERBS                        = %w(get put patch post delete head options connect trace)
+	VOID_HTML_TAGS                    = %w(area base br col command embed hr img input keygen link meta param source track wbr)
+	HTTP_VERB_SEPARATOR               = '://'
+	BROWSER_VIEW_SIZE                 = 'browser_view_size'
+	INTERPOLATE_CHAR                  = '`' # easily distinguishable betwen ```
+	COMMENT_CHAR                      = '#'
+	FENCE_CHARS                       = '```'
+	PREFIX                            = %w(! - + ~ not return)
+	INFIX                             = %w(
 		+ - ^ * ** / % ~ == === =!= =>= =<= =/= ? . .?
 		= := : ||= &&= **= <<= >>= += -= *= |= /= %= &= ^= =~ !~
 		&& || & | << >>
@@ -22,31 +22,32 @@ module Ore
 		!= <= >= < > <=> < >
 		and or
 	)
-	POSTFIX                     = %w() # note: ; can never be a postfix, it's reserved
-	CIRCUMFIX                   = %w( \( [ { | )
-	CIRCUMFIX_GROUPINGS         = { '(' => '()', '{' => '{}', '[' => '[]', '|' => '||' }.freeze
-	LOGICAL_OPERATORS           = %w(&& & || | and or)
-	COMPOUND_OPERATORS          = %w(||= &&= **= <<= >>= += -= *= |= /= %= &= ^=)
-	COMPARISON_OPERATORS        = %w(<=> == === =!= =>= =<= =/= != <= >= < > =~ !~)
-	INFIX_ARITHMETIC_OPERATORS  = %w(+ - * ** / % << >> ^ & |)
-	RANGE_OPERATORS             = %w(... ..< >.. >.<)
-	SCOPE_OPERATORS             = %w(~/ ./ ../)
-	SELF_KEYWORDS               = %w(self Self)
-	DOT_ACCESS_OPERATORS        = %w(. .?)
-	TYPE_COMPOSITION_OPERATORS  = %w(| & ~ ^) # Union, Intersection, Removal, Symmetric Difference
-	ANY_IDENTIFIER              = %i(identifier Identifier IDENTIFIER)
-	TYPE_IDENTIFIER             = %i(Identifier IDENTIFIER)
-	GSCOPE                      = :global
-	STARTING_PRECEDENCE         = 0
-	DEFAULT_OPERATOR_PRECEDENCE = 500 # given to all custom operators at runtime unless
-	DELIMITERS                  = %W(, ; { } ( ) [ ] \n \r).freeze
-	ILLEGAL_OPERATOR_CHARS      = %w(` ' " { } ( ) [ ] ).freeze
-	NEWLINES                    = %W(\r\n \n).freeze
-	WHITESPACES                 = %W(\t \s).freeze
-	NUMERIC_REGEX               = /\A\d+\z/
-	ALPHA_REGEX                 = /\A\p{Alpha}+\z/
-	ALPHANUMERIC_REGEX          = /\A\p{Alnum}+\z/
-	SYMBOLIC_REGEX              = /\A[^\p{Alnum}\s]+\z/
+	POSTFIX                           = %w() # note: ; can never be a postfix, it's reserved
+	CIRCUMFIX                         = %w( \( [ { | )
+	CIRCUMFIX_GROUPINGS               = { '(' => '()', '{' => '{}', '[' => '[]', '|' => '||' }.freeze
+	LOGICAL_OPERATORS                 = %w(&& & || | and or)
+	COMPOUND_OPERATORS                = %w(||= &&= **= <<= >>= += -= *= |= /= %= &= ^=)
+	COMPARISON_OPERATORS              = %w(<=> == === =!= =>= =<= =/= != <= >= < > =~ !~)
+	ANY_WILDCARD_COMPARISON_OPERATORS = %w(== != === =!= =>= =<= =/=)
+	INFIX_ARITHMETIC_OPERATORS        = %w(+ - * ** / % << >> ^ & |)
+	RANGE_OPERATORS                   = %w(... ..< >.. >.<)
+	SCOPE_OPERATORS                   = %w(~/ ./ ../)
+	SELF_KEYWORDS                     = %w(self Self)
+	DOT_ACCESS_OPERATORS              = %w(. .?)
+	TYPE_COMPOSITION_OPERATORS        = %w(| & ~ ^) # Union, Intersection, Removal, Symmetric Difference
+	ANY_IDENTIFIER                    = %i(identifier Identifier IDENTIFIER)
+	TYPE_IDENTIFIER                   = %i(Identifier IDENTIFIER)
+	GSCOPE                            = :global
+	STARTING_PRECEDENCE               = 0
+	DEFAULT_OPERATOR_PRECEDENCE       = 500 # given to all custom operators at runtime unless
+	DELIMITERS                        = %W(, ; { } ( ) [ ] \n \r).freeze
+	ILLEGAL_OPERATOR_CHARS            = %w(` ' " { } ( ) [ ] , ; ).freeze
+	NEWLINES                          = %W(\r\n \n \r).freeze
+	WHITESPACES                       = %W(\t \s).freeze
+	NUMERIC_REGEX                     = /\A\d+\z/
+	ALPHA_REGEX                       = /\A\p{Alpha}+\z/
+	ALPHANUMERIC_REGEX                = /\A\p{Alnum}+\z/
+	SYMBOLIC_REGEX                    = /\A[^\p{Alnum}\s]+\z/
 
 	# It's been a while, but I believe this RESERVED list must be maintained. The other declarations above are helpers for comparisons while this contains every reserved symbols and identifiers.
 	RESERVED = %w(

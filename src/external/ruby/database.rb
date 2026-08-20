@@ -19,37 +19,84 @@ module Ore
 			@declarations['connection'] = @connection = db
 		end
 
-		def proxy_create_table name, columns_ore_dict
-			return connection[name.to_sym] if proxy_table_exists? name
+		# old proxy_create_table(name, columns_ore_dict)
 
-			connection.create_table name.to_sym do
-				columns_ore_dict.hash.each do |col, type|
-					col = col.to_sym
+		# @param [::String] table_name
+		# @param [Ore::Struct] schema
+		# @return [Ore::Table] table it created
+		def proxy_create_table table_name, schema
+			return connection[table_name.to_str.to_sym] if proxy_table_exists? table_name
+			raise "proxy_create_table now only takes Struct" unless schema.is_a? Ore::Struct
 
-					case type
-					when 'primary_key'
-						primary_key col
-					when 'String'
-						String col
-					when 'Text'
-						String col, text: true # text:true changes this from VARCHAR(255) -> TEXT
-					when 'Integer'
-						Integer col
-					when 'Float'
-						Float col
-					when 'Boolean'
-						TrueClass col
+			# Tags the returned table with its real declared type (`Task<Task_Schema> | Table {}`) instead of staying generically `Table`-shaped. Doesn't run the model's own `new{;}` -- only safe via a full structured reference (`Task<Task_Schema>()`).
+			model_type = Ore::Interpreter.current&.find_table_type_for_schema schema
+
+			Ore::Table.new.tap do |it|
+				it['schema']     = schema
+				it['table_name'] = table_name
+
+				if model_type
+					# `it['name'] = ` also needed -- Type#initialize bakes the constructor's default name into @declarations['name'] too, so an Ore-level `table.name` dot-read would otherwise still see it stale.
+					it.name    = model_type.name
+					it.types   = model_type.types
+					it['name'] = model_type.name
+				end
+
+				it['connection'] = connection.create_table table_name.to_str.to_sym do
+					schema.members.values.each do |member|
+						next unless member.name && member.type
+
+						column_name = member.name.to_s
+						# member.type is the real Ore::Type/Ore::Enum object, not a string -- `.name` is what compares against these literals.
+						type_name = member.type.name
+
+						if type_name == 'Primary_Key'
+							# Sequel's `primary_key` doesn't take a type, so no String/UUID primary keys yet.
+							primary_key member.name.to_sym
+							next
+						end
+
+						if member.type.is_a? Ore::Enum
+							# Any user-declared enum -- stored as text, no per-enum special-casing needed.
+							String column_name
+							next
+						end
+
+						case type_name
+						when 'String'
+							String column_name
+						when 'Text' # no distinct Ore Text type -- alias one yourself (`Text | String {}`)
+							String(column_name, text: true)
+						when 'Int'
+							Integer column_name
+						when 'Number'
+							Numeric column_name
+						when 'Bool'
+							TrueClass column_name
+						when 'Date'
+							Date column_name
+						when 'Date_Time'
+							DateTime column_name
+						when 'Time'
+							Time column_name
+
+							# Sequel also supports these, but no real Ore type maps to them yet:
+							# when 'Flt', 'Float' then Float column_name     # see design.md
+							# when 'Decimal' then BigDecimal column_name     # Number above covers general numeric use
+							# when 'Blob', 'Binary' then File column_name    # no Ore binary/file type yet
+							# Foreign keys need a separate generator method -- blocked on table associations, see todos.md
+						end
 					end
 				end
 			end
 		end
 
 		def proxy_delete_table name
-			connection.drop_table name.to_sym
+			connection.drop_table name.to_str.to_sym
 		end
 
 		def proxy_table_exists? table_name
-			connection.table_exists? table_name.to_sym
+			connection.table_exists? table_name.to_str.to_sym
 		end
 
 		def proxy_tables

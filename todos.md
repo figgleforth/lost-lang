@@ -1,3 +1,4 @@
++ Finalize Enums (`::`): type annotations (`Task_Type :: Number { ... }`, per-member `: Type`) are parsed and stored (`.type`/`.types`) but never enforced anywhere -- no `Type_Contract_Violation` on a mismatch. Decide whether/how to enforce before relying on enums for anything type-sensitive; not documented as a real feature yet, see readme.md/CLAUDE.md notes.
 + Reserch whether FFI with systems languages like C, C++ possible? I think yes.
 + Be able to compose with parts of a class. Like `|Thing.all_functions`, `&Thing.specific_function`, `.variables`, `.constants`, etc.
 + A few of the Advent of Code tests are super slow because they crunch a lot of data. One of them was like 50% of the entire testing time. I don't want to leave them completely untested. Look into maybe some env var that tracks number of times tests have run, then every n full test runs (maybe 100) then test those as well.
@@ -16,7 +17,6 @@
 + Every value passed around inside of Ore should be an Ore::Class of some kind. calling `#maybe_instance` in `#interp_circumfix` for starters.
 + A `Command_Line` class. Lets you execute commands from Ore::String and Ore::Fence. Inspired by Tsoding and Jai.
 + The way Ore::Classes are created differs in many places. I should have some kind of `Interpreter#make klass` that does all the linking to the runtime and stuff
-+ Ability to cast and compare types at runtime. For example, a class with struct `<id: Int>` should qualify anywhere the type annotation says `: <id: Int>` (a struct with one int named `id`). Maybe even `: <Int>` should succeed whenever any Int is declared on the class.
 + Add runtime types for all instantiable constructs in the language
 + Switch statement / pattern matching: required for `@help` / `help{expr;}` function.
 + Rename preload.ore to global_scope.ore. That's what the global scope will be loaded from, gives me better control. Would be cool to construct different scopes that users can pick to be their global scope, or make their own.
@@ -82,3 +82,7 @@
 - Migrated every raw `./`/`../` usage in `ore/*.ore` (stdlib) and `examples/*.ore` to `self`/`Self`, matching learn/readme/CLAUDE.md. Also fixed `self.x,`/`Self.x,` (nil-init) not parsing, sharing the same parser desugaring `self.funk {;}` already used (`parse_self_prefixed_func_name` renamed to `parse_self_prefixed_identifier`, now used by both).
 - Migrated incidental `./`/`../` usage across `test/*.rb` to `self`/`Self`, kept it where tests specifically cover the operators themselves, removed the self/Self-equals-`./`/`../` equivalence test. Found a pre-existing bug logged in bugs.md.
 - Split `todos.md` into `todos.md` (general/feature work), `bugs.md` (defects), and `design.md` (open language-design questions), each with their own `[DONE]` log.
+- `Primary_Key {}` is now a standard marker type for `create_table` schemas, same as `String`/`Bool`. `database.rb`'s column dispatch generalized to any user enum and exhaustively lists Sequel's column types (unsupported ones commented in). `db.create_table` tags its returned `Table` with the real model type's identity when the schema matches (new `Interpreter.current`).
+- Struct type annotations now work on function params, not just variables: `right: <name: String, ...>` is structural -- any argument with those members, compatibly typed, satisfies it (`Any` is a wildcard), enforced at every call.
+- `Any` is a universal wildcard type: any non-nil value/type is `==`/`===` to it and back, no composition required.
+- `Table`'s CRUD methods return a real, model-shaped `Struct` instead of a `Dictionary` when the model has a structured `Table` reference (`Tasks | Table<'tasks', Task> {}`); falls back to `Dictionary` otherwise. `create` also now returns the created record itself, not just the id (docs/tests updated to match).

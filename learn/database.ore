@@ -10,12 +10,14 @@ db := Sqlite.memory()
 
 ``` create_table and table_exists?
 
-A table's schema is a Dictionary from column name to column type.
+A table's schema is a named Struct: one member per column, its own type deciding the column type. `Primary_Key`, used here on `id`, is a small standard/provided marker type (`ore/database.ore`, same as `String`/`Bool`/etc) that marks a member as the table's primary key.
 ```
-db.create_table('survivors', {
-	id: 'primary_key',
-	name: 'String'
-})
+Survivors_Schema <
+	id: Primary_Key
+	name: String
+>
+
+db.create_table('survivors', Survivors_Schema)
 
 @assert db.table_exists?('survivors') == true, 'create_table should make the table exist'
 @assert db.table_exists?('rafts') == false, 'a table that was never created should not exist'

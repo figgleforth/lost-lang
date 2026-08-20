@@ -82,6 +82,7 @@ module Ore
 		end
 
 		# input[i]
+		# @return [Ore::Lexeme]
 		def curr_lexeme
 			input[i]
 		end
@@ -274,6 +275,73 @@ module Ore
 			copy_location it, start
 		end
 
+		def parse_enum_expr
+			# TYPE_IDENT :: (OPTIONAL_FORCED_TYPE_FOR_CONSTANTS) {
+			#
+			#   TYPE_IDENT              # gets its own unique value
+			#   TYPE_IDENT,             # with comma
+			#   TYPE_IDENT: TYPE_IDENT
+			#   TYPE_IDENT := EXPR
+			#   TYPE_IDENT: TYPE_IDENT = EXPR
+			# }
+
+			# TYPE_IDENT :: (OPTIONAL_FORCED_TYPE_FOR_CONSTANTS) {
+			expr             = Ore::Enum_Expr.new
+			expr.expressions = []
+			expr.name        = eat TYPE_IDENTIFIER
+			eat '::'
+			expr.type = eat TYPE_IDENTIFIER if curr? TYPE_IDENTIFIER
+			eat '{'
+
+			#   TYPE_IDENT :: (TYPE_IDENT) { ... }
+			until curr? '}'
+				reduce_newlines # has to run before the nested-enum lookahead below, not just inside the else -- a member on its own line (the normal case) starts with a leading newline still sitting in curr, so `curr? TYPE_IDENTIFIER, '::'` would never see past it to recognize a nested enum
+				break if curr? '}' # reduce_newlines just now may have consumed the last thing standing before the closing '}' -- without re-checking here, the loop barrels on into parsing a phantom next member starting at '}' itself (an empty-but-newline-containing body, `My_Enum :: {\n}`, was still broken without this)
+
+				item = if curr? TYPE_IDENTIFIER, '::'
+					parse_enum_expr
+				else
+					#   TYPE_IDENT              # gets its own unique value
+					#   TYPE_IDENT,             # with comma
+					#   TYPE_IDENT: TYPE_IDENT
+					#   TYPE_IDENT := EXPR
+					#   TYPE_IDENT: TYPE_IDENT = EXPR
+					item_name = parse_identifier_expr # also consumes a trailing `: Type` annotation itself, if there is one
+
+					Ore.assert item_name.is_a? Ore::Identifier_Expr
+
+					case curr_lexeme.value
+					when ','
+						parse_nil_init_expr item_name
+					when ':='
+						eat ':='
+						infix          = Ore::Infix_Expr.new
+						infix.operator = Lexeme.new(:operator, ':=')
+						infix.left     = item_name
+						infix.right    = parse_expression
+						infix
+					when '='
+						eat '='
+						infix          = Ore::Infix_Expr.new
+						infix.operator = Lexeme.new(:operator, '=')
+						infix.left     = item_name
+						infix.right    = parse_expression
+						infix
+					else
+						# Bare TYPE_IDENT (with or without a `: Type` annotation already picked up above), nothing following -- next token is '}' or the next member's own name. A plain bare name (no type) gets the same nil-init treatment as the explicit-comma form; a typed-but-unvalued name (`ABC: Some_Type`) is left as the Identifier_Expr #parse_identifier_expr already built.
+						item_name.type ? item_name : parse_nil_init_expr(item_name)
+					end
+				end
+
+				eat if curr? ','
+				reduce_newlines
+
+				expr.expressions << item
+			end
+			eat '}'
+			expr
+		end
+
 		def parse_func precedence = STARTING_PRECEDENCE
 			named            = curr?(:identifier)
 			start            = curr_lexeme
@@ -329,9 +397,14 @@ module Ore
 					end
 					param.lexeme = param.name
 
-					if curr? ':'
+					if curr?(':', TYPE_IDENTIFIER)
 						eat ':'
-						param.type = eat(:Identifier)
+						param.type             = eat(TYPE_IDENTIFIER)
+						param.type_struct      = parse_struct # returns nil if none was found, e.g. `thing: Abc<Number>` -- see #parse_identifier_expr, same shape
+						param.type_struct.name = param.type.value if param.type_struct
+					elsif curr?(':', '<')
+						eat ':'
+						param.type_struct = parse_struct # bare struct annotation, e.g. `right: <name: String, type: Any, value: Any>` -- structural rather than nominal, see #check_struct_type_contract
 					end
 
 					if curr? ':='
@@ -387,6 +460,9 @@ module Ore
 				it.names  = []
 				eat '<'
 				until curr? '>'
+					reduce_newlines # a member on its own line otherwise gets its leading newline parsed as its own bare, unnamed element (nil) -- same bug class as #parse_enum_expr's missing reduce_newlines had
+					break if curr? '>' # reduce_newlines just now may have consumed the last thing standing between the previous element and the closing '>' -- without re-checking here, the loop barrels on into parsing a phantom next element starting at '>' itself
+
 					# Each element is a full expression (`Number`, `4815`, `1+2+3/123`, `this`, ...). A named element (`some_string: String`) parses as an Identifier_Expr with #type set, via #parse_identifier_expr's existing `: Type` annotation handling.
 					# A bare identifier directly followed by `,` (`<String, Number>`) is special-cased here rather than going through #parse_expression, because #begin_expression would otherwise mistake it for the nil-init idiom (`ident,` => `ident = ident or nil`), which is unrelated to struct members and only coincidentally shares the same shape.
 					element = if curr?(ANY_IDENTIFIER, ',')
@@ -447,7 +523,7 @@ module Ore
 
 			Ore.assert is_type || is_const, "Type names can only be Capitalized or UPPERCASE" # todo; proper error
 
-			it.structure = parse_struct # returns nil if none was found
+			it.structure      = parse_struct # returns nil if none was found
 			it.structure.name = it.name if it.structure
 
 			# When no body and no composition chain follow e.g.
@@ -537,9 +613,9 @@ module Ore
 
 			# A composed operand can itself be a structured type reference (`| Other<'users'>`), not just a bare type reference. Wrap it into a Type_Expr (mirroring #parse_type_decl's own reference form) so #interp_composition resolves it through the normal structured-type matching. Without this the trailing `<...>` is left unconsumed and #parse_type_decl's `until curr? '{'` loop spins forever re-checking the same token.
 			if curr?('<') && ident.is_a?(Ore::Identifier_Expr)
-				type_ref           = Ore::Type_Expr.new
-				type_ref.name      = ident.value
-				type_ref.structure = parse_struct
+				type_ref                = Ore::Type_Expr.new
+				type_ref.name           = ident.value
+				type_ref.structure      = parse_struct
 				type_ref.structure.name = type_ref.name if type_ref.structure
 				copy_location type_ref, ident
 				ident = type_ref
@@ -575,8 +651,8 @@ module Ore
 
 			if curr?(':', :Identifier)
 				eat ':'
-				expr.type        = eat(:Identifier)
-				expr.type_struct = parse_struct # returns nil if none was found
+				expr.type             = eat(:Identifier)
+				expr.type_struct      = parse_struct # returns nil if none was found
 				expr.type_struct.name = expr.type.value if expr.type_struct
 			elsif curr?(':', '<')
 				eat ':'
@@ -746,12 +822,13 @@ module Ore
 			copy_location expr, start
 		end
 
-		def parse_nil_init_expr
-			start = curr_lexeme
+		# `left`, when given, is an identifier already parsed by the caller (e.g. #parse_enum_expr, which has to parse a member's name itself first to look ahead and decide which member form it's looking at) -- skips re-parsing it from the current position, which by then is already past it.
+		def parse_nil_init_expr left = nil
+			start = left&.lexeme || curr_lexeme
 
 			expr          = Ore::Nil_Init_Expr.new
 			expr.lexeme   = start
-			expr.left     = curr?(SELF_KEYWORDS, '.') ? parse_self_prefixed_identifier : parse_identifier_expr
+			expr.left     = left || (curr?(SELF_KEYWORDS, '.') ? parse_self_prefixed_identifier : parse_identifier_expr)
 			expr.operator = Lexeme.new(:operator, '=')
 
 			nil_expr         = Ore::Identifier_Expr.new
@@ -774,6 +851,9 @@ module Ore
 
 			elsif peek_contains?(Ore::FUNCTION_DELIMITER, '}') && (curr?('{') || curr?(:identifier, '{') || curr?(:identifier, ':', '{') || curr?(SCOPE_OPERATORS, :identifier, '{') || curr?(SCOPE_OPERATORS, :identifier, ':', '{') || curr?(SELF_KEYWORDS, '.', :identifier, '{') || curr?(SELF_KEYWORDS, '.', :identifier, ':', '{'))
 				parse_func precedence
+
+			elsif curr?(TYPE_IDENTIFIER, '::', TYPE_IDENTIFIER, '{') || curr?(TYPE_IDENTIFIER, '::', '{')
+				parse_enum_expr
 
 			elsif curr?('<') && curr_lexeme.type == :operator && !@custom_prefix.include?('<')
 				# note; A leading `<` can never be a legitimate infix `<` so we can safely parse a struct.
@@ -838,7 +918,7 @@ module Ore
 				# This is reserved for function declarations
 				raise Ore::Reserved_Function_Delimiter.new curr_lexeme
 
-			elsif curr? :delimiter
+			elsif curr?(:delimiter) && NEWLINES.include?(curr_lexeme.value)
 				reduce_newlines and nil
 
 			elsif curr? :html # This is a subtype of Ore::Fence_Expr

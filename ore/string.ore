@@ -21,8 +21,9 @@ String {
 		end
 	}
 
-	@operator == @infix { left: String, right: String;
-		left.value == right.value
+	@operator == @infix { left: String, right;
+		# `right: String` isn't runtime-enforced (param types never are, only literal args at the static checker), so this can be called with any `right` -- including `nil` (e.g. `!=` derives from `==` when a type has no `!=` of its own, see interp_infix). `.?value` -- rather than a bare `.value` -- returns nil instead of raising when `right` isn't a String at all.
+		left.value == right.?value
 	}
 
 	downcase {; @ruby }

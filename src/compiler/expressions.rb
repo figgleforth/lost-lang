@@ -47,7 +47,7 @@ module Ore
 	end
 
 	class Param_Expr < Expression
-		attr_accessor :name, :label, :type, :default, :add_to_readable, :add_to_writable
+		attr_accessor :name, :label, :type, :type_struct, :default, :add_to_readable, :add_to_writable
 	end
 
 	class Func_Expr < Expression
@@ -100,8 +100,11 @@ module Ore
 					# own lexeme via the shared base, even if it's not a perfect rendering of
 					# a compound expression; `.inspect` is the last-resort fallback for
 					# anything that isn't an Expression at all, so this never raises.
-					type = if name
+					type = if name && type.type
 						type.type.value
+					elsif name && type.respond_to?(:member_default) && type.member_default
+						# A named member with no `: Type` annotation (`done := false`) has no `.type` to read -- fall back to rendering its default value instead.
+						type.member_default.value
 					elsif type.respond_to? :value
 						type.value
 					else
@@ -119,6 +122,10 @@ module Ore
 				str << ">"
 			end
 		end
+	end
+
+	class Enum_Expr < Expression
+		attr_accessor :name, :type, :expressions
 	end
 
 	class Type_Expr < Expression

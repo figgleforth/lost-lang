@@ -38,14 +38,21 @@ module Ore
 
 		# Strict equality for declaration-time collision checks (does a variant with this *exact*
 		# structure already exist under this base name, so a new `Type<Struct>{}` should extend it
-		# rather than start a fresh variant?) -- same set-comparison rules as the language's own
-		# `===` operator on Type/Instance (interp_infix's COMPARISON_OPERATORS branch): plain,
-		# positional `==` on the underlying arrays, nothing looser. Two declarations only ever
-		# describe the *same* variant if every member's name and type match exactly -- a
-		# differently-named member of the same type (`dict:`/`other:`, both `Dictionary`) is a
-		# distinct variant, which is the whole point of comparing `names` here too.
+		# rather than start a fresh variant?). Two declarations only ever describe the *same*
+		# variant if every member's name and type match -- a differently-named member of the same
+		# type (`dict:`/`other:`, both `Dictionary`) is a distinct variant, which is the whole point
+		# of comparing `names` here too.
+		#
+		# Order-insensitive once every member is named -- a name (not position) is what identifies a
+		# named member everywhere it's actually used (dot access, named construction), so `<a: X, b:
+		# Y>` and `<b: Y, a: X>` are the same declaration, just typed in a different order. Falls back
+		# to strict positional comparison the moment either side has an unnamed member, where position
+		# *is* the member's only identity (positional construction binds by index).
 		def structure_declaration_equal? other
-			other.is_a?(Struct) && names == other.names && type_names == other.type_names
+			return false unless other.is_a? Struct
+			return names == other.names && type_names == other.type_names unless names.all? && other.names.all?
+
+			names.zip(type_names).sort == other.names.zip(other.type_names).sort
 		end
 
 		# Loose/compositional match for reference resolution (`Abc<value>()` against a declared

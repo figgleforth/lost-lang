@@ -15,6 +15,9 @@ module Ore
 
 		class << self
 			attr_accessor :cached_source_by_filename, :cached_expressions_by_filepath, :type_checked_filepaths
+
+			# Lets Ruby proxy methods (no interpreter reference otherwise) reach interpreter state, e.g. #find_table_type_for_schema. Not thread-safe across multiple interpreters; fine for one-per-process.
+			attr_accessor :current
 		end
 
 		attr_accessor :input, :lexer, :parser, :load_standard_library, :stack, :route_functions_by_route_name, :servers, :dom_onclick_function_handlers, :dom_input_elements, :last_output, :current_source_file, :stdlib_scope, :declarations, :global
@@ -33,6 +36,8 @@ module Ore
 			@parser              = Parser.new
 			@declarations        = {} # {::String => Ore::Declaration}, see Declarator
 			@forced_declarations = Set.new # identity-tracked Ore::Expression, see #resolve_forward_declaration
+
+			Interpreter.current = self
 		end
 
 		def run source_code
@@ -826,6 +831,9 @@ module Ore
 				elsif stack.any? { |s| s.equal? global } && resolve_forward_declaration(expr.value) && global.has?(expr.value)
 					# not reached yet in file order, but declared somewhere later on -- forced early. Identity check (not #include?, which is `==` and can hit an Ore type's own overload -- e.g. Ore::Array#== assumes its operand also has .values). Global being absent from the stack means we're deliberately excluding it (a plain `x.y` dot access, #interp_dot_scope's exclude_global_scope: true) -- a member missing on x should stay missing, not quietly resolve to an unrelated global
 					global[expr.value]
+				elsif (variants = structured_variants_for(expr.value)).length == 1
+					# A structured declaration (`Task<Schema> {}`) never binds its bare name like a plain `Type {}` does -- unambiguous with one variant, so allow it (mirrors Bare Named Structs). 2+ variants stay unreachable except via `Name<Structure>`.
+					variants.first
 				else
 					raise Ore::Undeclared_Identifier.new(expr)
 				end
@@ -1460,7 +1468,19 @@ module Ore
 		end
 
 		# note; I'm special casing these because they don't behave like the traditional == and != in Ruby.
+		# The literal `Any` type (ore/preload.ore), a universal wildcard -- see #interp_comparison_infix.
+		def any_type? value
+			value.is_a?(Ore::Type) && value.name == 'Any'
+		end
+
 		def interp_comparison_infix expr, left, right
+			# `Any` is a supertype of everything except nil, no composition needed. True for every "equal-ish" op, false for "different-ish" ones.
+			if ANY_WILDCARD_COMPARISON_OPERATORS.include?(expr.operator.value) && (any_type?(left) || any_type?(right))
+				other = any_type?(left) ? right : left
+				equal = !other.nil?
+				return %w(== === =>= =<=).include?(expr.operator.value) ? equal : !equal
+			end
+
 			case expr.operator.value
 			when '===', '=!=', '=>=', '=<=', '=/='
 				left_structure  = left.is_a?(Ore::Type) ? left.structure_instance&.types : nil
@@ -1745,8 +1765,9 @@ module Ore
 
 					existing = find_structured_type_variant lookup_name, supplied
 					unless existing.is_a? Ore::Type
-						# `expr.name` has nothing declared under it at all -- no bare Type, no structured variant (checked separately from `existing` above, which only tells us no *matching* variant was found, not that none exist), no alias. Rather than raise, treat this as a bare named struct (`Named <Struct>`), reusing the already-interpreted `supplied` Struct instance and naming it. When every member is named, this also declares `expr.name` in the current scope -- unlike an unnamed/mixed struct (`Named <String, Number>`), where multiple differently-shaped structures can share one base name (matched structurally at each reference, same as an ordinary structured-type variant) and persisting the first one seen would block the others, a fully-named struct only ever means one shape, so persisting it is safe and is what makes a bare statement form (`Named <Struct>`, no `:=`) actually reusable afterward -- `Named(...)`/`Named.new(...)` then go through the ordinary Ore::Struct call path (#interp_call's Ore::Struct branch), constructing a real, fully Struct-backed instance with real per-slot values. A name that *does* have something declared -- a real Type with a mismatched structure, or an alias to a non-Type value -- still raises, unchanged.
-						if aliased.nil? && structured_variants_for(lookup_name).empty?
+						# Nothing declared under this name -> bare named struct (see Bare Named Structs, CLAUDE.md). Also allows re-declaring the same struct with an identical shape as a no-op.
+						redeclaring_same_struct = aliased.is_a?(Ore::Struct) && aliased.get('name') == expr.name && aliased.structure_declaration_equal?(supplied)
+						if (aliased.nil? || redeclaring_same_struct) && structured_variants_for(lookup_name).empty?
 							supplied.declare 'name', expr.name
 							supplied.types = Set[expr.name] + supplied.types # `.types` inherited `Set['Struct']` alone from Struct#initialize's `super 'Struct'`; put the struct's own declared name first (own-name-before-composed, same order an ordinary `Ident | Struct {}` composition would produce) so type-identity checks (===, a `-> Ident` return-type contract, `type_name_to_string`'s `.types.first`, ...) see it as `Ident`-shaped, not just generically Struct-shaped.
 							stack.last.declare expr.name, supplied if supplied.names.all?
@@ -1879,6 +1900,29 @@ module Ore
 			variant
 		end
 
+		# A struct-typed param (`right: <name: String, ...>`) is structural, not nominal -- any argument with those declarations, compatibly typed, satisfies it. Raises Type_Contract_Violation on mismatch. `Any` is a wildcard.
+		def check_struct_type_contract param, value, expr
+			# Interpreted fresh per call, not cached -- a Param_Expr can be shared across Interpreter instances.
+			struct = interp_struct param.type_struct, allow_spread: false
+
+			struct.names.each_with_index do |name, i|
+				next unless name # unnamed members have nothing to check by name
+
+				declared_type = struct.type_names[i]
+				next if declared_type == 'Any'
+
+				unless value.is_a?(Ore::Scope) && value.has?(name)
+					raise Ore::Type_Contract_Violation.new(expr, "<#{struct.names.compact.join(', ')}>", describe_value_shape(value))
+				end
+
+				member_value = value.get name
+				candidates   = member_value.nil? ? [] : member_candidate_type_names(member_value)
+				unless candidates.include? declared_type
+					raise Ore::Type_Contract_Violation.new(expr, declared_type, type_name_to_string(member_value))
+				end
+			end
+		end
+
 		# All type names a supplied member value could match a declared struct's member under -- its own primary name first, then everything it composes, so e.g. a `Div` satisfies a member declared `Dom` without being named Dom itself. See #find_structured_type_variant.
 		def member_candidate_type_names value
 			case value
@@ -1925,10 +1969,24 @@ module Ore
 		def structured_variants_for base_name, current_scope_only: false
 			scopes = current_scope_only ? [stack.last] : stack.reverse_each
 			scopes.each do |scope|
+				# `stack` can briefly hold non-Scope receivers during dot-access (e.g. Ore::Range).
+				next unless scope.respond_to? :structured_type_variants
 				list = scope.structured_type_variants.fetch(base_name, [])
 				return list unless list.empty?
 			end
 			[]
+		end
+
+		# Every declared structured-type variant under Global (Table-composed models are always top-level).
+		def all_structured_type_variants
+			global.structured_type_variants.values.flatten
+		end
+
+		# For Ore::Database#proxy_create_table: finds the Table-composed type declared with this exact schema, if any, so the created table can be tagged with the model's real identity. Nil if none matches.
+		def find_table_type_for_schema schema
+			all_structured_type_variants.find do |variant|
+				variant.types.include?('Table') && variant.structure_declaration&.structure_declaration_equal?(schema)
+			end
 		end
 
 		# Searches the full scope stack (innermost to outermost) for `key`, the same way a bare identifier resolves via #scope_for_identifier -- checking only `stack.last` would miss a type declared in an outer/global scope while evaluating from inside a nested context (e.g. a type's own declaration body during composition). This returns an Ore type. `excluding:` skips scopes of that class -- used by #find_operator_overload to keep looking past a currently-executing Type/Instance body, since merely being on the stack doesn't mean the *current* operands belong to it (Instance < Type, so excluding: Ore::Type skips both).
@@ -2005,10 +2063,13 @@ module Ore
 			ruby_class = find_ruby_class_for_type type
 			instance   = ruby_class ? ruby_class.new : Ore::Instance.new(type.name)
 
-			instance.name            = type.name
-			instance.types           = type.types
-			instance.enclosing_scope = type
-			instance.expressions     = type.expressions
+			# `.name =`/`.types =` are Ruby attr writes only -- for a composed type sharing a built-in's Ruby class (e.g. `Tasks | Table {}` -> Ore::Table), the `declarations[...]` writes below are also needed or an Ore-level `.name`/`.types` dot-read stays stuck on the backing class's own values.
+			instance.name                  = type.name
+			instance.declarations['name']  = type.name
+			instance.types                 = type.types
+			instance.declarations['types'] = wrap_ore_array type.types.to_a
+			instance.enclosing_scope       = type
+			instance.expressions           = type.expressions
 
 			# note; Bind structs onto the instance before the type's expressions (and therefore `new`) are interpreted below, so `new{;}`'s own body can reference `.structure`. This is a completely separate binding path from the call's own arguments — member values never get forwarded into `new`'s params.
 			effective_structure = type.structure_instance || type.structure_declaration
@@ -2160,6 +2221,8 @@ module Ore
 					raise Ore::Argument_Label_Mismatch.new(expr, param.label&.value, supplied_label)
 				end
 
+				check_struct_type_contract param, value, expr if param.type_struct
+
 				stack.last.declare param.name.value, value
 
 				if value.is_a? Ore::Type
@@ -2195,8 +2258,9 @@ module Ore
 			return_value = result.is_a?(Ore::Return) ? result.value : result
 
 			if func.func_signature.return_type
+				# Compositional, not exact-name -- a `-> Table` returning a `Task`-composed value is a safe covariant return.
 				actual_type = type_name_to_string return_value
-				if actual_type != func.func_signature.return_type
+				unless composed_types_for(return_value).include? func.func_signature.return_type
 					raise Ore::Type_Contract_Violation.new(expr, func.func_signature.return_type, actual_type)
 				end
 			end
@@ -2879,6 +2943,70 @@ module Ore
 			end
 		end
 
+		# `Key_Type :: { PRIMARY, }` declares `Key_Type` in the current scope, same as a Type/Struct declaration does -- unlike a nested enum member (`build_enum`, called directly, skips this), which is only ever reachable through its parent (`Outer.Nested`), not the enclosing scope.
+		def interp_enum expr
+			instance = build_enum expr
+			stack.last.declare expr.name.value, instance
+			instance
+		end
+
+		# Builds (but doesn't declare) a real Ore::Enum for an Enum_Expr -- shared by #interp_enum and nested enum members (#build_enum_member).
+		def build_enum expr
+			# Named at construction, not via `.name =` after -- a later attr write never touches @declarations.
+			instance = Ore::Enum.new expr.name.value
+			link_instance_to_type instance, 'Enum'
+
+			# Skips normal Type-construction, so Enum's own Ore-level body (keys/values/types/count, @operator ==) is run by hand.
+			type = instance.enclosing_scope
+			if type
+				instance.expressions = type.expressions
+				run_type_body_on_instance type, instance
+			end
+
+			keys, values, types = [], [], []
+			expr.expressions.each do |member_expr|
+				name, value, member_type = build_enum_member member_expr
+				keys << name
+				values << value
+				types << member_type
+				instance.declarations[name] = value
+			end
+
+			instance.declarations['type']   = expr.type ? find_in_stack(expr.type.value) : nil
+			instance.declarations['keys']   = wrap_ore_array keys
+			instance.declarations['values'] = wrap_ore_array values
+			instance.declarations['types']  = wrap_ore_array types
+			instance.declarations['count']  = keys.length
+
+			instance
+		end
+
+		# Links a raw Ore::Array to the real Array type so its own Ore-level methods (to_s{;}, etc.) are reachable. Used by #build_enum and #build_instance_of_type.
+		def wrap_ore_array list
+			array = Ore::Array.new list
+			link_instance_to_type array, 'Array'
+			array
+		end
+
+		# Returns [name, value, type] for one enum member, per #parse_enum_expr's five member forms (see CLAUDE.md). Bare/typed-only members get a Symbol matching their own name; `:=`/`: Type =` members use their real value; nested enums recurse into #build_enum.
+		def build_enum_member member_expr
+			case member_expr
+			when Ore::Enum_Expr
+				[member_expr.name.value, build_enum(member_expr), nil]
+			when Ore::Nil_Init_Expr
+				name = member_expr.left.value
+				[name, name.to_sym, nil]
+			when Ore::Identifier_Expr
+				name        = member_expr.value
+				member_type = member_expr.type ? find_in_stack(member_expr.type.value) : nil
+				[name, name.to_sym, member_type]
+			when Ore::Infix_Expr
+				name        = member_expr.left.value
+				member_type = member_expr.left.type ? find_in_stack(member_expr.left.type.value) : nil
+				[name, interpret(member_expr.right), member_type]
+			end
+		end
+
 		def interp_struct expr, allow_spread: true
 			types         = [] # per-member type object (or the raw value itself for unnamed members)
 			values        = [] # per-member real value, nil when a named member has none
@@ -3068,6 +3196,9 @@ module Ore
 
 			when Ore::Struct_Expr
 				interp_struct expr
+
+			when Ore::Enum_Expr
+				interp_enum expr
 
 			when nil
 				maybe_instance nil
