@@ -936,7 +936,7 @@ User.update(1, {name: 'Alicia'})
 User.delete(1)
 ```
 
-Records come back as Dictionaries for this plain pattern. Compose `Table` with a structured reference instead (`Tasks | Table<'tasks', Task> {}`) and every CRUD method returns a real `Task`-shaped Struct instead.
+Records come back as Dictionaries for this plain pattern. Compose `Table` with a tagged reference instead (`Tasks | Table\<'tasks', Task> {}`) and every CRUD method returns a real `Task`-shaped Struct instead.
 
 ## HTML Elements
 
@@ -1018,12 +1018,12 @@ Duck =/= Fish          # false (both compose Swimming — not disjoint)
 Flying =/= Swimming    # true  (share nothing)
 ```
 
-All five comparison operators also take [Structs](#structs) into account. An unstructured type is treated as having no members, so plain comparisons like the ones above are unaffected:
+All five comparison operators also take [Structs](#structs) into account. An untagged type is treated as having no members, so plain comparisons like the ones above are unaffected:
 
 ```lost
-Abc<Number> {}
-Abc<Number> === Abc<String>   # false — same composed type, different structure
-Abc === Abc                   # true  — neither side structured
+Abc\<Number> {}
+Abc\<Number> === Abc\<String>   # false — same composed type, different tag
+Abc === Abc                     # true  — neither side tagged
 ```
 
 `Any` is a universal wildcard for `==`/`!=`/`===`/`=!=`: anything that isn't `nil` counts as equal to it, no composition needed.
@@ -1181,45 +1181,45 @@ lying(5)   # raises Lost::Type_Contract_Violation — declared Number, actually 
 
 ## Structs
 
-1. `<...>` attaches runtime-inspectable metadata (a struct) to a type declaration, a value, or a reference to an existing type
-2. Each declared structure is its own type — `Abc<Number> {}` and `Abc<String> {}` don't share `new`/methods
-3. A reference matches a declared structure by type (like overload resolution), including types it composes and not just its own name — no match raises `Lost::Undeclared_Type_Structure`
-4. Reachable through `.structure` (`.structure.types`, or `.structure.some_name` for named members) — bound before `new{;}` runs, never forwarded as constructor args
-5. Naming an *undeclared* identifier this way (`Named<...>`) builds a plain, named struct instead of raising — a name that's already taken by a real Type still takes priority and behaves as above
+1. `<...>` attaches runtime-inspectable metadata (a struct) to a standalone value or a reference to an existing type. Tagging a *Type* declaration/reference itself uses `\` instead, to stay unambiguous with a plain struct value and with comparisons — `Array\<String> {}` (inline literal), or `Array\Task_Schema {}`/`Array\String {}` (a named reference to an already-declared struct or Type)
+2. Each declared tag is its own type — `Abc\<Number> {}` and `Abc\<String> {}` don't share `new`/methods
+3. A reference matches a declared tag by type (like overload resolution), including types it composes and not just its own name. Referencing a real Type with no matching variant yet auto-declares one; referencing anything else with no match raises `Lost::Undeclared_Type_Structure`
+4. Reachable through `.tag` (`.tag.types`, or `.tag.some_name` for named members) — bound before `new{;}` runs, never forwarded as constructor args
+5. Naming an *undeclared* identifier with bare `<...>` (no `\`, e.g. `Named<...>`) builds a plain, named struct instead of raising — a name that's already taken by a real Type still takes priority and behaves as above
 
 ```lost
-String<dict: Dictionary> {
-    to_s {; "dict: `structure.dict`" }
+String\<dict: Dictionary> {
+    to_s {; "dict: `tag.dict`" }
 }
-String<num: Number> {
-    to_s {; "number: `structure.num`" }
+String\<num: Number> {
+    to_s {; "number: `tag.num`" }
 }
 
-String<{x=1}>().to_s()   # "dict: {x: 1}"
-String<5>().to_s()       # "number: 5"
+String\<{x=1}>().to_s()   # "dict: {x: 1}"
+String\<5>().to_s()       # "number: 5"
 
 Thing := <String, Number>   # anonymous struct -- .name is nil
-n := Named<String, Number>
+n := Named<String, Number>  # bare <...>, no `\` -- Named is undeclared, so this builds a plain named struct instead
 n.name                      # 'Named'
 ```
 
 ## Enums (not finalized — don't rely on yet)
 
 ```lost
-Task_Type :: {
+Task_Type [
 	TODO
 	BUG,
 	DONE: Priority             # type-annotated -- still Symbol-valued, annotation is metadata only
 	CANCELLED: Priority = 99   # type-annotated with an explicit value
 	ARCHIVED := 'archived'     # self-declared value, no annotation
-}
+]
 
 Task_Type.TODO      # :TODO
 Task_Type.keys      # [TODO, BUG, DONE, CANCELLED, ARCHIVED]
 Task_Type.count     # 5
 ```
 
-Enums are syntactically present but not finalized: the forced type (`Task_Type :: Number { ... }`) and each member's `: Type` annotation are parsed and stored, but not enforced — nothing raises if a value doesn't match its declared type. Don't rely on Enum type-checking yet.
+Enums are syntactically present but not finalized: each member's `: Type` annotation is parsed and stored, but not enforced — nothing raises if a value doesn't match its declared type. The older forced-type spelling (`TYPE_IDENT :: Type { ... }`) no longer exists. Don't rely on Enum type-checking yet.
 
 ## Shorthand Nil-Initialization
 

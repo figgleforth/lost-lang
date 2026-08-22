@@ -66,7 +66,7 @@ Two files, independently optional — pure-Lost types skip #2, rare Ruby-only ty
 
 1. `Interpreter#find_ruby_class_for_type(type)` walks `type.types` (most-derived first), returns the first Ruby constant `Lost::#{type_name}` that's a `Class < Lost::Instance`.
 2. `Interpreter#build_instance_of_type(type, expr)` calls #1: found → `ruby_class.new`; not found → `Lost::Instance.new(type.name)`.
-3. Either way: `instance.enclosing_scope = type`, `.structure` bound if any, then the type's own Lost-level body runs on it.
+3. Either way: `instance.enclosing_scope = type`, `.tag` bound if any, then the type's own Lost-level body runs on it.
 4. This is automatic — no manual registration call for the common case.
 5. One manual hook exists: `Interpreter#link_instance_to_type(instance, type_name)`, used only by intrinsics built directly in Ruby (numbers, bools) that skip `build_instance_of_type` entirely — looks up `type_name` in the global scope, sets `instance.enclosing_scope`.
 

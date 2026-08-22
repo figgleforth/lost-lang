@@ -11,6 +11,7 @@ module Lost
 			@custom_circumfix = ::Set.new
 			@input            = input
 			@i                = 0 # index of current lexeme
+			@struct_nesting_depth = 0 # how many `<...>` structs #parse_struct is currently inside of -- see #split_glued_close_angles!
 		end
 
 		def input= value
@@ -150,10 +151,10 @@ module Lost
 			end
 		end
 
-		# `Abc<Number>` and an ordinary `<` comparison that just happens to start with a capitalized identifier (`X < Y`) are indistinguishable by lookahead alone -- rather than trying to enumerate every legitimate statement-ending token a struct's own member values could contain (`,` inside a member list is fine, but so is a `(`/`)`/`[`/`{}` nested inside one member's own default value), just attempt the real parse and see what happens. Saves the token position first; a syntax error anywhere in the attempt (ran out of tokens hunting for a `>` that was never coming, or any other `Parser#eat` mismatch) rewinds back to it and reports "not a structured type reference" instead, so the caller falls through to ordinary expression parsing (`X < Y` as a comparison).
-		def try_parse_type_decl
+		# `Ident <...>` and an ordinary `<` comparison that just happens to start with a capitalized identifier (`X < Y`) are indistinguishable by lookahead alone -- rather than trying to enumerate every legitimate statement-ending token a struct's own member values could contain (`,` inside a member list is fine, but so is a `(`/`)`/`[`/`{}` nested inside one member's own default value), just attempt the real parse and see what happens. Saves the token position first; a syntax error anywhere in the attempt (ran out of tokens hunting for a `>` that was never coming, or any other `Parser#eat` mismatch) rewinds back to it, so the caller falls through to ordinary expression parsing (`X < Y` as a comparison) instead.
+		def try_parse_struct
 			saved_i = @i
-			parse_type_decl
+			parse_struct
 		rescue StandardError
 			@i = saved_i
 			nil
@@ -275,30 +276,27 @@ module Lost
 			copy_location it, start
 		end
 
+		# TYPE_IDENT [
+		#
+		#   TYPE_IDENT              # gets its own unique value
+		#   TYPE_IDENT,             # with comma
+		#   TYPE_IDENT: TYPE_IDENT
+		#   TYPE_IDENT := EXPR
+		#   TYPE_IDENT: TYPE_IDENT = EXPR
+		# ]
 		def parse_enum_expr
-			# TYPE_IDENT :: (OPTIONAL_FORCED_TYPE_FOR_CONSTANTS) {
-			#
-			#   TYPE_IDENT              # gets its own unique value
-			#   TYPE_IDENT,             # with comma
-			#   TYPE_IDENT: TYPE_IDENT
-			#   TYPE_IDENT := EXPR
-			#   TYPE_IDENT: TYPE_IDENT = EXPR
-			# }
-
-			# TYPE_IDENT :: (OPTIONAL_FORCED_TYPE_FOR_CONSTANTS) {
+			# TYPE_IDENT [
 			expr             = Lost::Enum_Expr.new
 			expr.expressions = []
 			expr.name        = eat TYPE_IDENTIFIER
-			eat '::'
-			expr.type = eat TYPE_IDENTIFIER if curr? TYPE_IDENTIFIER
-			eat '{'
+			eat '['
 
-			#   TYPE_IDENT :: (TYPE_IDENT) { ... }
-			until curr? '}'
-				reduce_newlines # has to run before the nested-enum lookahead below, not just inside the else -- a member on its own line (the normal case) starts with a leading newline still sitting in curr, so `curr? TYPE_IDENTIFIER, '::'` would never see past it to recognize a nested enum
-				break if curr? '}' # reduce_newlines just now may have consumed the last thing standing before the closing '}' -- without re-checking here, the loop barrels on into parsing a phantom next member starting at '}' itself (an empty-but-newline-containing body, `My_Enum :: {\n}`, was still broken without this)
+			#   TYPE_IDENT [ ... ]
+			until curr? ']'
+				reduce_newlines
+				break if curr? ']'
 
-				item = if curr? TYPE_IDENTIFIER, '::'
+				item = if curr? TYPE_IDENTIFIER, '['
 					parse_enum_expr
 				else
 					#   TYPE_IDENT              # gets its own unique value
@@ -338,7 +336,7 @@ module Lost
 
 				expr.expressions << item
 			end
-			eat '}'
+			eat ']'
 			expr
 		end
 
@@ -384,7 +382,7 @@ module Lost
 					end
 				end
 
-				if curr?(:Identifier) || curr?(:IDENTIFIER)
+				if curr? TYPE_IDENTIFIER
 					# Bare type, no name — a real function param always starts with a lowercase identifier, so a bare Capitalized token here can only mean this is a signature-literal's param list, e.g. `{Number, Number -> Number;}`.
 					param.type   = eat
 					param.lexeme = param.type
@@ -399,9 +397,8 @@ module Lost
 
 					if curr?(':', TYPE_IDENTIFIER)
 						eat ':'
-						param.type             = eat(TYPE_IDENTIFIER)
-						param.type_struct      = parse_struct # returns nil if none was found, e.g. `thing: Abc<Number>` -- see #parse_identifier_expr, same shape
-						param.type_struct.name = param.type.value if param.type_struct
+						param.type        = parse_identifier_expr # picks up a trailing `\<...>`/`\Name` itself, see #parse_identifier_expr
+						param.type_struct = param.type.type_struct
 					elsif curr?(':', '<')
 						eat ':'
 						param.type_struct = parse_struct # bare struct annotation, e.g. `right: <name: String, type: Any, value: Any>` -- structural rather than nominal, see #check_struct_type_contract
@@ -451,48 +448,72 @@ module Lost
 			copy_location func, start
 		end
 
+		# `>>`/`>>>`/etc are legitimate operators elsewhere (right-shift, `>>=`), but two or more `<...>` structs closing back-to-back (`Array\<String>>`) glue into that same token at the lexer level -- the same ambiguity C++ has with nested template brackets. Splits the current lexeme in place into that many separate `>` tokens whenever it's a pure run of `>` characters, so each nested #parse_struct call can close with its own ordinary `eat '>'`. A no-op on anything else (a lone `>`, or a real `>>=`/`>>` that isn't closing a struct at all), so callers can call it defensively before every `>` check without needing to know whether gluing actually happened here.
+		def split_glued_close_angles!
+			return unless curr_lexeme && curr_lexeme.value.is_a?(::String) && curr_lexeme.value.length > 1 && curr_lexeme.value.chars.all? { |char| char == '>' }
+
+			glued = curr_lexeme
+			closes = glued.value.chars.each_index.map do |index|
+				closer    = glued.dup
+				closer.value = '>'
+				closer.c0    = glued.c0 + index
+				closer.c1    = closer.c0
+				closer
+			end
+
+			input[i, 1] = closes
+		end
+
 		def parse_struct
-			return nil unless curr? '<'
+			# TYPE_IDENTIFIER <...>
 			start = curr_lexeme
 			Lost::Struct_Expr.new.tap do |it|
+				it.name   = eat if curr? TYPE_IDENTIFIER
 				it.lexeme = Lost::Lexeme.new :struct, '<>'
 				it.types  = []
 				it.names  = []
 				eat '<'
-				until curr? '>'
-					reduce_newlines # a member on its own line otherwise gets its leading newline parsed as its own bare, unnamed element (nil) -- same bug class as #parse_enum_expr's missing reduce_newlines had
-					break if curr? '>' # reduce_newlines just now may have consumed the last thing standing between the previous element and the closing '>' -- without re-checking here, the loop barrels on into parsing a phantom next element starting at '>' itself
+				@struct_nesting_depth += 1
+				begin
+					loop do
+						split_glued_close_angles!
+						break if curr? '>'
 
-					# Each element is a full expression (`Number`, `4815`, `1+2+3/123`, `this`, ...). A named element (`some_string: String`) parses as an Identifier_Expr with #type set, via #parse_identifier_expr's existing `: Type` annotation handling.
-					# A bare identifier directly followed by `,` (`<String, Number>`) is special-cased here rather than going through #parse_expression, because #begin_expression would otherwise mistake it for the nil-init idiom (`ident,` => `ident = ident or nil`), which is unrelated to struct members and only coincidentally shares the same shape.
-					element = if curr?(ANY_IDENTIFIER, ',')
-						parse_identifier_expr
-					else
-						parse_expression(precedence_for('<'))
+						reduce_newlines
+						split_glued_close_angles!
+						break if curr? '>'
+
+						element = if curr?(ANY_IDENTIFIER, ',')
+							parse_identifier_expr
+						else
+							parse_expression(precedence_for('<'))
+						end
+
+						# A named member can carry a default, either typed (`dict: Dictionary = {}`) or bare (`id := 4815`, type inferred from the default at interpret time -- see #interp_struct). Both `=` and `:=` bind looser than `precedence_for('<')`, so #parse_expression above already stopped right before either, leaving them for us here.
+						if curr? ':='
+							eat ':='
+							element.member_default = parse_expression(precedence_for('<'))
+						elsif element.is_a?(Lost::Identifier_Expr) && element.type && curr?('=')
+							eat '='
+							element.member_default = parse_expression(precedence_for('<'))
+						end
+
+						# A `:` still sitting here means #parse_identifier_expr's own `: Type` lookahead (above, inside `element`) saw a `:` but declined to consume it, because what followed wasn't a valid type -- almost always a lowercase value, as if `:` worked like a Dictionary's `key: value`. It doesn't in a struct member list, so raise here rather than silently leaving the `:` to be reparsed as an unrelated `:symbol` prefix literal starting a whole new element next iteration (commas are optional between struct members, same as any other list).
+						raise Lost::Invalid_Struct_Member_Annotation.new(curr_lexeme) if curr? ':'
+
+						it.types << element
+						it.names << if element.is_a?(Lost::Identifier_Expr) && (element.type || element.member_default)
+							element.value
+						else
+							nil
+						end
+
+						eat if curr? ','
 					end
-
-					# A named member can carry a default, either typed (`dict: Dictionary = {}`) or bare (`id := 4815`, type inferred from the default at interpret time -- see #interp_struct). Both `=` and `:=` bind looser than `precedence_for('<')`, so #parse_expression above already stopped right before either, leaving them for us here.
-					if curr? ':='
-						eat ':='
-						element.member_default = parse_expression(precedence_for('<'))
-					elsif element.is_a?(Lost::Identifier_Expr) && element.type && curr?('=')
-						eat '='
-						element.member_default = parse_expression(precedence_for('<'))
-					end
-
-					# A `:` still sitting here means #parse_identifier_expr's own `: Type` lookahead (above, inside `element`) saw a `:` but declined to consume it, because what followed wasn't a valid type -- almost always a lowercase value, as if `:` worked like a Dictionary's `key: value`. It doesn't in a struct member list, so raise here rather than silently leaving the `:` to be reparsed as an unrelated `:symbol` prefix literal starting a whole new element next iteration (commas are optional between struct members, same as any other list).
-					raise Lost::Invalid_Struct_Member_Annotation.new(curr_lexeme) if curr? ':'
-
-					it.types << element
-					it.names << if element.is_a?(Lost::Identifier_Expr) && (element.type || element.member_default)
-						element.value
-					else
-						nil
-					end
-
-					eat if curr? ','
+					closing = eat '>'
+				ensure
+					@struct_nesting_depth -= 1
 				end
-				closing = eat '>'
 
 				# Manually tracking location insead of using `#copy_location`, because I want it to span all of "<....>
 				it.c0          = start.c0
@@ -523,8 +544,14 @@ module Lost
 
 			Lost.assert is_type || is_const, "Type names can only be Capitalized or UPPERCASE" # todo; proper error
 
-			it.structure      = parse_struct # returns nil if none was found
-			it.structure.name = it.name if it.structure
+			if curr?(TAG_OPERATOR, '<') and eat(TAG_OPERATOR)
+				# Inline anonymous struct literal (`Array\<String>`) -- reuses #parse_struct verbatim.
+				it.tag      = parse_struct # returns nil if none was found
+				it.tag.name = it.name if it.tag
+			elsif curr?(TAG_OPERATOR, TYPE_IDENTIFIER) and eat(TAG_OPERATOR)
+				# Named reference, no `<...>` (`Array\Task_Schema`) -- resolved at interpret time.
+				it.tag = parse_identifier_expr
+			end
 
 			# When no body and no composition chain follow e.g.
 			#
@@ -533,7 +560,7 @@ module Lost
 			#   Abc<Number>()
 			#   Abc<4815>()
 			#
-			# Then this is a reference to an existing type (optionally structured), not a declaration. `it.expressions` stays nil here so callers (like #interp_type) can tell this apart from a real, even if empty, `{}` body. Whatever follows (like a trailing `(...)` call) is picked up in #complete_expression, same as any other primary expression.
+			# Then this is a reference to an existing type (optionally tagged), not a declaration. `it.expressions` stays nil here so callers (like #interp_type) can tell this apart from a real, even if empty, `{}` body. Whatever follows (like a trailing `(...)` call) is picked up in #complete_expression, same as any other primary expression.
 			unless curr?('{') || curr?(TYPE_COMPOSITION_OPERATORS, ANY_IDENTIFIER)
 				return copy_location it, start
 			end
@@ -611,12 +638,11 @@ module Lost
 				ident = infix
 			end
 
-			# A composed operand can itself be a structured type reference (`| Other<'users'>`), not just a bare type reference. Wrap it into a Type_Expr (mirroring #parse_type_decl's own reference form) so #interp_composition resolves it through the normal structured-type matching. Without this the trailing `<...>` is left unconsumed and #parse_type_decl's `until curr? '{'` loop spins forever re-checking the same token.
-			if curr?('<') && ident.is_a?(Lost::Identifier_Expr)
-				type_ref                = Lost::Type_Expr.new
-				type_ref.name           = ident.value
-				type_ref.structure      = parse_struct
-				type_ref.structure.name = type_ref.name if type_ref.structure
+			# A composed operand can itself be a tagged reference (`| Other\<'users'>`) -- #parse_identifier_expr already consumed it onto `.type_struct`; repackage into a Type_Expr so #interp_composition resolves it properly instead of dropping it.
+			if ident.is_a?(Lost::Identifier_Expr) && ident.type_struct
+				type_ref      = Lost::Type_Expr.new
+				type_ref.name = ident.value
+				type_ref.tag  = ident.type_struct
 				copy_location type_ref, ident
 				ident = type_ref
 			end
@@ -647,13 +673,20 @@ module Lost
 			expr.lexeme  = eat
 			expr.privacy = Lost.privacy_of_ident expr.value
 
-			# 7/20/25, I'm storing the type as well, even though I haven't written any code to support types yet.
+			# A type reference can carry its own trailing `\<...>`/`\Name` (`x: Abc\<Number>`) -- a recursive call here never goes through #parse_type_decl, so it's handled directly.
+			if TYPE_IDENTIFIER.include?(expr.lexeme.type) && curr?(TAG_OPERATOR, '<')
+				eat TAG_OPERATOR
+				expr.type_struct      = parse_struct
+				expr.type_struct.name = expr.value if expr.type_struct
+			elsif TYPE_IDENTIFIER.include?(expr.lexeme.type) && curr?(TAG_OPERATOR, TYPE_IDENTIFIER)
+				eat TAG_OPERATOR
+				expr.type_struct = parse_identifier_expr # named reference, e.g. `Abc\Task_Schema`
+			end
 
-			if curr?(':', :Identifier)
+			if curr?(':', TYPE_IDENTIFIER)
 				eat ':'
-				expr.type             = eat(:Identifier)
-				expr.type_struct      = parse_struct # returns nil if none was found
-				expr.type_struct.name = expr.type.value if expr.type_struct
+				expr.type        = parse_identifier_expr
+				expr.type_struct = expr.type.type_struct
 			elsif curr?(':', '<')
 				eat ':'
 				expr.type_struct = parse_struct # bare struct annotation, e.g. `thing: <String, Number>`
@@ -852,24 +885,18 @@ module Lost
 			elsif peek_contains?(Lost::FUNCTION_DELIMITER, '}') && (curr?('{') || curr?(:identifier, '{') || curr?(:identifier, ':', '{') || curr?(SCOPE_OPERATORS, :identifier, '{') || curr?(SCOPE_OPERATORS, :identifier, ':', '{') || curr?(SELF_KEYWORDS, '.', :identifier, '{') || curr?(SELF_KEYWORDS, '.', :identifier, ':', '{'))
 				parse_func precedence
 
-			elsif curr?(TYPE_IDENTIFIER, '::', TYPE_IDENTIFIER, '{') || curr?(TYPE_IDENTIFIER, '::', '{')
+			elsif curr?(TYPE_IDENTIFIER, '[')
 				parse_enum_expr
 
+			elsif curr?(TYPE_IDENTIFIER, '<') && (structured = try_parse_struct)
+				structured
+
 			elsif curr?('<') && curr_lexeme.type == :operator && !@custom_prefix.include?('<')
-				# note; A leading `<` can never be a legitimate infix `<` so we can safely parse a struct.
-				# The `curr_lexeme.type == :operator` guard matters: `curr?('<')` matches by lexeme VALUE
-				# alone, so a string literal whose own content happens to be exactly "<" (e.g. `'<'`) used
-				# to be misparsed as the start of a struct literal too, swallowing everything after it --
-				# same bug class already fixed for prefix operators colliding with string content (see the
-				# String_Expr exclusion a bit further down in this method).
 				parse_struct
 
-			elsif curr?(:Identifier, '{') || curr?(:Identifier, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, TYPE_COMPOSITION_OPERATORS) || curr?(:IDENTIFIER, '{')
+			elsif curr?(TYPE_IDENTIFIER, '{') || curr?(TYPE_IDENTIFIER, TAG_OPERATOR, '<') || curr?(TYPE_IDENTIFIER, TAG_OPERATOR, TYPE_IDENTIFIER) || curr?(TYPE_IDENTIFIER, TYPE_COMPOSITION_OPERATORS)
+				# No trailing `{` guard needed for the named-reference form -- unlike `/`, `\` never collides with anything else in Lost, so it's unambiguous with or without a body.
 				parse_type_decl
-
-			elsif curr?(TYPE_IDENTIFIER, '<') && (structured = try_parse_type_decl)
-				# `X < Y` (X/Y capitalized variables holding comparable values, not types) looks identical up to this point to `Abc<Number>` -- #try_parse_type_decl actually attempts the real parse and rewinds on any syntax error, so a comparison that never finds a real closing `>` falls through to ordinary expression parsing below instead of running #parse_struct out of tokens hunting for one (Lost::Out_Of_Tokens).
-				structured
 
 			elsif curr?(TYPE_COMPOSITION_OPERATORS) && peek.is(:Identifier)
 				parse_composition_expr
@@ -1070,6 +1097,9 @@ module Lost
 					return complete_expression it, precedence
 				else
 					while (INFIX.include?(curr_lexeme.value) || @custom_infix.include?(curr_lexeme.value)) && curr?(:operator)
+						# A `>>`/`>>>`/etc token might really be two or more `<...>` structs closing back-to-back (`Array\<String>>`), glued at the lexer level -- split it into individual `>` tokens whenever a lone `>` would stop this very loop anyway (i.e. we're already at or below `>`'s own precedence) AND we're actually somewhere inside a `<...>` struct right now. Both conditions matter: the precedence check alone would also misfire on an ordinary top-level `8 >> 2 >> 1` (that recurses into its own right-hand side at `>>`'s own high precedence, satisfying the precedence check on its own); gating on `@struct_nesting_depth` keeps a genuine `>>`/`>>=` completely unaffected everywhere outside a struct.
+						split_glued_close_angles! if @struct_nesting_depth > 0 && curr_lexeme.value.length > 1 && curr_lexeme.value.chars.all? { |char| char == '>' } && precedence_for('>') <= precedence
+
 						# It's very important that the curr?(:operator) check here remains because otherwise it breaks Lost::Call_Expr when the receiver is an Lost::Infix_Expr.
 						curr_operator      = curr_lexeme.value
 						curr_operator_prec = precedence_for curr_operator

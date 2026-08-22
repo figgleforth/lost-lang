@@ -6,7 +6,7 @@ module Lost
 			@input  = input
 			@scopes = [new_scope_frame]
 
-			# Per-declared-type member/method registry, keyed by qualified type name ("Web_Application", "Array<Web_Server>" for a structured type
+			# Per-declared-type member/method registry, keyed by qualified type name ("Web_Application", "Array\Web_Server" for a tagged type
 			@type_info  = Hash.new { |h, k| h[k] = { members: {}, methods: {} } }
 			@type_stack = [] # qualified type names currently being walked, innermost last
 		end
@@ -28,7 +28,7 @@ module Lost
 			end
 		end
 
-		# Resolves `receiver`'s own static type, then looks up `member` as a declared member on that type. Returns nil the moment any link in the chain isn't statically known (an untyped local, a plain unstructured bare type, etc), same "skip rather than guess" philosophy as the rest of this checker.
+		# Resolves `receiver`'s own static type, then looks up `member` as a declared member on that type. Returns nil the moment any link in the chain isn't statically known (an untyped local, a plain untagged bare type, etc), same "skip rather than guess" philosophy as the rest of this checker.
 		def infer_dot_type expr
 			return nil unless expr.operator&.value == '.'
 			return nil unless expr.right.is_a? Lost::Identifier_Expr
@@ -134,9 +134,12 @@ module Lost
 
 		def qualified_type_name expr
 			return nil unless expr.is_a? Lost::Type_Expr
-			return expr.name unless expr.structure
+			return expr.name unless expr.tag
 
-			member_names = expr.structure.types.map { |t| t.value if t.is_a? Lost::Identifier_Expr }
+			# A named reference (`Abc\Task_Schema`) has no member list to render -- just use its own name.
+			return "#{expr.name}#{Lost::TAG_OPERATOR}#{expr.tag.value}" unless expr.tag.is_a? Lost::Struct_Expr
+
+			member_names = expr.tag.types.map { |t| t.value if t.is_a? Lost::Identifier_Expr }
 			return nil if member_names.any?(&:nil?)
 
 			"#{expr.name}<#{member_names.join(',')}>"

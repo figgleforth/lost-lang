@@ -33,16 +33,29 @@ module Lost
 		end
 	end
 
-	class Undeclared_Type_Structure < Error
-		# When a structured-type reference (`Abc<Number>`) has no declared variant matching its structure (`Abc<Number> {}`)
-		# @expression: Lost::Type_Expr
+	class Undeclared_Tagged_Type < Error
+		# No declared variant matches this structure -- also raised for a Bare Named Struct redeclared with a different shape. `expression` is a Type_Expr or a bare Struct_Expr (`.name` a raw Lexeme then).
+		# @expression: Lost::Type_Expr | Lost::Struct_Expr
 
 		def detail_message
-			name                     = expression.name
-			structure                = expression.structure.to_s
+			if expression.is_a? Lost::Struct_Expr
+				name      = expression.name.is_a?(Lost::Lexeme) ? expression.name.value : expression.name
+				structure = expression.to_s
+			else
+				name      = expression.name
+				structure = expression.tag.to_s
+			end
+
 			expected_structured_type = "#{name}#{structure} {}"
-			existing_type            = "#{name} {}"
 			"#{Ascii.bold name} structured with #{Ascii.bold structure} not found:\n\n\t#{Ascii.bold expected_structured_type}"
+		end
+	end
+
+	# A named reference (`Abc\Task_Schema`) resolved to something other than a Struct or Type -- neither form has a valid target.
+	# @expression: Lost::Type_Expr
+	class Tag_Reference_Must_Be_Type_Or_Struct < Error
+		def detail_message
+			"`#{Ascii.bold expression.name}#{Lost::TAG_OPERATOR}#{expression.tag.value}` -- the right-hand side of `#{Lost::TAG_OPERATOR}` must resolve to a Struct or a Type, not a plain value."
 		end
 	end
 

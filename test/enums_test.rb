@@ -14,7 +14,7 @@ require_relative 'base_test'
 class Enums_Test < Base_Test
 	def test_empty_enum
 		out = Lost.parse <<~CODE
-		    My_Enum :: {}
+		    My_Enum []
 		CODE
 		assert_kind_of Lost::Enum_Expr, out.first
 		refute out.first.type
@@ -24,20 +24,19 @@ class Enums_Test < Base_Test
 
 	def test_enum_with_forced_type
 		out = Lost.parse <<~CODE
-		    My_Enum :: Number {}
+		    My_Enum []
 		CODE
 		assert_kind_of Lost::Enum_Expr, out.first
 		assert_equal 'My_Enum', out.first.name.value
-		assert_equal 'Number', out.first.type.value
 		assert_empty out.first.expressions
 	end
 
 	# TYPE_IDENT # gets its own unique value
 	def test_bare_member_gets_its_own_unique_value
 		out = Lost.parse <<~CODE
-		    My_Enum :: {
+		    My_Enum [
 		    	ABC
-		    }
+		    ]
 		CODE
 		member = out.first.expressions.first
 		assert_kind_of Lost::Nil_Init_Expr, member
@@ -47,9 +46,9 @@ class Enums_Test < Base_Test
 	# TYPE_IDENT, # with comma -- same shape as the bare form above, comma is just a separator
 	def test_member_with_trailing_comma
 		out = Lost.parse <<~CODE
-		    My_Enum :: {
+		    My_Enum [
 		    	ABC,
-		    }
+		    ]
 		CODE
 		member = out.first.expressions.first
 		assert_kind_of Lost::Nil_Init_Expr, member
@@ -59,9 +58,9 @@ class Enums_Test < Base_Test
 	# TYPE_IDENT: TYPE_IDENT
 	def test_member_with_type_annotation_only
 		out = Lost.parse <<~CODE
-		    My_Enum :: {
+		    My_Enum [
 		    	ABC: Some_Type
-		    }
+		    ]
 		CODE
 		member = out.first.expressions.first
 		assert_kind_of Lost::Identifier_Expr, member
@@ -72,9 +71,9 @@ class Enums_Test < Base_Test
 	# TYPE_IDENT := EXPR
 	def test_member_with_self_declared_value
 		out = Lost.parse <<~CODE
-		    My_Enum :: {
+		    My_Enum [
 		    	ABC := 1
-		    }
+		    ]
 		CODE
 		member = out.first.expressions.first
 		assert_kind_of Lost::Infix_Expr, member
@@ -87,9 +86,9 @@ class Enums_Test < Base_Test
 	# TYPE_IDENT: TYPE_IDENT = EXPR
 	def test_member_with_type_annotation_and_value
 		out = Lost.parse <<~CODE
-		    My_Enum :: {
+		    My_Enum [
 		    	ABC: Some_Type = 1
-		    }
+		    ]
 		CODE
 		member = out.first.expressions.first
 		assert_kind_of Lost::Infix_Expr, member
@@ -101,12 +100,12 @@ class Enums_Test < Base_Test
 		assert_equal 1, member.right.value
 	end
 
-	# A member can be another enum declaration, nested (recursive TYPE_IDENT :: { ... })
+	# A member can be another enum declaration, nested (recursive TYPE_IDENT [ ... ])
 	def test_nested_enum_member
 		out = Lost.parse <<~CODE
-		    My_Enum :: {
-		    	Nested :: {}
-		    }
+		    My_Enum [
+		    	Nested []
+		    ]
 		CODE
 		member = out.first.expressions.first
 		assert_kind_of Lost::Enum_Expr, member
@@ -116,10 +115,10 @@ class Enums_Test < Base_Test
 
 	def test_multiple_bare_members
 		out = Lost.parse <<~CODE
-		    My_Enum :: {
+		    My_Enum [
 		    	ABC
 		    	DEF
-		    }
+		    ]
 		CODE
 		assert_equal 2, out.first.expressions.count
 		assert_equal 'ABC', out.first.expressions[0].left.value
@@ -129,7 +128,7 @@ class Enums_Test < Base_Test
 	# `Lost::Enum.new` (no name argument) used to bake "Instance" into @declarations['name'] at construction time; a later `.name =` (a plain Ruby attr write) never touched it, so an enum's own name was permanently wrong at the Lost level.
 	def test_enum_reports_its_own_name_not_the_ruby_default_regression
 		out = Lost.interp <<~CODE
-		    Task_Type :: { TODO, BUG }
+		    Task_Type [ TODO, BUG ]
 		    Task_Type.name
 		CODE
 		assert_equal 'Task_Type', out
@@ -139,7 +138,7 @@ class Enums_Test < Base_Test
 	def test_struct_member_typed_with_an_enum_displays_the_real_enum_name_regression
 		out = Lost.interp <<~CODE
 		    @load 'lost/struct.tape'
-		    Task_Type :: { TODO, BUG }
+		    Task_Type [ TODO, BUG ]
 		    s := <kind: Task_Type = Task_Type.TODO>
 		    s.to_s()
 		CODE

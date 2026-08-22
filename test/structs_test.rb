@@ -16,30 +16,30 @@ class Structs_Test < Base_Test
 	end
 
 	def test_parses_type_declaration_with_struct
-		out = Lost.parse 'Array<String> {}'
+		out = Lost.parse 'Array\\<String> {}'
 		assert_kind_of Lost::Type_Expr, out.first
 		assert_equal 'Array', out.first.name
-		assert_kind_of Lost::Struct_Expr, out.first.structure
-		assert_equal %w(String), out.first.structure.types.map(&:value)
+		assert_kind_of Lost::Struct_Expr, out.first.tag
+		assert_equal %w(String), out.first.tag.types.map(&:value)
 	end
 
 	def test_parses_type_declaration_with_multiple_members
-		out = Lost.parse 'Dictionary<String, Number> {}'
-		assert_equal %w(String Number), out.first.structure.types.map(&:value)
+		out = Lost.parse 'Dictionary\\<String, Number> {}'
+		assert_equal %w(String Number), out.first.tag.types.map(&:value)
 	end
 
 	def test_type_declaration_without_struct_has_nil_struct
 		out = Lost.parse 'String {}'
-		assert_nil out.first.structure
+		assert_nil out.first.tag
 	end
 
 	def test_struct_members_can_be_arbitrary_expressions
-		out = Lost.parse 'Abc<1+2+3/123>'
-		assert_kind_of Lost::Infix_Expr, out.first.structure.types.first
+		out = Lost.parse 'Abc\\<1+2+3/123>'
+		assert_kind_of Lost::Infix_Expr, out.first.tag.types.first
 
 		result = Lost.interp "Abc {}
-		Abc<Number> {}
-		Abc<1+2+3/123>.structure.types.first()"
+		Abc\\<Number> {}
+		Abc\\<1+2+3/123>.tag.types.first()"
 		assert_equal 3, result
 	end
 
@@ -66,7 +66,7 @@ class Structs_Test < Base_Test
 
 	def test_type_with_struct_still_composes_normally
 		refute_raises do
-			out = Lost.interp 'Array<String> {}'
+			out = Lost.interp 'Array\\<String> {}'
 			assert_kind_of Lost::Type, out
 			assert_equal 'Array', out.name
 		end
@@ -74,7 +74,7 @@ class Structs_Test < Base_Test
 
 	def test_composing_builtin_type_with_struct_does_not_break_it
 		out = Lost.interp <<~CODE
-		    String<Dictionary> {}
+		    String\\<Dictionary> {}
 		    s := String('hello')
 		    s.upcase()
 		CODE
@@ -97,7 +97,7 @@ class Structs_Test < Base_Test
 	end
 
 	def test_annotation_form_captures_struct
-		out = Lost.parse 'x: Abc<Number>'
+		out = Lost.parse 'x: Abc\\<Number>'
 		assert_kind_of Lost::Struct_Expr, out.first.type_struct
 		assert_equal %w(Number), out.first.type_struct.types.map(&:value)
 	end
@@ -110,11 +110,11 @@ class Structs_Test < Base_Test
 
 	def test_type_reference_with_struct_does_not_mutate_shared_type
 		out = Lost.interp <<~CODE
-		    Abc<Number> {}
-		    Abc<String> {}
-		    x := Abc<Number>
-		    y := Abc<String>
-		    (x.structure.types.first(), y.structure.types.first())
+		    Abc\\<Number> {}
+		    Abc\\<String> {}
+		    x := Abc\\<Number>
+		    y := Abc\\<String>
+		    (x.tag.types.first(), y.tag.types.first())
 		CODE
 		assert_equal 'Number', out.values[0].name
 		assert_equal 'String', out.values[1].name
@@ -126,8 +126,8 @@ class Structs_Test < Base_Test
 		    	val,
 		    	new { v; self.val = v }
 		    }
-		    Abc<Number> {}
-		    Y := Abc<Number>
+		    Abc\\<Number> {}
+		    Y := Abc\\<Number>
 		    Y(9).val
 		CODE
 		assert_equal 9, out
@@ -139,8 +139,8 @@ class Structs_Test < Base_Test
 		    	val,
 		    	new { v; self.val = v }
 		    }
-		    Abc<Number> {}
-		    y := Abc<Number>
+		    Abc\\<Number> {}
+		    y := Abc\\<Number>
 		    z := y
 		    z(5).val
 		CODE
@@ -149,12 +149,12 @@ class Structs_Test < Base_Test
 
 	def test_struct_bound_onto_instance_before_new_runs
 		out = Lost.interp <<~CODE
-		    Abc<Number> {
+		    Abc\\<Number> {
 		    	new {;}
 		    }
-		    z := Abc<4815>
+		    z := Abc\\<4815>
 		    zz := z()
-		    zz.structure.types.first()
+		    zz.tag.types.first()
 		CODE
 		assert_equal 4815, out
 	end
@@ -165,46 +165,46 @@ class Structs_Test < Base_Test
 		    	val,
 		    	new { v := -1; self.val = v }
 		    }
-		    Abc<Number> {}
-		    zz := Abc<4815>()
+		    Abc\\<Number> {}
+		    zz := Abc\\<4815>()
 		    zz.val
 		CODE
 		assert_equal(-1, out)
 	end
 
 	def test_named_member_schema_parses_and_resolves_declared_type
-		out = Lost.parse 'Type<some_string: String, num: Number> {}'
-		assert_equal ['some_string', 'num'], out.first.structure.names
+		out = Lost.parse 'Type\\<some_string: String, num: Number> {}'
+		assert_equal ['some_string', 'num'], out.first.tag.names
 
-		type = Lost.interp 'Type<some_string: String, num: Number> {}'
-		assert_equal 'String', type.structure_declaration.declarations['some_string'].name
-		assert_equal 'Number', type.structure_declaration.declarations['num'].name
+		type = Lost.interp 'Type\\<some_string: String, num: Number> {}'
+		assert_equal 'String', type.tag_declaration.declarations['some_string'].name
+		assert_equal 'Number', type.tag_declaration.declarations['num'].name
 	end
 
-	def test_structure_declaration_captures_default_values
-		type = Lost.interp 'Widget<indent: Number = 2> {}'
-		assert_equal ['indent'], type.structure_declaration.names
-		assert_equal [2], type.structure_declaration.values
+	def test_tag_declaration_captures_default_values
+		type = Lost.interp 'Widget\\<indent: Number = 2> {}'
+		assert_equal ['indent'], type.tag_declaration.names
+		assert_equal [2], type.tag_declaration.values
 	end
 
-	def test_unstructured_declaration_has_no_structure_declaration
+	def test_untagged_declaration_has_no_tag_declaration
 		type = Lost.interp 'Plain { x, }'
-		assert_nil type.structure_declaration
+		assert_nil type.tag_declaration
 	end
 
-	def test_structure_declaration_is_independent_per_variant
+	def test_tag_declaration_is_independent_per_variant
 		out = Lost.interp <<~CODE
-		    dict_variant := String<dict: Dictionary> {}
-		    num_variant := String<num: Number> {}
+		    dict_variant := String\\<dict: Dictionary> {}
+		    num_variant := String\\<num: Number> {}
 		    (dict_variant, num_variant)
 		CODE
 		dict_variant, num_variant = out.values
 
-		assert_equal ['dict'], dict_variant.structure_declaration.names
-		assert_equal 'Dictionary', dict_variant.structure_declaration.type_objects.first.name
+		assert_equal ['dict'], dict_variant.tag_declaration.names
+		assert_equal 'Dictionary', dict_variant.tag_declaration.type_objects.first.name
 
-		assert_equal ['num'], num_variant.structure_declaration.names
-		assert_equal 'Number', num_variant.structure_declaration.type_objects.first.name
+		assert_equal ['num'], num_variant.tag_declaration.names
+		assert_equal 'Number', num_variant.tag_declaration.type_objects.first.name
 	end
 
 	def test_structure_declaration_equal_compares_names_and_types
@@ -220,7 +220,7 @@ class Structs_Test < Base_Test
 
 	# Reference matching (`String<{x=1}>()`) never supplies member names, so it only ever compares
 	# against `type_names` -- names exist purely to keep declarations distinct from each other.
-	def test_structure_satisfied_by_candidates_ignores_names
+	def test_tag_satisfied_by_candidates_ignores_names
 		declared = Lost::Struct.new(['dict'], ['Dictionary'], [nil])
 
 		assert declared.satisfied_by_candidates?([['Dictionary']])
@@ -229,43 +229,43 @@ class Structs_Test < Base_Test
 
 	def test_differently_named_same_typed_members_are_distinct_variants_regression
 		out = Lost.interp <<~CODE
-		    String<dict: Dictionary> { to_s {; "dict-named" } }
-		    String<other: Dictionary> { to_s {; "other-named" } }
+		    String\\<dict: Dictionary> { to_s {; "dict-named" } }
+		    String\\<other: Dictionary> { to_s {; "other-named" } }
 
-		    a := String<{x=1}>()
+		    a := String\\<{x=1}>()
 		    a.to_s()
 		CODE
 		assert_equal 'dict-named', out
 
 		out = Lost.interp <<~CODE
-		    String<dict: Dictionary> { to_s {; "dict-named" } }
-		    String<other: Dictionary> { to_s {; "other-named" } }
+		    String\\<dict: Dictionary> { to_s {; "dict-named" } }
+		    String\\<other: Dictionary> { to_s {; "other-named" } }
 
-		    a := String<other := {x=1}>()
+		    a := String\\<other := {x=1}>()
 		    a.to_s()
 		CODE
 		assert_equal 'other-named', out
 
 		out = Lost.interp <<~CODE
-		    String<dict: Dictionary> { to_s {; "dict-named" } }
-		    String<other: Dictionary> { to_s {; "other-named" } }
+		    String\\<dict: Dictionary> { to_s {; "dict-named" } }
+		    String\\<other: Dictionary> { to_s {; "other-named" } }
 
-		    a := String<dict := {x=1}>()
+		    a := String\\<dict := {x=1}>()
 		    a.to_s()
 		CODE
 		assert_equal 'dict-named', out
 	end
 
 	def test_reference_to_never_declared_type_name_builds_a_bare_named_struct
-		# `Ident<...>` with a base name that's never been declared as anything at all (no bare Type, no structured variant, no alias) isn't an error -- it's a bare named struct, same shape as `<...>` but with `.name` set from the identifier. Only collides with something else declared -- a real Type with a mismatched structure, or an alias to a non-Type value -- does it still raise (see test_reference_to_mismatched_declared_structure_raises).
+		# `Ident<...>` with a base name that's never been declared as anything at all (no bare Type, no tagged variant, no alias) isn't an error -- it's a bare named struct, same shape as `<...>` but with `.name` set from the identifier. Only collides with something else declared -- a real Type with a mismatched tag, or an alias to a non-Type value -- does it still raise (see test_reference_to_mismatched_declared_tag_raises).
 		out = Lost.interp <<~CODE
-		    n := Named<Number>
+		    n := Named\\<Number>
 		    n.name
 		CODE
 		assert_equal 'Named', out
 
 		out = Lost.interp <<~CODE
-		    n := Named<Number>
+		    n := Named\\<Number>
 		    n.types.values.map({it; it.name}).join(', ')
 		CODE
 		assert_equal 'Number', out
@@ -291,7 +291,7 @@ class Structs_Test < Base_Test
 
 	# A genuinely different shape under the same name still raises, unchanged.
 	def test_redeclaring_bare_named_struct_with_a_different_shape_still_raises
-		assert_raises Lost::Undeclared_Type_Structure do
+		assert_raises Lost::Undeclared_Tagged_Type do
 			Lost.interp <<~CODE
 			    Task <id: Number>
 			    Task <id: String>
@@ -323,28 +323,28 @@ class Structs_Test < Base_Test
 		assert_equal before_members, after_members
 	end
 
-	# Unnamed members have no such identity besides position -- reordering those still counts as a different structure and raises, same as any other shape mismatch.
-	def test_redeclaring_unnamed_structured_type_with_reordered_members_still_raises
-		assert_raises Lost::Undeclared_Type_Structure do
+	# Unnamed members have no such identity besides position -- reordering those still counts as a different tag and raises, same as any other shape mismatch.
+	def test_redeclaring_unnamed_tagged_type_with_reordered_members_still_raises
+		assert_raises Lost::Undeclared_Tagged_Type do
 			Lost.interp <<~CODE
-			    Abc<Number, String> {}
-			    Abc<String, Number>
+			    Abc\\<Number, String> {}
+			    Abc\\<String, Number>
 			CODE
 		end
 	end
 
-	def test_reference_to_mismatched_declared_structure_raises
-		assert_raises Lost::Undeclared_Type_Structure do
+	def test_reference_to_mismatched_declared_tag_raises
+		assert_raises Lost::Undeclared_Tagged_Type do
 			Lost.interp <<~CODE
-			    Abc<Number> {}
-			    Abc<String>
+			    Abc\\<Number> {}
+			    Abc\\<String>
 			CODE
 		end
 	end
 
 	# Undeclared_Type_Structure's own message-rendering used to crash (NoMethodError inside Struct_Expr#to_s) when the mismatched struct had a named member with no `: Type` annotation (`done := false` -- `.type` is nil, unlike `.type.value` this code blindly read). assert_raises here would surface that NoMethodError instead of the real error if this regressed.
 	def test_mismatched_structure_error_message_renders_untyped_member_without_crashing
-		error = assert_raises Lost::Undeclared_Type_Structure do
+		error = assert_raises Lost::Undeclared_Tagged_Type do
 			Lost.interp <<~CODE
 			    Task <id: String>
 			    Task <
@@ -356,33 +356,33 @@ class Structs_Test < Base_Test
 		assert_includes error.message, 'done: false'
 	end
 
-	def test_reference_matches_structure_by_composed_type_not_just_own_name
+	def test_reference_matches_tag_by_composed_type_not_just_own_name
 		out = Lost.interp <<~CODE
 		    Flying { can_fly := true }
 		    Duck | Flying { name := 'duck' }
 
-		    String<val: Flying> {
+		    String\\<val: Flying> {
 		    	to_s {; "yes" }
 		    }
 
 		    d := Duck()
-		    String<d>().to_s()
+		    String\\<d>().to_s()
 		CODE
 		assert_equal 'yes', out
 	end
 
-	def test_structured_type_can_be_aliased_and_restructured_through_the_alias
+	def test_tagged_type_can_be_aliased_and_retagged_through_the_alias
 		out = Lost.interp <<~CODE
 		    Flying { can_fly := true }
 		    Duck | Flying { name := 'duck' }
 
-		    String<val: Flying> {
+		    String\\<val: Flying> {
 		    	to_s {; "yes" }
 		    }
 
 		    duck := Duck()
-		    Does_It_Fly := String<Flying>
-		    Does_It_Fly<duck>().to_s()
+		    Does_It_Fly := String\\<Flying>
+		    Does_It_Fly\\<duck>().to_s()
 		CODE
 		assert_equal 'yes', out
 	end
@@ -394,11 +394,11 @@ class Structs_Test < Base_Test
 		    Combo_Alpha | Alpha { }
 		    Combo_Beta | Beta { }
 
-		    Thing<x: Alpha, y: Beta> {
+		    Thing\\<x: Alpha, y: Beta> {
 		    	to_s {; "matched" }
 		    }
 
-		    Thing<Combo_Alpha(), Combo_Beta()>().to_s()
+		    Thing\\<Combo_Alpha(), Combo_Beta()>().to_s()
 		CODE
 		assert_equal 'matched', out
 	end
@@ -406,19 +406,19 @@ class Structs_Test < Base_Test
 	def test_unnamed_member_value_that_is_a_struct_spreads_into_the_struct
 		type = Lost.interp <<~CODE
 		    DEFAULT_COLUMNS := <id: Number, created_at: Number>
-		    Thing<DEFAULT_COLUMNS> {}
+		    Thing\\<DEFAULT_COLUMNS> {}
 		CODE
-		assert_equal %w(id created_at), type.structure_declaration.names
-		assert_equal %w(Number Number), type.structure_declaration.type_objects.map(&:name)
+		assert_equal %w(id created_at), type.tag_declaration.names
+		assert_equal %w(Number Number), type.tag_declaration.type_objects.map(&:name)
 	end
 
 	def test_spread_struct_members_bind_correctly_at_construction
 		out = Lost.interp <<~CODE
 		    DEFAULT_COLUMNS := <id: Number, created_at: Number>
-		    Thing<DEFAULT_COLUMNS> {}
+		    Thing\\<DEFAULT_COLUMNS> {}
 
-		    t := Thing<5, 1234>()
-		    (t.structure.id, t.structure.created_at)
+		    t := Thing\\<5, 1234>()
+		    (t.tag.id, t.tag.created_at)
 		CODE
 		assert_equal [5, 1234], out.values
 	end
@@ -427,13 +427,13 @@ class Structs_Test < Base_Test
 		out = Lost.interp <<~CODE
 		    Options := <table_name: String, columns: Number>
 
-		    Thing<opts: Options = Options> {
+		    Thing\\<opts: Options = Options> {
 		    	new {;}
 		    }
 
-		    a := Thing<opts: Options>()
-		    b := Thing<Options>()
-		    (a.structure.opts, b.structure.opts)
+		    a := Thing\\<opts: Options>()
+		    b := Thing\\<Options>()
+		    (a.tag.opts, b.tag.opts)
 		CODE
 		refute_nil out.values[0]
 		refute_nil out.values[1]
@@ -441,43 +441,43 @@ class Structs_Test < Base_Test
 
 	# Regression: a reference member named via the bare `:=` idiom (used to disambiguate an
 	# otherwise-ambiguous match, e.g. `String<other := {x=1}>()`) bound the member's own *resolved
-	# type* onto `.structure` instead of the real supplied value -- `interp_type`'s reference-resolution
+	# type* onto `.tag` instead of the real supplied value -- `interp_type`'s reference-resolution
 	# read `supplied.type_objects` (identity-only, used for the "did they just restate the type"
 	# check) where it should have read `supplied.values` for the actual result.
 	def test_named_reference_member_preserves_the_real_supplied_value_regression
 		out = Lost.interp <<~CODE
 		    Data_Conn { name, new { name; self.name = name } }
-		    Table<columns: Struct, database: Data_Conn> {}
+		    Table\\<columns: Struct, database: Data_Conn> {}
 
 		    cols := <name: String, age: Number>
 		    db := Data_Conn('primary')
 
-		    t := Table<columns := cols, database := db>
-		    (t.structure.columns.names, t.structure.database.name)
+		    t := Table\\<columns := cols, database := db>
+		    (t.tag.columns.names, t.tag.database.name)
 		CODE
 		assert_equal %w(name age), out.values[0].values
 		assert_equal 'primary', out.values[1]
 	end
 
-	def test_redeclaring_same_structure_extends_the_same_variant
+	def test_redeclaring_same_tag_extends_the_same_variant
 		out = Lost.interp <<~CODE
-		    Abc<Number> {
+		    Abc\\<Number> {
 		    	first {; 'first' }
 		    }
-		    Abc<Number> {
+		    Abc\\<Number> {
 		    	second {; 'second' }
 		    }
 
-		    a := Abc<Number>()
+		    a := Abc\\<Number>()
 		    (a.first(), a.second())
 		CODE
 		assert_equal %w(first second), out.values
 	end
 
-	# A structured type declaration never bound its own bare name in @declarations the way a bare `Type { }` does -- only `Abc<Number>()` (a full reference) resolved it. When exactly one variant is declared under a name, the bare name is unambiguous, so it's reachable too now.
-	def test_structured_type_reachable_by_bare_name_when_unambiguous
+	# A tagged type declaration never bound its own bare name in @declarations the way a bare `Type { }` does -- only `Abc<Number>()` (a full reference) resolved it. When exactly one variant is declared under a name, the bare name is unambiguous, so it's reachable too now.
+	def test_tagged_type_reachable_by_bare_name_when_unambiguous
 		out = Lost.interp <<~CODE
-		    Abc<Number> {
+		    Abc\\<Number> {
 		    	greet {; 'hi' }
 		    }
 		    x := Abc()
@@ -487,33 +487,33 @@ class Structs_Test < Base_Test
 	end
 
 	# A genuinely ambiguous name (2+ declared variants) still can't resolve on its own -- there'd be no way to know which variant a bare `X()` should build.
-	def test_structured_type_bare_name_stays_unreachable_when_ambiguous
+	def test_tagged_type_bare_name_stays_unreachable_when_ambiguous
 		assert_raises Lost::Undeclared_Identifier do
 			Lost.interp <<~CODE
-			    X<a: Number> {}
-			    X<b: String> {}
+			    X\\<a: Number> {}
+			    X\\<b: String> {}
 			    X()
 			CODE
 		end
 	end
 
-	def test_string_structured_with_a_dictionary
+	def test_string_tagged_with_a_dictionary
 		src = <<~CODE
-		    String<dict: Dictionary> {
+		    String\\<dict: Dictionary> {
 		    	new { str: String = "";
 		    		value = str
 		    	}
 		    	to_s {;
 		    		final := value
 		    		final += "{"
-		    		for structure.dict
+		    		for tag.dict
 		    			final += "`key`::`value`, "
 		    		end
 		    		final += "}"
 		    	}
 		    }
-		    a := String<{x=0, y=1, z=2}>()
-		    b := String<{x=0, y=1, z=2}>("My dict: ")
+		    a := String\\<{x=0, y=1, z=2}>()
+		    b := String\\<{x=0, y=1, z=2}>("My dict: ")
 		    (a.to_s(), b.to_s())
 		CODE
 		out = Lost.interp src
@@ -534,15 +534,15 @@ class Structs_Test < Base_Test
 		assert_equal [4815], out.values
 	end
 
-	def test_structured_reference_has_members_populated
+	def test_tagged_reference_has_members_populated
 		out = Lost.interp <<~CODE
 		    @load 'lost/struct.tape'
-		    Abc<dict: Dictionary> {
+		    Abc\\<dict: Dictionary> {
 		    	new {;}
 		    }
-		    z := Abc<{x=1}>
+		    z := Abc\\<{x=1}>
 		    zz := z()
-		    zz.structure.members
+		    zz.tag.members
 		CODE
 		assert_equal 1, out.values.length
 		assert_equal 'dict', out.values.first.name
@@ -687,9 +687,9 @@ class Structs_Test < Base_Test
 		end
 	end
 
-	# `x: Abc<Number>` (a named type plus a structure) parses the same way it already does for plain identifiers/variables.
+	# `x: Abc\<Number>` (a named type plus a tag) parses the same way it already does for plain identifiers/variables.
 	def test_named_type_plus_struct_param_parses
-		out   = Lost.parse 'f { x: Abc<Number>; x }'
+		out   = Lost.parse 'f { x: Abc\\<Number>; x }'
 		param = out.first.parameters.first
 		assert_equal 'Abc', param.type.value
 		assert_kind_of Lost::Struct_Expr, param.type_struct
@@ -712,5 +712,228 @@ class Structs_Test < Base_Test
 		assert_includes values, '>'
 		assert_includes values, ','
 		refute_includes values, '>,'
+	end
+
+	# --- `\` named-reference tagged types (`Type\Struct`, no `<...>` at all) ---
+
+	def test_named_reference_tagged_type_declaration
+		type = Lost.interp <<~CODE
+		    Task_Schema <a: Number, b: String>
+		    Array\\Task_Schema {}
+		CODE
+		assert_equal ['a', 'b'], type.tag_declaration.names
+	end
+
+	# Regression: dispatch used to require a trailing `{`, which left the bare (no-body) reference form -- the "Reference: Type::Struct" your own spec called for -- unreachable.
+	def test_named_reference_tagged_type_used_as_a_bare_value_regression
+		out = Lost.interp <<~CODE
+		    Task_Schema <a: Number, b: String>
+		    Array\\Task_Schema {}
+		    x := Array\\Task_Schema
+		    x.tag.names
+		CODE
+		assert_equal ['a', 'b'], out.values
+	end
+
+	# `\Name` accepts a Struct or a Type (wrapped like `\<Type>` would build) -- a plain value isn't a valid target for either.
+	def test_named_reference_must_resolve_to_a_type_or_struct
+		assert_raises Lost::Tag_Reference_Must_Be_Type_Or_Struct do
+			Lost.interp <<~CODE
+			    X := 5
+			    Array\\X {}
+			CODE
+		end
+	end
+
+	# Regression: `\Name` used to require Name to already be a Struct -- a bare Type reference
+	# (`Array\String`) raised even though it's exactly equivalent to `Array\<String>`.
+	def test_named_reference_to_a_type_behaves_like_the_equivalent_inline_literal
+		out = Lost.interp <<~CODE
+		    Array\\String {}
+		    x := Array\\String
+		    x.tag.types.first().name
+		CODE
+		assert_equal 'String', out
+	end
+
+	# --- Unifying declare/reference spread behavior ---
+
+	# Regression: declaring spreads a lone unnamed Struct-valued member, but a reference to that same shape used to never spread -- so a reference/composition site could never reach a variant declared this way.
+	def test_reference_matches_a_spread_declared_variant_regression
+		out = Lost.interp <<~CODE
+		    Connection <db: Number, name: String>
+		    Container\\<Connection> {}
+		    x := Container\\<Connection>
+		    x.tag.names
+		CODE
+		assert_equal ['db', 'name'], out.values
+	end
+
+	# Same shape, reached through a composition operand (`X | Y\<...> {}`) rather than a plain
+	# reference -- a separate parser code path (#parse_composition_expr) that needed its own fix.
+	def test_composition_operand_with_named_reference_propagates_tag_regression
+		out = Lost.interp <<~CODE
+		    Connection <db: Number, name: String>
+		    Container\\<Connection> {}
+		    Tasks | Container\\<Connection> {}
+		    Tasks.tag.names
+		CODE
+		assert_equal ['db', 'name'], out.values
+	end
+
+	# A composition chain can mix plain operands with both tagged-reference forms; ordinary `|` "leftmost wins" conflict rules still apply to the composed `tag` member itself.
+	def test_composition_chain_mixes_plain_and_both_tagged_reference_forms
+		out = Lost.interp <<~CODE
+		    This { a := 1 }
+		    That { b := 2 }
+		    Here\\<> {}
+		    Info <c: Number>
+		    There\\Info {}
+
+		    Combo | This | That | There\\Info | Here\\<> {}
+		    x := Combo()
+		    (x.a, x.b, Combo.tag.names)
+		CODE
+		a, b, tag_names = out.values
+		assert_equal 1, a
+		assert_equal 2, b
+		assert_equal ['c'], tag_names.values
+	end
+
+	# An unspread reference that already matches (a real named member never spreads) should win outright -- spreading is only ever a fallback.
+	def test_reference_prefers_unspread_match_before_retrying_with_spread
+		out = Lost.interp <<~CODE
+		    Connection <db: Number, name: String>
+		    Container\\<conn: Connection> {}
+		    Container\\<Connection> {}
+		    x := Container\\<Connection>
+		    x.tag.names
+		CODE
+		assert_equal ['conn'], out.values
+	end
+
+	# --- Bare Named Structs (`Ident <...>`, no `\`) interacting with real declared Types ---
+
+	def test_bare_named_struct_conflicting_with_an_existing_type_raises
+		assert_raises Lost::Undeclared_Tagged_Type do
+			Lost.interp <<~CODE
+			    Task\\<a: Number> {}
+			    Task <b: String>
+			CODE
+		end
+	end
+
+	# --- Tag-aware `=X=` comparison operators ---
+
+	# Regression: `interp_comparison_infix` read `tag_instance&.types` for a struct's per-member
+	# types, but Lost::Struct < Instance < Type also inherits Type's own `.types` (the composed-type-name
+	# Set, e.g. `Set['Struct']` -- the SAME for every struct regardless of its actual members), so a
+	# plain Ruby method call shadowed the real per-member list. Every differently-tagged type compared
+	# `===`-equal to every other one, no matter what it was actually tagged with.
+	def test_differently_tagged_types_are_not_equal_regression
+		out = Lost.interp <<~CODE
+		    Abc\\<Number> {}
+		    Abc\\<String> {}
+		    (Abc\\<Number> === Abc\\<String>, Abc\\<Number> === Abc\\<Number>)
+		CODE
+		assert_equal [false, true], out.values
+	end
+
+	# `=!=`/`=>=`/`=<=`/`=/=` are all derived from the same tag-aware superset check `===` uses --
+	# confirm the fix propagates to all four, not just `===` itself.
+	def test_differently_tagged_types_via_the_other_comparison_operators_regression
+		out = Lost.interp <<~CODE
+		    Abc\\<Number> {}
+		    Abc\\<String> {}
+		    (Abc\\<Number> =!= Abc\\<String>, Abc\\<Number> =>= Abc\\<String>, Abc\\<Number> =<= Abc\\<String>, Abc\\<Number> =/= Abc\\<String>)
+		CODE
+		# =/= is disjointness of *composed types*, not tag -- both still compose "Abc", so they're not disjoint despite differing tags.
+		assert_equal [true, false, false, false], out.values
+	end
+
+	# --- A struct member's own `: Type` annotation carrying a `\`-tag ---
+
+	# `id: Array\String` parses `\String` onto the *annotation's* `.type_struct` (#parse_identifier_expr's
+	# recursive `: Type` handling), a different AST shape than a bare `Array\String` reference -- #interp_struct
+	# used to just `interpret` that annotation directly, silently resolving the untagged `Array` and dropping
+	# the tag. `#interp_type_annotation` routes it through the same reference resolution a bare `Array\String`
+	# already gets instead.
+	def test_struct_member_type_annotation_resolves_named_reference_tag_regression
+		out = Lost.interp <<~CODE
+		    s := <id: Array\\String>
+		    m := s.members.first()
+		    (m.type.display_name, m.type.tag.type_names.first())
+		CODE
+		assert_equal %w(Array\\String String), out.values
+	end
+
+	# Same regression, but for the inline-literal tag form (`\<...>`) on the annotation -- exercises the
+	# other branch of #parse_identifier_expr's `\`-consuming lookahead.
+	def test_struct_member_type_annotation_resolves_inline_literal_tag_regression
+		out = Lost.interp <<~CODE
+		    s := <id: Array\\<String>>
+		    m := s.members.first()
+		    (m.type.display_name, m.type.tag.type_names.first())
+		CODE
+		assert_equal ['Array\\<String>', 'String'], out.values
+	end
+
+	# --- Nested `<...>` structs closing back-to-back (`>>`/`>>>` glued at the lexer level) ---
+
+	# Two (or more) `<...>` structs closing with no space between them (`Array\<String>>`) lex as one
+	# `>>` token -- a legitimate right-shift operator everywhere else, and a *higher*-precedence one than
+	# a lone `>`, so ordinary expression parsing used to swallow it looking for a right-hand operand and
+	# run out of tokens. #split_glued_close_angles! splits it back into individual `>` tokens, gated on
+	# actually being inside a `<...>` (never firing for a real `8 >> 2`) and on a lone `>` being able to
+	# stop parsing right there anyway.
+	def test_nested_struct_closing_angles_parse_regression
+		out = refute_raises Lost::Out_Of_Tokens do
+			Lost.interp <<~CODE
+			    s := <id: Array\\<String>>
+			    s.members.first().type.tag.type_names.first()
+			CODE
+		end
+		assert_equal 'String', out
+	end
+
+	# Three levels deep (`>>>`) -- confirms the fix isn't hardcoded to exactly two glued `>`s.
+	def test_triple_nested_struct_closing_angles_parse_regression
+		out = Lost.interp <<~CODE
+		    s := <a: Array\\<b: Array\\<String>>>
+		    s.members.first().type.tag.members.first().type.tag.type_names.first()
+		CODE
+		assert_equal 'String', out
+	end
+
+	# A genuine `>>`/chained `>>` (right-shift, nothing to do with structs) must keep working -- the fix
+	# is gated on actually being inside a `<...>`, not just on precedence alone (an earlier version of
+	# this fix broke exactly this, misfiring on the recursive right-hand-side parse of the *first* `>>`).
+	def test_chained_real_shift_operator_unaffected_by_struct_close_fix_regression
+		assert_equal 1, Lost.interp('8 >> 2 >> 1')
+	end
+
+	# --- Tag display mirrors how `\`'s RHS was actually written ---
+
+	# `Array\<String>` (inline literal) and `Array\String` (bare reference) produce an *identically
+	# shaped* single-unnamed-member struct at runtime -- shape alone can't tell them apart, so display
+	# has to remember which form was actually written (Struct#bare_reference_name, set only for the bare
+	# form) rather than guessing from the resolved struct's shape.
+	def test_tag_display_distinguishes_bare_reference_from_inline_literal_with_same_shape_regression
+		out = Lost.interp <<~CODE
+		    a := Array\\String
+		    b := Array\\<String>
+		    (a.display_name, b.display_name)
+		CODE
+		assert_equal ['Array\\String', 'Array\\<String>'], out.values
+	end
+
+	# A bare reference to an already-declared *struct value* (as opposed to a Type) displays the same way.
+	def test_tag_display_bare_reference_to_named_struct_value_regression
+		out = Lost.interp <<~CODE
+		    Named_Struct <a: Number>
+		    Container\\Named_Struct {}
+		    Container\\Named_Struct.display_name
+		CODE
+		assert_equal 'Container\\Named_Struct', out
 	end
 end

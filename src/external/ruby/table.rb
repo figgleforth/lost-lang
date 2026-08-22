@@ -19,14 +19,16 @@ module Lost
 			@declarations['table_name'] = first_type.split('::').last.downcase.pluralize
 		end
 
+		# Checked on `self` first (per-instance), then `enclosing_scope` (the older static `Self.database` pattern) -- same own-then-enclosing_scope fallback as #struct_schema below.
 		# @return [Lost::Database]
 		def database
-			@declarations['database']
+			@declarations['database'] || enclosing_scope&.declarations&.[]('database')
 		end
 
 		# @return [Symbol]
 		def table_name
-			@declarations['table_name']&.to_str&.to_sym
+			name = @declarations['table_name'] || enclosing_scope&.declarations&.[]('table_name')
+			name&.to_str&.to_sym
 		end
 
 		# @return [Sequel::SQLite::Dataset]
@@ -89,12 +91,12 @@ module Lost
 			end
 		end
 
-		# A structured composition (`Tasks | Table<'tasks', Task> {}`) declares `.structure` (a real member, copied onto Tasks at composition time -- see #declare_structure, interpreter.rb) whose `columns` is the model's own schema Struct (`Task`). Checked on `self` first (for an instance call), then `enclosing_scope` (the Type, for a static call, since @declarations is shared with a temp instance built fresh per call -- see #interp_directive's 'ruby' case).
+		# A tagged composition (`Tasks | Table\<'tasks', Task> {}`) declares `.tag` (a real member, copied onto Tasks at composition time -- see #declare_tag, interpreter.rb) whose `columns` is the model's own schema Struct (`Task`). Checked on `self` first (for an instance call), then `enclosing_scope` (the Type, for a static call, since @declarations is shared with a temp instance built fresh per call -- see #interp_directive's 'ruby' case).
 		def struct_schema
-			(@declarations['structure'] || enclosing_scope&.declarations&.[]('structure'))&.get('columns')
+			(@declarations['tag'] || enclosing_scope&.declarations&.[]('tag'))&.get('columns')
 		end
 
-		# Builds a real, Task-shaped Lost::Struct from a raw SQL row when the model was declared with a schema (see #struct_schema); falls back to a plain Lost::Dictionary otherwise, unchanged from before -- the older `User | Table { Self.database := ~/db }` pattern (no structured reference) has no schema to shape a Struct from. Goes through Interpreter#build_struct (not a bare Lost::Struct.new) so `.members` gets populated the same way a real struct literal's does -- lost/struct.tape's own `to_s`/`==` read `.members`, not `.names`/`.values` directly.
+		# Builds a real, Task-shaped Lost::Struct from a raw SQL row when the model was declared with a schema (see #struct_schema); falls back to a plain Lost::Dictionary otherwise, unchanged from before -- the older `User | Table { Self.database := ~/db }` pattern (no tagged reference) has no schema to shape a Struct from. Goes through Interpreter#build_struct (not a bare Lost::Struct.new) so `.members` gets populated the same way a real struct literal's does -- lost/struct.tape's own `to_s`/`==` read `.members`, not `.names`/`.values` directly.
 		def record_struct row
 			schema      = struct_schema
 			interpreter = Lost::Interpreter.current

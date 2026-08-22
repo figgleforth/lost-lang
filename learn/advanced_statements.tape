@@ -1,26 +1,26 @@
-### A structured type can require a Statement
+### A tagged type can require a Statement
 
-`<name: Statement>` (see learn/statement_expressions.tape and learn/structured_types.tape) makes a structured type's shape say "this slot holds a deferred, callable expression," not a plain value.
+`\<name: Statement>` (see learn/statement_expressions.tape and learn/tagged_types.tape) makes a tagged type's shape say "this slot holds a deferred, callable expression," not a plain value.
 ###
-Row<id: Statement> {}
+Row\<id: Statement> {}
 
-r := Row<`1+2`>()
-@assert r.structure.id() == 3, 'a structured Statement member should be callable'
+r := Row\<`1+2`>()
+@assert r.tag.id() == 3, 'a tagged Statement member should be callable'
 
 
 ### Not idempotent — every call re-runs the wrapped expression
 
-This is the real-world angle for a structured `Statement` member: a column default computed at insert-time instead of baked in once when the schema is declared, e.g. `created_at: Statement` around a clock call (Lost has no clock yet, so a counter stands in below). But it cuts both ways — two structured references sharing *the same* Statement value both advance the same underlying call, not independent ones.
+This is the real-world angle for a tagged `Statement` member: a column default computed at insert-time instead of baked in once when the schema is declared, e.g. `created_at: Statement` around a clock call (Lost has no clock yet, so a counter stands in below). But it cuts both ways — two tagged references sharing *the same* Statement value both advance the same underlying call, not independent ones.
 ###
 seq      := 0
 next_seq := `seq += 1`
 
-row_a := Row<next_seq>()
-row_b := Row<next_seq>()
+row_a := Row\<next_seq>()
+row_b := Row\<next_seq>()
 
-@assert row_a.structure.id() == 1, 'the first call should advance the shared counter to 1'
-@assert row_b.structure.id() == 2, 'a second reference sharing the same Statement should advance the same counter'
-@assert row_a.structure.id() == 3, 'rereading row_a should still advance it, not return a cached value'
+@assert row_a.tag.id() == 1, 'the first call should advance the shared counter to 1'
+@assert row_b.tag.id() == 2, 'a second reference sharing the same Statement should advance the same counter'
+@assert row_a.tag.id() == 3, 'rereading row_a should still advance it, not return a cached value'
 
 
 ### Captured by default

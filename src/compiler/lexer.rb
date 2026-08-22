@@ -232,6 +232,12 @@ module Lost
 				# Don't append `.` onto a trailing `>` unless it's forming a genuine range operator (`>..`, `>.<`). Otherwise `Type<Struct>.member` would lex `>.` as one bogus operator token, swallowing the `>` that's supposed to close the struct's member list on its own.
 				break if it == '>' && curr == '.' && !%w(. <).include?(peek)
 
+				# Same idea for `\` immediately followed by `<` -- `Type\<Struct>` would otherwise glue into one bogus token.
+				break if it == Lost::TAG_OPERATOR && curr == '<'
+
+				# `<` immediately followed by `>` (empty struct literal `<>`) isn't a real operator either, unlike `<=`/`<=>`.
+				break if it == '<' && curr == '>'
+
 				it << eat
 				break if Lost::SCOPE_OPERATORS.include? it
 				break if Lost::ILLEGAL_OPERATOR_CHARS.include? it

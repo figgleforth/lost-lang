@@ -389,9 +389,9 @@ module Lost
 		end
 
 		# Does `a` (composed types + struct members) carry at least everything `b` does? Shared by `=>=`/`=<=`/`===`/`=!=` -- see #interp_comparison_infix.
-		def superset_of_types_and_structure? a_types, a_structure, b_types, b_structure
+		def superset_of_types_and_tag? a_types, a_tag, b_types, b_tag
 			types_superset   = b_types.all? { |type| a_types.include? type }
-			members_superset = (b_structure || []).all? { |member| (a_structure || []).include? member }
+			members_superset = (b_tag || []).all? { |member| (a_tag || []).include? member }
 			types_superset && members_superset
 		end
 
@@ -791,7 +791,7 @@ module Lost
 					return rebind_func_to_scope(result, scope) if result.is_a? Lost::Func
 					result
 				elsif scope.respond_to? proxy_method
-					# Prefer the instance's own owning Type first -- for a structured variant (e.g. `Array<Web_Server>`) this is a distinct Type from the plain global one, and holds the actual override. Only fall back to a blind by-name search of the stack (which only ever finds the plain global type, e.g. plain "Array") when the instance isn't linked to a Type that declares this method itself.
+					# Prefer the instance's own owning Type first -- for a tagged variant (e.g. `Array\Web_Server`) this is a distinct Type from the plain global one, and holds the actual override. Only fall back to a blind by-name search of the stack (which only ever finds the plain global type, e.g. plain "Array") when the instance isn't linked to a Type that declares this method itself.
 					type_def       = if scope.enclosing_scope.is_a?(Lost::Type) && scope.enclosing_scope.has?(expr.value)
 						scope.enclosing_scope
 					else
@@ -831,8 +831,8 @@ module Lost
 				elsif stack.any? { |s| s.equal? global } && resolve_forward_declaration(expr.value) && global.has?(expr.value)
 					# not reached yet in file order, but declared somewhere later on -- forced early. Identity check (not #include?, which is `==` and can hit an Lost type's own overload -- e.g. Lost::Array#== assumes its operand also has .values). Global being absent from the stack means we're deliberately excluding it (a plain `x.y` dot access, #interp_dot_scope's exclude_global_scope: true) -- a member missing on x should stay missing, not quietly resolve to an unrelated global
 					global[expr.value]
-				elsif (variants = structured_variants_for(expr.value)).length == 1
-					# A structured declaration (`Task<Schema> {}`) never binds its bare name like a plain `Type {}` does -- unambiguous with one variant, so allow it (mirrors Bare Named Structs). 2+ variants stay unreachable except via `Name<Structure>`.
+				elsif (variants = tagged_variants_for(expr.value)).length == 1
+					# A tagged declaration (`Task\Schema {}`) never binds its bare name like a plain `Type {}` does -- unambiguous with one variant, so allow it (mirrors Bare Named Structs). 2+ variants stay unreachable except via `Name\Tag`.
 					variants.first
 				else
 					raise Lost::Undeclared_Identifier.new(expr)
@@ -881,7 +881,8 @@ module Lost
 					value        = interpret parser.output.first
 					result       = result.gsub "`#{sub}`", "#{stringify_for_display(value)}"
 				end
-				result.gsub('\\', '') # Remove any escapes from the resulting string? Is this okay? I don't know...
+				# Only the `\`` sequences still left over from escaping a backtick (deliberately never matched/substituted above) get un-escaped here -- a blanket `result.gsub('\\', '')` used to also strip any literal backslash that arrived as part of a substituted value's own content (e.g. `Array\<String>`), which was never the intent.
+				result.gsub('\\`', '`')
 			end
 		end
 
@@ -1232,7 +1233,7 @@ module Lost
 			when Lost::Dictionary
 				interp_dot_dictionary receiver, expr
 			else
-				# A structured type reference on the right (`ns.Abc<Number>`) isn't an Identifier_Expr, so it bypasses #interp_dot_scope's right-operand validation.
+				# A tagged type reference on the right (`ns.Abc\<Number>`) isn't an Identifier_Expr, so it bypasses #interp_dot_scope's right-operand validation.
 				if expr.right.instance_of? Lost::Type_Expr
 					return interp_member_access receiver, expr.right
 				end
@@ -1246,7 +1247,8 @@ module Lost
 
 		def stringify_for_display value, show_quotes: false
 			value = maybe_instance value
-			return value unless value.is_a? Lost::Scope
+			# A bare Type's `to_s` (copied from its own body) assumes real instance context and crashes if called directly on the Type itself, so only attempt it on a genuine Instance.
+			return value unless value.is_a? Lost::Instance
 
 			method_name       = show_quotes && value.is_a?(Lost::String) ? 'pretty_print' : 'to_s'
 			to_s_ident        = Lost::Identifier_Expr.new
@@ -1483,8 +1485,12 @@ module Lost
 
 			case expr.operator.value
 			when '===', '=!=', '=>=', '=<=', '=/='
-				left_structure  = left.is_a?(Lost::Type) ? left.structure_instance&.types : nil
-				right_structure = right.is_a?(Lost::Type) ? right.structure_instance&.types : nil
+				# `.type_objects`, not `.types` -- `Lost::Struct < Instance < Type` inherits Type's own
+				# `.types` (the composed-type-name Set, e.g. `Set['Struct']` for every struct alike),
+				# which shadows/collides with what's actually wanted here: the struct's own per-member
+				# type objects (`.type_objects`, backed by its `@declarations['types']`).
+				left_tag  = left.is_a?(Lost::Type) ? left.tag_instance&.type_objects : nil
+				right_tag = right.is_a?(Lost::Type) ? right.tag_instance&.type_objects : nil
 
 				# note; `left`/`right` are whatever #interpret returned (a raw Ruby Integer/String/etc for literals, not necessarily an Lost::Type/Instance), so `.types` can't be called on them directly. Using #composed_types_for here which resolves the correct composed-type set.
 				left_types  = composed_types_for left
@@ -1493,21 +1499,21 @@ module Lost
 				# note; `=>=`/`=<=` are the only operators here that carry genuinely new information (see CLAUDE.md) -- `=<=` is just `=>=` with operands swapped, and `===` is mutual `=>=` in both directions; `=!=` is `!(===)`. Deriving them instead of duplicating the field-superset check keeps all four in sync by construction.
 				case expr.operator.value
 				when '=>='
-					superset_of_types_and_structure? left_types, left_structure, right_types, right_structure
+					superset_of_types_and_tag? left_types, left_tag, right_types, right_tag
 				when '=<='
-					superset_of_types_and_structure? right_types, right_structure, left_types, left_structure
+					superset_of_types_and_tag? right_types, right_tag, left_types, left_tag
 				when '==='
-					superset_of_types_and_structure?(left_types, left_structure, right_types, right_structure) &&
-						superset_of_types_and_structure?(right_types, right_structure, left_types, left_structure)
+					superset_of_types_and_tag?(left_types, left_tag, right_types, right_tag) &&
+						superset_of_types_and_tag?(right_types, right_tag, left_types, left_tag)
 				when '=!='
-					!(superset_of_types_and_structure?(left_types, left_structure, right_types, right_structure) &&
-						superset_of_types_and_structure?(right_types, right_structure, left_types, left_structure))
+					!(superset_of_types_and_tag?(left_types, left_tag, right_types, right_tag) &&
+						superset_of_types_and_tag?(right_types, right_tag, left_types, left_tag))
 				when '=/='
 					shared_types   = left_types.any? do |type|
 						right_types.include? type
 					end
-					shared_members = (left_structure || []).any? do |member|
-						(right_structure || []).include? member
+					shared_members = (left_tag || []).any? do |member|
+						(right_tag || []).include? member
 					end
 
 					!shared_types && !shared_members
@@ -1754,26 +1760,41 @@ module Lost
 		def interp_type expr
 			return interp_anonymous_composition expr if expr.anonymous_composition
 
-			# No body was parsed (`x: Abc<Number>`, `y := Abc<Number>`, `Abc<Number>()`, `Abc<4815>()`) so this references an existing type rather than declaring one. Dup it so structuring this reference doesn't mutate the shared declaration every other reference sees.
+			# No body was parsed (`x: Abc\<Number>`, `y := Abc\<Number>`, `Abc\<Number>()`, `Abc\<4815>()`) so this references an existing type rather than declaring one. Dup it so tagging this reference doesn't mutate the shared declaration every other reference sees.
 			if expr.expressions.nil?
-				if expr.structure
-					supplied = interp_struct expr.structure, allow_spread: false
+				if expr.tag
+					supplied = resolve_tag_reference expr, allow_spread: false
 
-					# note; `expr.name` is normally a real type name ("String"), but if it's instead a local alias bound to an earlier structured reference (`X := String<Flying>`), re-structure against *that value's own* family name rather than treating "X" itself as a type name. So `X<duck>` should behave exactly like `String<duck>`, since `.name` on any Type object (dup'd or not) always reflects its true declared family.
+					# note; `expr.name` is normally a real type name ("String"), but if it's instead a local alias bound to an earlier tagged reference (`X := String\<Flying>`), re-tag against *that value's own* family name rather than treating "X" itself as a type name. So `X\<duck>` should behave exactly like `String\<duck>`, since `.name` on any Type object (dup'd or not) always reflects its true declared family.
 					aliased     = find_in_stack expr.name
 					lookup_name = aliased.is_a?(Lost::Type) ? aliased.name : expr.name
 
-					existing = find_structured_type_variant lookup_name, supplied
+					existing = find_tagged_type_variant lookup_name, supplied
+
+					# Declaring spreads a lone unnamed Struct-valued member (#interp_struct); unify by retrying a failed unspread match with spreading applied, rather than statically committing to one or the other.
+					if !existing.is_a?(Lost::Type) && expr.tag.is_a?(Lost::Struct_Expr) && expr.tag.types.length == 1 && expr.tag.names[0].nil?
+						spread_supplied = interp_struct expr.tag, allow_spread: true
+						spread_existing = find_tagged_type_variant lookup_name, spread_supplied
+						if spread_existing.is_a? Lost::Type
+							supplied = spread_supplied
+							existing = spread_existing
+						end
+					end
 					unless existing.is_a? Lost::Type
 						# Nothing declared under this name -> bare named struct (see Bare Named Structs, CLAUDE.md). Also allows re-declaring the same struct with an identical shape as a no-op.
 						redeclaring_same_struct = aliased.is_a?(Lost::Struct) && aliased.get('name') == expr.name && aliased.structure_declaration_equal?(supplied)
-						if (aliased.nil? || redeclaring_same_struct) && structured_variants_for(lookup_name).empty?
+						if (aliased.nil? || redeclaring_same_struct) && tagged_variants_for(lookup_name).empty?
 							supplied.declare 'name', expr.name
 							supplied.types = Set[expr.name] + supplied.types # `.types` inherited `Set['Struct']` alone from Struct#initialize's `super 'Struct'`; put the struct's own declared name first (own-name-before-composed, same order an ordinary `Ident | Struct {}` composition would produce) so type-identity checks (===, a `-> Ident` return-type contract, `type_name_to_string`'s `.types.first`, ...) see it as `Ident`-shaped, not just generically Struct-shaped.
 							stack.last.declare expr.name, supplied if supplied.names.all?
 							return supplied
 						end
-						raise Lost::Undeclared_Type_Structure.new(expr)
+
+						# Base name is a real Type but nothing matches this shape yet -- a bare reference auto-declares it (empty body), same as writing `Array\String {}` explicitly first.
+						unless aliased.is_a? Lost::Type
+							raise Lost::Undeclared_Tagged_Type.new(expr)
+						end
+						existing                = declare_tagged_type_variant lookup_name, supplied, []
 					end
 				else
 					existing = find_in_stack expr.name
@@ -1782,13 +1803,13 @@ module Lost
 					end
 				end
 
-				# Object#dup is shallow so  @declarations/@static_declarations would still be the exact same Hash/Set every reference and the matched variant share, so structuring one would silently mutate all the others (and the variant itself). Fork them explicitly.
+				# Object#dup is shallow so  @declarations/@static_declarations would still be the exact same Hash/Set every reference and the matched variant share, so tagging one would silently mutate all the others (and the variant itself). Fork them explicitly.
 				referenced                     = existing.dup
 				referenced.declarations        = existing.declarations.dup
 				referenced.static_declarations = (existing.static_declarations || Set.new).dup
-				if expr.structure
-					# Call-site member values are usually positional (`Woof<'hello', 4815>`), but a member can be named at the reference site too (`Woof<key := 'hello'>`) to disambiguate an otherwise-ambiguous match. Either way, re-associate them with the names — and pick up any defaults — from the matched variant's own struct declaration (`Woof<String, key: Dictionary> {}`) so `.structure.key` still works on the resulting instance.
-					declaration            = existing.structure_declaration
+				if expr.tag
+					# Call-site member values are usually positional (`Woof<'hello', 4815>`), but a member can be named at the reference site too (`Woof<key := 'hello'>`) to disambiguate an otherwise-ambiguous match. Either way, re-associate them with the names — and pick up any defaults — from the matched variant's own struct declaration (`Woof<String, key: Dictionary> {}`) so `.tag.key` still works on the resulting instance.
+					declaration            = existing.tag_declaration
 					declaration_names      = declaration.is_a?(Lost::Struct) ? declaration.names : []
 					declaration_types      = declaration.is_a?(Lost::Struct) ? declaration.type_objects : [] # declared type objects, used below only to detect an unfilled default via identity
 					declaration_type_names = declaration.is_a?(Lost::Struct) ? declaration.type_names : []
@@ -1805,14 +1826,16 @@ module Lost
 						end
 					end
 
-					referenced.structure_instance = build_struct declaration_names, declaration_type_names, resolved_values, resolved_values
+					# `supplied.type_objects`, not `resolved_values`, for the types argument -- a schema-only unnamed member's own value is nil (see #interp_struct), no longer interchangeable with its type object the way `resolved_values` (built for the *values* result, see the comment above) used to assume.
+					referenced.tag_instance                     = build_struct declaration_names, declaration_type_names, supplied.type_objects, resolved_values
+					referenced.tag_instance.bare_reference_name = supplied.bare_reference_name
 				end
-				declare_structure referenced
+				declare_tag referenced
 				return referenced
 			end
 
-			if expr.structure
-				interp_structured_type_declaration expr
+			if expr.tag
+				interp_tagged_type_declaration expr
 			else
 				interp_bare_type_declaration expr
 			end
@@ -1862,7 +1885,7 @@ module Lost
 			type
 		end
 
-		# A plain, unstructured declaration (`String { ... }`) -- reopens/extends the same shared Type object across multiple declarations of the same bare name, e.g. how preload.tape's files each contribute to the same base String/Array/etc.
+		# A plain, untagged declaration (`String { ... }`) -- reopens/extends the same shared Type object across multiple declarations of the same bare name, e.g. how preload.tape's files each contribute to the same base String/Array/etc.
 		def interp_bare_type_declaration expr
 			existing = stack.last.has?(expr.name) && stack.last[expr.name]
 			type     = existing.is_a?(Lost::Type) ? existing : Lost::Type.new(expr.name)
@@ -1874,29 +1897,53 @@ module Lost
 			type
 		end
 
-		# A structured declaration (`String<dict: Dictionary> { ... }`) is its own type, separate from the bare `String` and every other struct under the same name -- this stops one variant's `new`/methods from clobbering another's (a real bug this fixed).
-		def interp_structured_type_declaration expr
-			struct = interpret expr.structure
+		# Resolves `expr.tag` (either form of `\`'s RHS) to a real Lost::Struct -- an inline literal (`Abc\<Number>`) interprets to one directly; a named reference (`Abc\Task_Schema`) is used as-is if it's already a Struct, or wrapped into the single-unnamed-member equivalent if it's a Type (`Abc\String` behaves like `Abc\<String>`); anything else raises. A named reference also records its own identifier text as `bare_reference_name` (see Struct#bare_reference_name) -- the *only* signal that later tells #tag_display_name to print `Array\String` back out bare instead of falling back to the struct's own `<...>` rendering.
+		def resolve_tag_reference expr, allow_spread: true
+			return interp_struct expr.tag, allow_spread: allow_spread if expr.tag.is_a? Lost::Struct_Expr
 
-			existing = structured_variants_for(expr.name, current_scope_only: true).find do |variant|
-				variant.structure_declaration.structure_declaration_equal? struct
+			value = interpret expr.tag
+			if value.is_a? Lost::Struct
+				value.bare_reference_name ||= expr.tag.value
+				return value
+			end
+
+			unless value.is_a? Lost::Type
+				raise Lost::Tag_Reference_Must_Be_Type_Or_Struct.new(expr)
+			end
+
+			# The single member's own value stays nil, same as any other schema-only member (see #interp_struct) -- `value` here is always a bare Type (just checked above), not real data.
+			struct                     = build_struct [nil], [type_name_to_string(value)], [value], [nil]
+			struct.bare_reference_name = expr.tag.value
+			struct
+		end
+
+		# A tagged declaration (`String\<dict: Dictionary> { ... }`) is its own type, separate from the bare `String` and every other tag under the same name -- this stops one variant's `new`/methods from clobbering another's (a real bug this fixed).
+		def interp_tagged_type_declaration expr
+			struct = resolve_tag_reference expr
+			declare_tagged_type_variant expr.name, struct, expr.expressions
+		end
+
+		# Shared by a real declaration and an auto-declared reference (interp_type) -- both just extend-or-create a Type variant under `name` tagged with `struct`.
+		def declare_tagged_type_variant name, struct, body_expressions
+			existing = tagged_variants_for(name, current_scope_only: true).find do |variant|
+				variant.tag_declaration.structure_declaration_equal? struct
 			end
 
 			if existing
 				variant = existing
 			else
-				variant             = Lost::Type.new(expr.name)
-				blueprint           = stack.last.has?(expr.name) && stack.last[expr.name]
+				variant             = Lost::Type.new(name)
+				blueprint           = stack.last.has?(name) && stack.last[name]
 				variant.expressions = blueprint.is_a?(Lost::Type) ? (blueprint.expressions || []).dup : []
 			end
 
-			variant.expressions           = (variant.expressions || []) + expr.expressions
-			variant.structure_declaration = struct
+			variant.expressions     = (variant.expressions || []) + body_expressions
+			variant.tag_declaration = struct
 
 			# A reopened variant already ran its earlier body when it was declared, so only the new expressions run now (matching the bare path). A fresh variant runs everything, including the bare blueprint's copied body.
-			finish_type_declaration variant, (existing ? expr.expressions : variant.expressions)
+			finish_type_declaration variant, (existing ? body_expressions : variant.expressions)
 
-			stack.last.structured_type_variants[expr.name] << variant unless existing
+			stack.last.tagged_type_variants[name] << variant unless existing
 			variant
 		end
 
@@ -1923,7 +1970,7 @@ module Lost
 			end
 		end
 
-		# All type names a supplied member value could match a declared struct's member under -- its own primary name first, then everything it composes, so e.g. a `Div` satisfies a member declared `Dom` without being named Dom itself. See #find_structured_type_variant.
+		# All type names a supplied member value could match a declared struct's member under -- its own primary name first, then everything it composes, so e.g. a `Div` satisfies a member declared `Dom` without being named Dom itself. See #find_tagged_type_variant.
 		def member_candidate_type_names value
 			case value
 			when ::Integer, ::Float
@@ -1943,12 +1990,12 @@ module Lost
 			end
 		end
 
-		# Finds the declared variant a reference's supplied structure matches. A reference member can optionally be named (`String<other := {x=1}>()`, reusing the same bare-`:=` idiom declarations use) to disambiguate when more than one declared variant would otherwise match by type alone. Narrows to variants agreeing on every explicitly-named member first, then prefers an exact type match before falling back to anything a value merely composes.
-		def find_structured_type_variant base_name, supplied
+		# Finds the declared variant a reference's supplied tag matches. A reference member can optionally be named (`String\<other := {x=1}>()`, reusing the same bare-`:=` idiom declarations use) to disambiguate when more than one declared variant would otherwise match by type alone. Narrows to variants agreeing on every explicitly-named member first, then prefers an exact type match before falling back to anything a value merely composes.
+		def find_tagged_type_variant base_name, supplied
 			values = supplied.type_objects
-			return nil if values.nil? || values.empty?
+			return nil if values.nil?
 
-			variants = structured_variants_for base_name
+			variants = tagged_variants_for base_name
 			return nil if variants.empty?
 
 			candidate_lists = values.map { |value| member_candidate_type_names value }
@@ -1956,36 +2003,36 @@ module Lost
 
 			names      = supplied.names || []
 			candidates = variants.select do |variant|
-				declared_names = variant.structure_declaration.names
+				declared_names = variant.tag_declaration.names
 				names.each_with_index.all? { |name, i| name.nil? || declared_names[i] == name }
 			end
 
 			exact_types = candidate_lists.map(&:first)
-			candidates.find { |variant| variant.structure_declaration.type_names == exact_types } ||
-				candidates.find { |variant| variant.structure_declaration.satisfied_by_candidates? candidate_lists }
+			candidates.find { |variant| variant.tag_declaration.type_names == exact_types } ||
+				candidates.find { |variant| variant.tag_declaration.satisfied_by_candidates? candidate_lists }
 		end
 
-		# Structured variants declared under `base_name`, searched the same way #find_in_stack resolves a plain identifier -- innermost to outermost, stopping at the first scope that has any (lexical shadowing, not merging). `current_scope_only` restricts the search to `stack.last` alone, for declaration-time collision checks -- a nested structured declaration should only ever collide with another declared in that exact scope, never one from an enclosing one.
-		def structured_variants_for base_name, current_scope_only: false
+		# Tagged variants declared under `base_name`, searched the same way #find_in_stack resolves a plain identifier -- innermost to outermost, stopping at the first scope that has any (lexical shadowing, not merging). `current_scope_only` restricts the search to `stack.last` alone, for declaration-time collision checks -- a nested tagged declaration should only ever collide with another declared in that exact scope, never one from an enclosing one.
+		def tagged_variants_for base_name, current_scope_only: false
 			scopes = current_scope_only ? [stack.last] : stack.reverse_each
 			scopes.each do |scope|
 				# `stack` can briefly hold non-Scope receivers during dot-access (e.g. Lost::Range).
-				next unless scope.respond_to? :structured_type_variants
-				list = scope.structured_type_variants.fetch(base_name, [])
+				next unless scope.respond_to? :tagged_type_variants
+				list = scope.tagged_type_variants.fetch(base_name, [])
 				return list unless list.empty?
 			end
 			[]
 		end
 
-		# Every declared structured-type variant under Global (Table-composed models are always top-level).
-		def all_structured_type_variants
-			global.structured_type_variants.values.flatten
+		# Every declared tagged-type variant under Global (Table-composed models are always top-level).
+		def all_tagged_type_variants
+			global.tagged_type_variants.values.flatten
 		end
 
 		# For Lost::Database#proxy_create_table: finds the Table-composed type declared with this exact schema, if any, so the created table can be tagged with the model's real identity. Nil if none matches.
 		def find_table_type_for_schema schema
-			all_structured_type_variants.find do |variant|
-				variant.types.include?('Table') && variant.structure_declaration&.structure_declaration_equal?(schema)
+			all_tagged_type_variants.find do |variant|
+				variant.types.include?('Table') && variant.tag_declaration&.structure_declaration_equal?(schema)
 			end
 		end
 
@@ -1998,12 +2045,20 @@ module Lost
 			nil
 		end
 
-		# Makes `.structure` readable via Lost dot-access on a Type, Instance, or type reference, and marks it static so it's also readable straight off a bare Type (not just an instance). Only adds the declaration when this particular one actually has a structure, so plain unstructured types don't pick up a stray `structure` member.
-		def declare_structure scope
-			return unless scope.structure_instance
+		# Mirrors how this tag was actually written, not a guess from its resulting shape -- `Array\<String>` and `Array\String` produce an identically-shaped single-unnamed-member struct, so shape alone can't tell them apart (confirmed the hard way: an earlier version of this method used exactly that heuristic). `bare_reference_name` (see Struct#bare_reference_name/#resolve_tag_reference) is the one place that signal survives past parsing, so a bare identifier RHS (`\Type`, `\Named_Struct`) always redisplays bare, and everything else (`\<...>`, however many members) always falls back to the struct's own `<...>` rendering.
+		def tag_display_name scope
+			tag        = scope.tag_instance
+			qualifier  = tag.bare_reference_name || stringify_for_display(tag)
+			"#{scope.name}#{Lost::TAG_OPERATOR}#{qualifier}"
+		end
 
-			scope.declarations['structure'] = scope.structure_instance
-			scope.static_declarations       = (scope.static_declarations || Set.new) + ['structure']
+		# Makes `.tag` readable via Lost dot-access on a Type, Instance, or type reference, and marks it static so it's also readable straight off a bare Type (not just an instance). Only adds the declaration when this particular one actually has a tag, so plain untagged types don't pick up a stray `tag` member. Also refreshes `.display_name` (see Type#initialize) to fold the tag into the type's own displayable name, so a consumer like lost/member.tape's `to_s` never needs to know `.tag` exists at all.
+		def declare_tag scope
+			return unless scope.tag_instance
+
+			scope.declarations['tag']          = scope.tag_instance
+			scope.declarations['display_name'] = tag_display_name(scope)
+			scope.static_declarations          = (scope.static_declarations || Set.new) + %w(tag display_name)
 		end
 
 		#
@@ -2071,11 +2126,11 @@ module Lost
 			instance.enclosing_scope       = type
 			instance.expressions           = type.expressions
 
-			# note; Bind structs onto the instance before the type's expressions (and therefore `new`) are interpreted below, so `new{;}`'s own body can reference `.structure`. This is a completely separate binding path from the call's own arguments — member values never get forwarded into `new`'s params.
-			effective_structure = type.structure_instance || type.structure_declaration
-			if effective_structure
-				instance.structure_instance = effective_structure
-				declare_structure instance
+			# note; Bind structs onto the instance before the type's expressions (and therefore `new`) are interpreted below, so `new{;}`'s own body can reference `.tag`. This is a completely separate binding path from the call's own arguments — member values never get forwarded into `new`'s params.
+			effective_tag = type.tag_instance || type.tag_declaration
+			if effective_tag
+				instance.tag_instance = effective_tag
+				declare_tag instance
 			end
 
 			run_type_body_on_instance type, instance
@@ -2943,7 +2998,7 @@ module Lost
 			end
 		end
 
-		# `Key_Type :: { PRIMARY, }` declares `Key_Type` in the current scope, same as a Type/Struct declaration does -- unlike a nested enum member (`build_enum`, called directly, skips this), which is only ever reachable through its parent (`Outer.Nested`), not the enclosing scope.
+		# `Key_Type [ PRIMARY, ]` declares `Key_Type` in the current scope, same as a Type/Struct declaration does -- unlike a nested enum member (`build_enum`, called directly, skips this), which is only ever reachable through its parent (`Outer.Nested`), not the enclosing scope.
 		def interp_enum expr
 			instance = build_enum expr
 			stack.last.declare expr.name.value, instance
@@ -3007,6 +3062,16 @@ module Lost
 			end
 		end
 
+		# Resolves a `: Type` annotation's value, honoring a trailing `\<...>`/`\Name` tag (`id: Array\String`) if one was parsed onto it. `type_expr` is an Identifier_Expr, not a Type_Expr (see #parse_identifier_expr), so a tagged annotation is resolved through a synthetic Type_Expr reference instead of #interpret directly -- same trick #interp_func_body etc. use to reuse existing dispatch via a synthetic Call_Expr.
+		def interp_type_annotation type_expr
+			return interpret type_expr unless type_expr.type_struct
+
+			reference      = Lost::Type_Expr.new
+			reference.name = type_expr.value
+			reference.tag  = type_expr.type_struct
+			interp_type reference
+		end
+
 		def interp_struct expr, allow_spread: true
 			types         = [] # per-member type object (or the raw value itself for unnamed members)
 			values        = [] # per-member real value, nil when a named member has none
@@ -3015,11 +3080,10 @@ module Lost
 
 			expr.types.each_with_index do |member, i|
 				if expr.names[i]
-					# note; Named member (e.g. `some_string: String`), the member's own identifier (`some_string`) is just a label, not something to look up; resolve its declared type instead. Named members are never spread: the name is always its namespace (`.structure.columns`), even when the value is itself a Struct.
+					# note; Named member (e.g. `some_string: String`), the member's own identifier (`some_string`) is just a label, not something to look up; resolve its declared type instead. Named members are never spread: the name is always its namespace (`.tag.columns`), even when the value is itself a Struct.
 					if member.type
-						type_ref        = Lost::Identifier_Expr.new
-						type_ref.lexeme = member.type
-						types << interpret(type_ref)
+						# `member.type` is already a full Identifier_Expr (#parse_identifier_expr's `: Type` recurses), not a bare Lexeme -- directly interpretable, no rewrapping needed. A trailing `\<...>`/`\Name` on that annotation (`id: Array\String`) only ever populates `.type_struct` there (see #parse_identifier_expr), not a real `Type_Expr` -- a plain #interpret would silently resolve the untagged base type, so route through #interp_type_annotation instead.
+						types << interp_type_annotation(member.type)
 						if member.member_default
 							default_value = interpret(member.member_default)
 							values << wrap_string_literal_value(member.member_default, default_value)
@@ -3042,7 +3106,8 @@ module Lost
 						names.concat value.names
 					else
 						types << value
-						values << wrap_string_literal_value(member, value)
+						# A bare Type used as the member itself (`<Number>`, schema-only, no real data yet) isn't a value -- push nil, same as a named member's own `: Type` annotation with no default does, rather than the Type object itself (which used to leak into display code expecting a real value or nil).
+						values << (value.is_a?(Lost::Type) && !value.is_a?(Lost::Instance) ? nil : wrap_string_literal_value(member, value))
 						names << nil
 					end
 				end
@@ -3050,7 +3115,32 @@ module Lost
 
 			# Each member's "type" here is just its value's own inferred type name
 			type_names = types.map { |value| type_name_to_string value }
-			build_struct names, type_names, types, values
+			struct     = build_struct names, type_names, types, values
+
+			# A leading TYPE_IDENTIFIER before `<...>` (`Task <id: Number, done: Bool>`) makes `expr.name` a raw Lexeme -- a Bare Named Struct (see CLAUDE.md), registered globally here. `\<...>`'s inline-literal form sets `.tag.name` to a plain String instead, so it never re-triggers this.
+			return register_bare_named_struct(expr, struct) if expr.name.is_a? Lost::Lexeme
+
+			struct
+		end
+
+		# Registers (or idempotently confirms) a Bare Named Struct under its own name. Redeclaring the identical shape is a no-op; anything else already bound under that name raises rather than silently clobbering it.
+		def register_bare_named_struct expr, struct
+			name     = expr.name.value
+			existing = find_in_stack name
+
+			if existing.is_a?(Lost::Struct) && existing.get('name') == name && existing.structure_declaration_equal?(struct)
+				return existing
+			end
+
+			# A tagged Type declaration never registers under the plain identifier namespace (only in `tagged_type_variants`), so `find_in_stack` alone can't see a conflicting one -- check both.
+			if existing.nil? && tagged_variants_for(name).empty?
+				struct.declare 'name', name
+				struct.types = Set[name] + struct.types
+				stack.last.declare name, struct if struct.names.all?
+				return struct
+			end
+
+			raise Lost::Undeclared_Tagged_Type.new(expr)
 		end
 
 		# A value built directly from a string literal gets wrapped into a real Lost::String carrying the literal's own `quotation_style`, instead of staying the bare Ruby string #interp_string normally returns. Struct/Member's to_s{;} (lost/member.tape) and Array/Dictionary/Tuple's to_s{;} (lost/array.tape, lost/dictionary.tape, lost/preload.tape) read `.quotation_style` straight off the value to decide how to quote it for display.

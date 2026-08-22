@@ -12,6 +12,16 @@ Table {
 	Self.create { dict_or_struct; @ruby }
 	Self.update { id, dict; @ruby }
 	Self.delete { id; @ruby }
+}
+
+Table\<name: String, columns: Struct> {
+	new { database: Database;
+		self.database = database
+		self.schema = tag.columns
+		database.create_table(tag.name, tag.columns)
+	}
+}
+
 
 ###
 	@operator -> @infix { left,right; left has_one right }
@@ -22,4 +32,3 @@ Table {
 	User ->> Post       # user has_many profiles
 	Post <- User        # user belongs_to post
 ###
-}

@@ -3,14 +3,14 @@
 ### Valid members syntax:
 
 m := Member()
-<Member, mem1: Member, mem2 := Member(), mem3: Member = Member(), m>
+<Member, mem1: Member, mem2 := Member(), mem3: Member = Member(), m, Member\String>
 ###
 
 Struct {
-	members: Array<Member>    = []
-	names: Array<String>      = []
-	type_names: Array<String> = []
-	values: Array             = []
+	members: Array\Member    = []
+	names: Array\String      = []
+	type_names: Array\String = []
+	values: Array            = []
 
 	has? { member: Member -> Bool;
 		members.include?(member)

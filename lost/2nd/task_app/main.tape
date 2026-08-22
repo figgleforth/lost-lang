@@ -1,39 +1,43 @@
 @load 'lost/database'
 @load 'lost/table'
 
-db := Sqlite.memory()
-connected_db := @connect db # @connect just returns the database you gave it. todo; Connection {} or <>
-@assert connected_db == db
+Task_Type [TODO, BUG, DESIGN]
 
-Task_Type :: { TODO, BUG, DESIGN } # Task_Type [ TODO BUG DESIGN ] may be better for easy identification
+Task <
+	type: Task_Type
+	done := false
+	text: String
+	id: Primary_Key
+>
 
-Task <id: Primary_Key, type: Task_Type = Task_Type.TODO, text: String, done := false>
-@assert Task.name == 'Task'
+db := @connect Sqlite.memory()
 
-Table<name: String, columns: Struct> {
-	new { database: Database = ~/db;
-		# todo; this should all be abstracted away, done internally by Lost
-		self.database = database
-		self.schema = structure.columns
-		database.create_table(structure.name, structure.columns)
-	}
+Table_With_Name_And_Schema := Table\<String, Struct> { # tagged type
+	new (args;)
+	stuff (a, b, c;)
 }
 
-Tasks | Table<'tasks', Task> {
-	# returns Task structs as row data
-	# todo; this should also be automatic
-	Self.database = db
-	Self.table_name = 'tasks'
+Tasks | Table\<'tasks', Task> {
+	new (db: Database;
+		Self.table_name = 'tasks'
+		self.database = db
+		self.tag.0 # 'tasks'
+	)
+
+	Self.create (data: Task -> Task;
+		@ruby
+	)
 }
 
-tasks := Tasks()
-@assert tasks
+tasks := Tasks(db)
 
-task: Task = Tasks.create(<type := Task_Type.DESIGN, done := false, text := "Finish database syntax">)
-@assert task
-@puts task
+data1 := <type := Task_Type.DESIGN, done := false, text := "Finish database syntax"> # anon struct
+data2 := Task(Task_Type.TODO, false, "Another way of instantiating the data")        # named struct
 
-
+task1: Task = tasks.create(data1)
+task2: Task = tasks.create(data2)
+@puts task1
+@puts task2
 
 
 
@@ -52,9 +56,23 @@ task: Task = Tasks.create(<type := Task_Type.DESIGN, done := false, text := "Fin
 Todo := <text: String, done: Bool, id: Primary_Key>
 
 ## 2: Create a Table class representing the Task columns struct
-Table<name: String, columns: Struct> {}     # default Table provided by Lost
-Table<columns: Struct> {}                   # shorthand with named struct whose name can be used to derive table name
+Table\<name: String, columns: Struct> {}     # default Table provided by Lost
+Table\<columns: Struct> {}                   # shorthand with named struct whose name can be used to derive table name
 
-Todos | Table<'todos', Todo> {}       # declares table with explicit name
-Todos | Table<Todo> {}                # declares table with inferred name from Todo struct
+Todos | Table\<'todos', Todo> {}       # declares table with explicit name
+Todos | Table\<Todo> {}                # declares table with inferred name from Todo struct
 ###
+
+#Tasks\Connection {
+##	new {;
+##		self.tag.db
+##	}
+#}
+#
+#Tasks\<db: Database> {
+##	self.tag.db
+#}
+#
+#Tasks\<Connection> {
+##	self.tag.db
+#}

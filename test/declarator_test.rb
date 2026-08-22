@@ -20,7 +20,7 @@ class Declarator_Test < Base_Test
 
 	def test_named_struct_gets_its_declaring_name
 		decls = Lost.declare "Named <String, Number>"
-		assert_equal 'Named', decls['Named'].expr.structure.name
+		assert_equal 'Named', decls['Named'].expr.name.value
 	end
 
 	def test_conditional_branches_flatten_into_enclosing_scope

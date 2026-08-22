@@ -616,7 +616,7 @@ class Interpreter_Test < Base_Test
 		out = Lost.interp 'Vector2 { x := 0, y := 1 }
 		pos := Vector2()'
 		assert_instance_of Lost::Instance, out
-		data = { 'x' => 0, 'y' => 1, 'name' => 'Vector2', 'types' => Lost::Array.new(['Vector2']) }
+		data = { 'x' => 0, 'y' => 1, 'name' => 'Vector2', 'display_name' => 'Vector2', 'types' => Lost::Array.new(['Vector2']) }
 		assert_equal data, out.declarations
 	end
 
@@ -1771,6 +1771,25 @@ class Interpreter_Test < Base_Test
 		}
 		outer()"
 		assert_equal 65, out
+	end
+
+	def test_readable_unpack_write_shadows_local_and_leaves_source_untouched
+		# `x = 999` is allowed (finds x via the readable fallback), but Scope#[]= never routes through readable_scopes, so it lands as a fresh local instead, leaving vec untouched.
+		out = Lost.interp "
+		Vector {
+			x := 0
+			new { x; self.x = x }
+		}
+
+		add { @add_readable_scope vec;
+			x = 999
+			x
+		}
+
+		v := Vector(3)
+		local_result := add(v)
+		(local_result, v.x)"
+		assert_equal [999, 3], out.values
 	end
 
 	def test_privacy_and_binding

@@ -44,9 +44,9 @@ module Lost
 		end
 
 		def to_decl expr
-			# `.name`, where it exists, isnt always a plain ::String -- Func_Expr's is an Identifier_Expr (unwrap via .value); Operator_Expr/Operator_Overload_Expr have no .name at all, so fall back to .value, which holds the operator symbol itself
+			# `.name`, where it exists, isnt always a plain ::String -- Func_Expr's is an Identifier_Expr (unwrap via .value), a bare named Struct_Expr's is a raw Lexeme too (#parse_struct's leading-identifier capture); Operator_Expr/Operator_Overload_Expr have no .name at all, so fall back to .value, which holds the operator symbol itself
 			key = if expr.respond_to?(:name) && expr.name
-				expr.name.is_a?(Expression) ? expr.name.value : expr.name
+				(expr.name.is_a?(Expression) || expr.name.is_a?(Lexeme)) ? expr.name.value : expr.name
 			else
 				expr.value
 			end
@@ -149,9 +149,9 @@ module Lost
 					to_decl expr
 				end
 			when Type_Expr
-				# nested = every declaration found in the type's own body, keyed the same way #output keys its top-level result -- structure (if any) rides along under its own key..expressions is nil for a bare reference (`Abc<Number>`, `Named <String, Number>`) with no `{}` body at all -- distinct from a real, even if empty, body
-				nested              = expr.expressions ? declare_all(expr.expressions) : Hash.new
-				nested['structure'] = declare expr.structure if expr.structure
+				# nested = every declaration found in the type's own body, keyed the same way #output keys its top-level result -- the tag (if any) rides along under its own key..expressions is nil for a bare reference (`Abc\<Number>`, `Named <String, Number>`) with no `{}` body at all -- distinct from a real, even if empty, body
+				nested        = expr.expressions ? declare_all(expr.expressions) : Hash.new
+				nested['tag'] = declare expr.tag if expr.tag
 				Declaration[expr.name, nested, expr]
 			when Number_Expr, Symbol_Expr, String_Expr
 				# a bare literal statement (e.g. a func body's trailing return value) doesn't declare anything on its own -- see #resolve_value for how these register as the *value* on the right of a `:=`/`=`

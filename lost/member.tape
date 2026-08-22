@@ -32,9 +32,9 @@ Member {
 
 		if name
 			if type and has_value
-				"`name`: `type.?name` = `displayed_value`"
+				"`name`: `type.?display_name` = `displayed_value`"
 			elif type and not has_value
-				"`name`: `type.?name`"
+				"`name`: `type.?display_name`"
 			elif has_value and not type
 				"`name` := `displayed_value`"
 			else
@@ -44,7 +44,7 @@ Member {
 			if has_value
 				"`displayed_value`"
 			elif type
-				"`type.?name`"
+				"`type.?display_name`"
 			else
 				"Any"
 			end

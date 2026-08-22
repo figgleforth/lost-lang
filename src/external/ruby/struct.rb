@@ -6,6 +6,8 @@ module Lost
 	# <TypeA, b: TypeB, c := "xyz">
 	class Struct < Instance
 		attr_accessor :names, :values, :type_names, :members
+		# The identifier text used at a `\`-tag reference site (`Array\String` -> "String"), when it was written as a bare identifier rather than `\<...>` -- see Interpreter#resolve_tag_reference/#tag_display_name. nil for an inline `\<...>` literal (regardless of how many members it has), so display can tell the two apart even when they'd otherwise produce an identically-shaped struct (`\<String>` vs `\String`).
+		attr_accessor :bare_reference_name
 
 		def initialize names = [], type_names = [], types = [], values = []
 			super 'Struct'
@@ -37,7 +39,7 @@ module Lost
 		end
 
 		# Strict equality for declaration-time collision checks (does a variant with this *exact*
-		# structure already exist under this base name, so a new `Type<Struct>{}` should extend it
+		# structure already exist under this base name, so a new `Type\Struct {}` should extend it
 		# rather than start a fresh variant?). Two declarations only ever describe the *same*
 		# variant if every member's name and type match -- a differently-named member of the same
 		# type (`dict:`/`other:`, both `Dictionary`) is a distinct variant, which is the whole point

@@ -194,7 +194,7 @@ Walks the whole top-level AST once, before interpretation (invoked from `Interpr
 
 `#declare` dispatches per expression kind:
 
-- **Nests** under its own key: `Type_Expr`, `Func_Expr` (named only), `Route_Expr`, `Func_Signature_Expr` — each recurses into its own body/params via `#declare_all`, the same Hash-building the top level itself uses. A `Type_Expr`'s own `.structure` (if any) rides along under a `'structure'` key
+- **Nests** under its own key: `Type_Expr`, `Func_Expr` (named only), `Route_Expr`, `Func_Signature_Expr` — each recurses into its own body/params via `#declare_all`, the same Hash-building the top level itself uses. A `Type_Expr`'s own `.tag` (if any) rides along under a `'tag'` key
 - **Flattens** into the enclosing level instead: `Conditional_Expr` (`if`/`unless`/`while`/`until` don't push their own scope, so a `:=` inside a branch really does land in the enclosing scope — chains through `elif`/`elwhile` via `.when_false`) and `Circumfix_Expr` (groupings don't push a scope either) — `#declare_all` accepts either a `Declaration` or a `Hash` back from `#declare`, merging the latter flat rather than nesting it under a made-up key
 - **Deliberately excluded**: `For_Loop_Expr` (pushes its own scope per iteration in `#interp_for_loop` — loop-local, not forward-referenceable from outside), `Call_Expr` (its arguments can themselves use `:=` for named-argument passing, which looks identical to a declaration but isn't one — see Named Function Arguments above), and a bare `Identifier_Expr` (reads a value, doesn't declare one — registering one used to be a real bug: it silently clobbered a same-named real declaration reached later in the same Hash, since both share a key)
 - **Literals** (`String_Expr`/`Number_Expr`/`Symbol_Expr`) aren't declarations on their own, but are preserved (not dropped to `nil`) as the *value* on the right of a `:=`/`=` via `#resolve_value` — a separate helper from `#declare`, used only for RHS resolution, so a literal or plain identifier RHS is stored as-is instead of wrapped in another `Declaration`
@@ -384,7 +384,7 @@ Duck =/= Fish          #=> false (both compose Swimming, so they're not disjoint
 Flying =/= Swimming    #=> true  (share nothing)
 ```
 
-Struct members (see below) factor into all five: `===`/`=!=` require both the composed-type-sets *and* the structures (`left.structure&.types == right.structure&.types`) to match; `=>=`/`=<=` additionally require the member-poor side's members to be entirely present in the member-rich side's; `=/=` additionally requires the members to share nothing either. An unstructured side is treated as having no members, so `Abc === Abc` (neither side structured) is unaffected and stays `true`. Two types still sharing a composed type (e.g. both being `Abc`) always blocks `=/=` regardless of their members — disjointness means sharing *nothing*, composed types included.
+Struct members (see below) factor into all five: `===`/`=!=` require both the composed-type-sets *and* the structures (`left.tag&.types == right.tag&.types`) to match; `=>=`/`=<=` additionally require the member-poor side's members to be entirely present in the member-rich side's; `=/=` additionally requires the members to share nothing either. An unstructured side is treated as having no members, so `Abc === Abc` (neither side structured) is unaffected and stays `true`. Two types still sharing a composed type (e.g. both being `Abc`) always blocks `=/=` regardless of their members — disjointness means sharing *nothing*, composed types included.
 
 ### `Any` is a universal wildcard
 
@@ -403,79 +403,87 @@ Implemented once in `#interp_comparison_infix` (`interpreter.rb`), checked up fr
 
 ## Structs
 
-`<...>` attaches runtime-inspectable metadata (a "struct") to a type declaration, a standalone value, or a reference to an existing type. Parsed by `parse_struct` in `parser.rb` into `Lost::Struct_Expr`; interpreted by `interp_struct`/`interp_type` in `interpreter.rb` into an `Lost::Struct` instance (`src/external/ruby/struct.rb` — no paired `.tape` file; `lost/struct.tape` + `lost/member.tape` are a separate, higher-level `Member`/`Struct` layer built on top of it, loaded by default via `lost/preload.tape`).
+`<...>` attaches runtime-inspectable metadata (a "struct") to a standalone value or a reference to an existing type. Parsed by `parse_struct` in `parser.rb` into `Lost::Struct_Expr`; interpreted by `interp_struct` in `interpreter.rb` into an `Lost::Struct` instance (`src/external/ruby/struct.rb` — no paired `.tape` file; `lost/struct.tape` + `lost/member.tape` are a separate, higher-level `Member`/`Struct` layer built on top of it, loaded by default via `lost/preload.tape`).
+
+Tagging a *Type* declaration/reference itself — as opposed to a standalone struct value — goes through `\` (`Lost::TAG_OPERATOR`, `src/shared/constants.rb`) instead of bare `<...>`, to stay unambiguous from a lone unnamed Struct-valued member (see "Each declared tag is its own type" below) and from ordinary comparisons. `\` has two RHS forms, both handled by `interp_type`/`#interp_tagged_type_declaration`/`#resolve_tag_reference`:
 
 ```lost
-Abc<Number> {}             # declaration — Number becomes part of Abc's structure_declaration
-x := Abc<Number>            # reference — dup of the existing Abc type, structured; doesn't mutate the original
-x: Abc<Number>              # same, as a type annotation
-thing: <String, Number>     # bare struct, no type name at all — a standalone Lost::Struct value
-z := Abc<4815>              # a reference structured with an actual value rather than a type
-z()                         # constructs Abc, with .structure bound before new{;} runs
-Abc<4815>()                 # same, in one step
+Abc\<Number> {}              # inline literal declaration — Number becomes part of Abc's tag_declaration
+Task_Schema <a: Number, b: String>  # a separately-declared struct value (bare `<...>`, no `\`)
+Array\Task_Schema {}         # named reference — reuses an already-declared struct value verbatim
+Array\String {}              # named reference to a Type — wrapped as the equivalent single-unnamed-member struct, same as Array\<String>
+
+x := Abc\<Number>             # reference — dup of the existing Abc type, tagged; doesn't mutate the original
+x: Abc\<Number>                # same, as a type annotation
+thing: <String, Number>        # bare struct, no type name at all — a standalone Lost::Struct value, unrelated to `\`
+z := Abc\<4815>                # a reference tagged with an actual value rather than a type
+z()                            # constructs Abc, with .tag bound before new{;} runs
+Abc\<4815>()                   # same, in one step
 Def {}
-Def()                       # unstructured types are completely unaffected
+Def()                          # untagged types are completely unaffected
 ```
 
-- A member is any expression (`Abc<1+2+3/123>`, `Abc<this, that>`), not just a type name — evaluated normally at interpret time, so an identifier like `Number` resolves to the actual `Lost::Type`
-- Named members (`Type<some_string: String, num: Number> {}`) reuse `parse_identifier_expr`'s existing `: Type` annotation parsing for each member — no separate grammar needed. Only two named forms exist: `name: Type` and `name := value` — there's no general `name: value` the way Dictionaries have one. `:` immediately after a bare identifier, followed by anything that isn't a capitalized type name or `<...>` (almost always a lowercase value, mistaken for Dictionary-style `key: value`), raises `Lost::Invalid_Struct_Member_Annotation` at parse time in `#parse_struct` — without that check, `#parse_identifier_expr`'s own `: Type` lookahead just declines to consume the `:` (it can never be a type), leaving it to be reparsed on the next loop iteration as an unrelated `:symbol` prefix literal starting a whole new member, since commas are optional between struct members same as any other list — `<columns: cols>` would otherwise silently become the two members `columns, :cols` instead of erroring anywhere
-- A struct is only ever reachable via `.structure` (`.structure.types`, `.structure.some_string` for named members) — never auto-unpacked into `./`
+A named reference's RHS must resolve to a real `Lost::Struct` or `Lost::Type` — anything else raises `Lost::Tag_Reference_Must_Be_Type_Or_Struct`. Referencing a name that's a real declared Type but has no matching tagged variant yet doesn't raise — it auto-declares one on the spot (an implicit empty body via `#declare_tagged_type_variant`), so `Array\String` "just works" without requiring `Array\String {}` to have been written first; declaring it for real later reopens/extends this same auto-created variant.
+
+- A member is any expression (`Abc\<1+2+3/123>`, `Abc\<this, that>`), not just a type name — evaluated normally at interpret time, so an identifier like `Number` resolves to the actual `Lost::Type`
+- Named members (`Type\<some_string: String, num: Number> {}`) reuse `parse_identifier_expr`'s existing `: Type` annotation parsing for each member — no separate grammar needed. Only two named forms exist: `name: Type` and `name := value` — there's no general `name: value` the way Dictionaries have one. `:` immediately after a bare identifier, followed by anything that isn't a capitalized type name or `<...>` (almost always a lowercase value, mistaken for Dictionary-style `key: value`), raises `Lost::Invalid_Struct_Member_Annotation` at parse time in `#parse_struct` — without that check, `#parse_identifier_expr`'s own `: Type` lookahead just declines to consume the `:` (it can never be a type), leaving it to be reparsed on the next loop iteration as an unrelated `:symbol` prefix literal starting a whole new member, since commas are optional between struct members same as any other list — `<columns: cols>` would otherwise silently become the two members `columns, :cols` instead of erroring anywhere
+- A struct is only ever reachable via `.tag` (`.tag.types`, `.tag.some_string` for named members) — never auto-unpacked into `./`
 - A bare identifier immediately followed by `,` inside `<...>` (`<String, Number>`) is special-cased in `parse_struct` to parse as a plain identifier rather than the nil-init idiom (`ident,` ⇒ `ident = ident or nil`), which would otherwise misfire on the exact same shape
-- Reference forms (`x := Abc<Number>`) `dup` the matched variant (see below) rather than mutating it in place — `Object#dup` is shallow, so `@declarations`/`@static_declarations` are explicitly re-forked too, otherwise structuring one reference would silently mutate every other reference sharing that variant
-- Constructing from a structured reference binds `.structure` onto the instance *before* `type.expressions` (and therefore `new{;}`) run, so `new`'s own body can read `.structure` — but member values are never forwarded as constructor arguments; whatever `(...)` actually passes still binds to `new`'s own declared params, entirely separately
-- A named member's value, supplied positionally at the reference site (`Woof<'hello', 4815>`, never `Woof<key: 'hello'>`), gets re-associated with the *matched variant's own* `structure_declaration` names before landing on the instance, so `.structure.key` still resolves correctly
+- Reference forms (`x := Abc\<Number>`) `dup` the matched variant (see below) rather than mutating it in place — `Object#dup` is shallow, so `@declarations`/`@static_declarations` are explicitly re-forked too, otherwise tagging one reference would silently mutate every other reference sharing that variant
+- Constructing from a tagged reference binds `.tag` onto the instance *before* `type.expressions` (and therefore `new{;}`) run, so `new`'s own body can read `.tag` — but member values are never forwarded as constructor arguments; whatever `(...)` actually passes still binds to `new`'s own declared params, entirely separately
+- A named member's value, supplied positionally at the reference site (`Woof\<'hello', 4815>`, never `Woof\<key: 'hello'>`), gets re-associated with the *matched variant's own* `tag_declaration` names before landing on the instance, so `.tag.key` still resolves correctly
 
-### Each declared structure is its own type
+### Each declared tag is its own type
 
-`Abc<Number> {}` and `Abc<String> {}` are independent `Lost::Type` objects, not one shared type with two structures bolted on — declaring a structure creates a fresh type seeded from a copy of the *bare* type's own body (if one exists at declaration time), so one structure's `new`/methods can never clobber another's. This is handled by `#interp_structured_type_declaration` (`interpreter.rb`), a sibling of `#interp_bare_type_declaration` (used for plain, unstructured `Type { ... }`, which still reopens/extends one shared object as before). Both share a common tail, `#finish_type_declaration` (Lost:: Ruby-class linking, `@types` bookkeeping, running the body) — reopening an existing variant (bare or structured) only re-runs its *new* expressions, not ones already run on an earlier declaration.
+`Abc\<Number> {}` and `Abc\<String> {}` are independent `Lost::Type` objects, not one shared type with two tags bolted on — declaring a tag creates a fresh type seeded from a copy of the *bare* type's own body (if one exists at declaration time), so one tagged variant's `new`/methods can never clobber another's. This is handled by `#interp_tagged_type_declaration` (`interpreter.rb`), a sibling of `#interp_bare_type_declaration` (used for plain, untagged `Type { ... }`, which still reopens/extends one shared object as before). Both funnel into `#declare_tagged_type_variant` (shared with the auto-declare-on-reference fallback, see above) then `#finish_type_declaration` (Lost:: Ruby-class linking, `@types` bookkeeping, running the body) — reopening an existing variant (bare or tagged) only re-runs its *new* expressions, not ones already run on an earlier declaration.
 
-Each variant is kept in a per-scope list (`Scope#structured_type_variants`, keyed by base name — e.g. every declared structure of `String`) rather than a single mangled-string-keyed member, so `String<dict: Dictionary> {}` and `String<other: Dictionary> {}` are two distinct variants instead of colliding on a shared `"String<Dictionary>"` key. Matching is by real structure equality (`Lost::Struct#structure_declaration_equal?`, `struct.rb`) — both `names` and resolved `type_names`, positionally — mirroring the language's own `===` operator on Type/Instance (exact set equality, not a string compare).
+Each variant is kept in a per-scope list (`Scope#tagged_type_variants`, keyed by base name — e.g. every declared tag of `String`) rather than a single mangled-string-keyed member, so `String\<dict: Dictionary> {}` and `String\<other: Dictionary> {}` are two distinct variants instead of colliding on a shared `"String<Dictionary>"` key. Matching is by real structure equality (`Lost::Struct#structure_declaration_equal?`, `struct.rb` — this one Struct-comparison method kept its name; it's used for general struct-shape equality, not just tag matching) — both `names` and resolved `type_names`, positionally — mirroring the language's own `===` operator on Type/Instance (exact set equality, not a string compare).
 
-A reference resolves by inferring a type name for each supplied value and matching that against the declared variants for that base name — but the match isn't exact-name-only: `#member_candidate_type_names` returns every type a value composes (its own name first, then everything it composes), so e.g. a `Div` satisfies a member declared `Dom` even though nothing in `lost/html.tape` is literally named `Dom`. `Lost::Struct#satisfied_by_candidates?` checks a declared variant against those candidates (mirroring the language's own `=>=` superset operator), and `#find_structured_type_variant` prefers an exact match before falling back to a compositional one. A reference with no matching declared variant raises `Lost::Undeclared_Type_Structure` — there's no fallback to untyped/ad-hoc structuring.
+A reference resolves by inferring a type name for each supplied value and matching that against the declared variants for that base name — but the match isn't exact-name-only: `#member_candidate_type_names` returns every type a value composes (its own name first, then everything it composes), so e.g. a `Div` satisfies a member declared `Dom` even though nothing in `lost/html.tape` is literally named `Dom`. `Lost::Struct#satisfied_by_candidates?` checks a declared variant against those candidates (mirroring the language's own `=>=` superset operator), and `#find_tagged_type_variant` prefers an exact match before falling back to a compositional one. A lone unnamed Struct-valued member spreads at declare time but not at reference time by default (see below) — `#interp_type`'s reference branch retries with spreading applied whenever the unspread shape doesn't find anything, so a reference/composition operand can still reach a variant that was declared with spreading. A reference with no matching declared variant either auto-declares one (base name is a real Type, see above) or raises `Lost::Undeclared_Type_Structure` (base name is something else entirely).
 
 ```lost
-String<Dictionary> { to_s {; "I'm a dict-structured string" } }
-String<Number>     { to_s {; "I'm a number-structured string" } }
+String\<Dictionary> { to_s {; "I'm a dict-tagged string" } }
+String\<Number>     { to_s {; "I'm a number-tagged string" } }
 
-String<{x=1}>().to_s()   # "I'm a dict-structured string"   -- {x=1} is a Dictionary
-String<5>().to_s()       # "I'm a number-structured string" -- 5 is a Number
+String\<{x=1}>().to_s()   # "I'm a dict-tagged string"   -- {x=1} is a Dictionary
+String\<5>().to_s()       # "I'm a number-tagged string" -- 5 is a Number
 ```
 
 ### Confirmed example
 
 ```lost
-String<dict: Dictionary> {
+String\<dict: Dictionary> {
     new { str: String = "";
         value = str
     }
     to_s {;
         final := value
         final += "{"
-        for structure.dict
+        for tag.dict
             final += "`key`::`value`, "
         end
         final += "}"
     }
 }
-a := String<{x=0, y=1, z=2}>()
-b := String<{x=0, y=1, z=2}>("My dict: ")
+a := String\<{x=0, y=1, z=2}>()
+b := String\<{x=0, y=1, z=2}>("My dict: ")
 a.to_s()   # "{x::0, y::1, z::2, }"
 b.to_s()   # "My dict: {x::0, y::1, z::2, }"
 ```
 
 ### Runtime wiring
 
-- `Lost::Struct < Instance`, not `Scope` — the `enclosing_scope` method-lookup fallback used for `arr.push(...)`-style calls (see `#interp_identifier`) is gated on `is_a?(Lost::Instance)`, and `Struct` needs that same fallback for `lost/struct.tape`'s own declarations (`==`, `include?`) to be reachable at all. Note: `lost/struct.tape`/`lost/member.tape` are the separate, higher-level `Member`/`Struct` layer, loaded by default (`lost/preload.tape`) but still reachable with `Lost.interp(code, load_standard_library: false)` — distinct from this low-level `Lost::Struct` Ruby class, which every `<...>` struct literal goes through regardless of whether that layer is loaded
+- `Lost::Struct < Instance`, not `Scope` — the `enclosing_scope` method-lookup fallback used for `arr.push(...)`-style calls (see `#interp_identifier`) is gated on `is_a?(Lost::Instance)`, and `Struct` needs that same fallback for `lost/struct.tape`'s own declarations (`==`, `include?`) to be reachable at all. Note: `lost/struct.tape`/`lost/member.tape` are the separate, higher-level `Member`/`Struct` layer, loaded by default (`lost/preload.tape`) but still reachable with `Lost.interp(code, load_standard_library: false)` — distinct from this low-level `Lost::Struct` Ruby class, which every struct literal goes through regardless of whether that layer is loaded, or which operator (`<...>` or `\`) built it
 - Every `Lost::Struct.new` call site also calls `link_instance_to_type(struct, 'Struct')`, linking it to whichever `Struct` type is currently declared — either the bare Ruby-backed fallback (no standard library loaded), or `lost/struct.tape`'s own `Struct { }` otherwise (see `#build_struct`)
-- `.structure` is exposed on `Type`/`Instance` via `declare_structure` (`interpreter.rb`) — only added when a scope actually has a structure, and marked as a static declaration so it's readable straight off a bare `Type`, not just an instance
+- `.tag` is exposed on `Type`/`Instance` via `declare_tag` (`interpreter.rb`) — only added when a scope actually has a tag, and marked as a static declaration so it's readable straight off a bare `Type`, not just an instance
 - `Type` (and therefore `Instance`, which subclasses it) carries two separate accessors, both holding an `Lost::Struct`:
-  - `.structure` — what a specific reference or instance was actually structured with (`Abc<4815>`). Only ever set on an explicit `Abc<...>` reference, never on the bare declared type — its mere presence is what distinguishes "explicitly referenced" from "just the declared type" for `===`/`=!=`/etc. and for whether construction binds `.structure` at all
-  - `.structure_declaration` — the type's own declared structure (`Abc<dict: Dictionary = {}> {}`): named/positional members, annotations, and defaults. A structured reference looks here to re-associate positional call-site values with names and fall back to defaults
-  - Both live on `Type`, not `Scope`, because a structured reference is a `dup` of the type (same Ruby class as the type itself), so a `Type`-vs-`Instance` check can't stand in for the "declared" vs "supplied" distinction — see the comments on `Type#structure_instance`/`Type#structure_declaration` in `scopes.rb`
+  - `.tag_instance` (Ruby; `.tag` at the Lost level) — what a specific reference or instance was actually tagged with (`Abc\<4815>`). Only ever set on an explicit `Abc\<...>`/`Abc\Name` reference, never on the bare declared type — its mere presence is what distinguishes "explicitly referenced" from "just the declared type" for `===`/`=!=`/etc. and for whether construction binds `.tag` at all
+  - `.tag_declaration` — the type's own declared tag (`Abc\<dict: Dictionary = {}> {}`): named/positional members, annotations, and defaults. A tagged reference looks here to re-associate positional call-site values with names and fall back to defaults
+  - Both live on `Type`, not `Scope`, because a tagged reference is a `dup` of the type (same Ruby class as the type itself), so a `Type`-vs-`Instance` check can't stand in for the "declared" vs "supplied" distinction — see the comments on `Type#tag_instance`/`Type#tag_declaration` in `scopes.rb`
 
 ### Bare Named Structs
 
-`Ident<...>` where `Ident` has nothing declared under it anywhere (no bare `Type`, no structured variant, no alias to one) isn't an error — it builds a plain `Struct`, same as `<...>` alone, except with `.name` set from the identifier:
+`Ident<...>` where `Ident` has nothing declared under it anywhere (no bare `Type`, no tagged variant, no alias to one) isn't an error — it builds a plain `Struct`, same as `<...>` alone, except with `.name` set from the identifier:
 
 ```lost
 Thing := <String, Number>   # anonymous -- .name is nil; only reachable via the variable Thing
@@ -488,17 +496,18 @@ n.name                      # 'Named'
 **Type lookup always takes priority.** This only kicks in when `Ident` is genuinely undeclared — a name that collides with something real still behaves exactly as it always has:
 
 ```lost
-Abc<Number> {}
-Abc<String>          # raises Lost::Undeclared_Type_Structure -- Abc IS declared, just not with this structure
+Abc\<Number> {}
+Task \<a: Number> {}
+Task <b: String>      # raises Lost::Undeclared_Type_Structure -- Task IS declared (as a tagged Type), just not with this shape
 ```
 
-Implemented in `#interp_type` (`interpreter.rb`): the existing bare-reference branch (`Abc<Number>`, no `{}` body) already raised `Lost::Undeclared_Type_Structure` whenever nothing matched — it just never distinguished "nothing declared under this name at all" from "something's declared, this structure doesn't match it". Now it checks both `find_in_stack(expr.name)` (a bare Type or a local alias) and `structured_variants_for(lookup_name)` (any structured variant, matching or not) before falling through to a named struct — either one being non-empty means something real is declared under that name, so the original error still applies.
+Implemented in `#interp_struct`/`#register_bare_named_struct` (`interpreter.rb`), gated on `expr.name.is_a?(Lost::Lexeme)` (`parse_struct`'s own leading-identifier capture — distinct from `\<...>`'s inline-literal form, which copies its name onto `.tag.name` as a plain String instead and so never re-triggers this path). Conflict detection checks both `find_in_stack(name)` (a bare Type or a local alias) and `tagged_variants_for(name)` (any tagged variant under that name, matching or not) — a tagged Type declaration never registers under the plain identifier namespace, so `find_in_stack` alone can't see it; either check being non-empty means something real is declared under that name, so the original error still applies.
 
 ## Enums (not finalized — don't rely on yet)
 
-`TYPE_IDENT :: (OPTIONAL_FORCED_TYPE) { ... }` declares an `Lost::Enum` (`Lost::Enum_Expr` in the parser, `#parse_enum_expr`; `#interp_enum`/`#build_enum`/`#build_enum_member` in `interpreter.rb`; backing Lost body in `lost/enum.tape`, Ruby class in `src/external/ruby/enum.rb`). Members can be bare (`TODO`), bare with a trailing comma (`BUG,`), type-annotated only (`DONE: Priority`), type-annotated with a value (`CANCELLED: Priority = 99`), self-declared with a value (`ARCHIVED := 'archived'`), or a nested enum (`Nested :: { A, B }`, reachable only as `Outer.Nested`). A bare/annotated-only member's value is a Symbol matching its own name. The enum exposes `.type` (the forced type, or `nil`), `.keys`/`.values`/`.types` (parallel Arrays), and `.count`.
+`TYPE_IDENTIFIER [ ... ]` declares an `Lost::Enum` (`Lost::Enum_Expr` in the parser, `#parse_enum_expr`; `#interp_enum`/`#build_enum`/`#build_enum_member` in `interpreter.rb`; backing Lost body in `lost/enum.tape`, Ruby class in `src/external/ruby/enum.rb`). Members can be bare (`TODO`), bare with a trailing comma (`BUG,`), type-annotated only (`DONE: Priority`), type-annotated with a value (`CANCELLED: Priority = 99`), self-declared with a value (`ARCHIVED := 'archived'`), or a nested enum (`Nested [ A, B ]`, reachable only as `Outer.Nested`). A bare/annotated-only member's value is a Symbol matching its own name. The enum exposes `.type`, `.keys`/`.values`/`.types` (parallel Arrays), and `.count`.
 
-**Syntactically present, but the type system isn't enforced yet**: the forced type after `::` and each member's own `: Type` annotation are stored but never checked against anything — `Task_Type :: Number { BUG: String = 'oops' }` declares and constructs without error. See the todos.md entry for finalizing this. Don't build real functionality on top of Enum type annotations until that's resolved.
+**Syntactically present, but the type system isn't enforced yet**: each member's own `: Type` annotation is stored but never checked against anything — `Task_Type [ BUG: String = 'oops' ]` declares and constructs without error. The older forced-type spelling (`TYPE_IDENT :: Type { ... }`) doesn't exist anymore — `#parse_enum_expr` no longer parses a forced type at all, so `.type` is currently always `nil`. See the todos.md entry for finalizing this. Don't build real functionality on top of Enum type annotations until that's resolved.
 
 ## Destructuring
 
@@ -1114,7 +1123,7 @@ User | Table {
 - `update(id, attributes)` - Update record by ID
 - `delete(id)` - Delete record by ID
 
-`attributes`/a returned record is a Dictionary for the plain `User | Table { Self.database := ~/db }` pattern; for a model composed with a structured `Table` reference (`Tasks | Table<'tasks', Task> {}`, see `lost/2nd/task_app/main.tape`), `create`/`find`/`find_by`/`where`/`all` return a real `Task`-shaped Struct instead (`Lost::Table#record_struct`, `table.rb`), read off the model's own `.structure.columns`.
+`attributes`/a returned record is a Dictionary for the plain `User | Table { Self.database := ~/db }` pattern; for a model composed with a structured `Table` reference (`Tasks | Table\<'tasks', Task> {}`, see `lost/2nd/task_app/main.tape` — that file is a work in progress, don't treat it as a settled example), `create`/`find`/`find_by`/`where`/`all` return a real `Task`-shaped Struct instead (`Lost::Table#record_struct`, `table.rb`), read off the model's own `.tag.columns`.
 
 ```lost
 `Create records

@@ -1,8 +1,8 @@
 ### Introduction
 
-Sometimes you want to attach a small bundle of typed data to something without declaring a whole new Type for it. Structs are Lost's answer: `<...>` builds a small, structured, runtime-inspectable value on the spot.
+Sometimes you want to attach a small bundle of typed data to something without declaring a whole new Type for it. Structs are Lost's answer: `<...>` builds a small, runtime-inspectable value on the spot.
 
-This file is about Structs as standalone values. Attaching `<...>` to a Type name instead (to create independent variants of that type) is a related but separate feature -- see learn/structured_types.tape for that.
+This file is about Structs as standalone values. Attaching a struct to a Type name instead (to create independent, tagged variants of that type) is a related but separate feature -- see learn/tagged_types.tape for that.
 ###
 pair := <String, Number>
 type_names := pair.types.values.map({it;
@@ -63,9 +63,9 @@ sb := <name: String, age: Number>('Alice', 30)
 sc := <name: String, age: Number>('Alice', 99)
 
 @assert (sa == sb) == true, '== should be true for identical values'
-@assert (sa === sb) == true, '=== should be true for the same structure of members'
+@assert (sa === sb) == true, '=== should be true for the same set of members'
 @assert (sa == sc) == false, '== should be false when age differs (30 vs 99)'
-@assert (sa === sc) == true, '=== should still be true -- still the same structure of members'
+@assert (sa === sc) == true, '=== should still be true -- still the same set of members'
 
 
 ### Bare named structs
@@ -84,6 +84,6 @@ n := Named<String, Number>
 
 This only kicks in when the identifier is genuinely undeclared -- a name that collides with something real still behaves exactly as it always did:
 ###
-Abc<Number> {}
-# Abc<String> would raise Lost::Undeclared_Type_Structure, same as before this feature existed --
-# Abc is declared, just not with that structure, so it's never treated as a bare named struct.
+Abc\<Number> {}
+# Abc<String> would raise Lost::Undeclared_Type_Structure --
+# Abc is declared (tagged, via `\`), just not with that shape, so it's never treated as a bare named struct.

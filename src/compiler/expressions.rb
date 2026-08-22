@@ -129,10 +129,8 @@ module Lost
 	end
 
 	class Type_Expr < Expression
-		attr_accessor :name, :expressions, :structure
-		# A composition chain (`Abc|Def`, `A & B`, ...) with no `{ }` body -- a reference to an
-		# anonymous type built by applying the chain (`.expressions`, all Composition_Expr), not a
-		# declaration. See #Parser#parse_type_decl/#Interpreter#interp_type.
+		attr_accessor :name, :expressions, :tag
+		# A bare composition chain (`Abc|Def`), no `{}` body -- an anonymous type reference, not a declaration.
 		attr_accessor :anonymous_composition
 	end
 

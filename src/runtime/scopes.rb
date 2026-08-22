@@ -1,6 +1,6 @@
 module Lost
 	class Scope
-		attr_accessor :enclosing_scope, :readable_scopes, :writable_scopes, :declarations, :name, :type_by_identifier, :static_declarations, :structured_type_variants
+		attr_accessor :enclosing_scope, :readable_scopes, :writable_scopes, :declarations, :name, :type_by_identifier, :static_declarations, :tagged_type_variants
 
 		def initialize name = nil
 			@name               = name
@@ -11,8 +11,8 @@ module Lost
 			@readable_scopes     = ObjectSpace::WeakMap.new
 			@writable_scopes     = ObjectSpace::WeakMap.new
 			@static_declarations = Set.new
-			# `Type<Struct> { }` declarations of the same base name (e.g. every structured variant of "String") are kept here, separate from @declarations -- see #Interpreter#interp_structured_type_declaration/#find_structured_type_variant. A base name maps to every variant declared under it in this scope; matching is by real structure equality (names + types), not a mangled string key.
-			@structured_type_variants = Hash.new { |h, k| h[k] = [] }
+			# `Type\Struct { }` declarations of the same base name (e.g. every tagged variant of "String") are kept here, separate from @declarations -- see #Interpreter#interp_tagged_type_declaration/#find_tagged_type_variant. A base name maps to every variant declared under it in this scope; matching is by real structure equality (names + types), not a mangled string key.
+			@tagged_type_variants = Hash.new { |h, k| h[k] = [] }
 		end
 
 		def declare identifier, value, type = nil
@@ -122,19 +122,17 @@ module Lost
 
 	class Type < Scope
 		attr_accessor :expressions, :types, :routes
-		# Holds an Lost::Struct, exposed to Lost code as `.structure` (see #declare_structure) -- `structure_instance` is just the Ruby-side name.
-		attr_accessor :structure_instance
-		# A type's own struct declaration (e.g. `Abc<dict: Dictionary = {}> {}`)'s named/positional members, annotations, and defaults -- kept separate from `.structure`, which is only ever set on an explicit `Abc<...>` reference, never the bare type (see #interp_type_call).
-		# Both live on Type, not Scope, since a structured reference is a dup of the type (same class), so Type/Instance can't stand in for this distinction.
-		attr_accessor :structure_declaration
-		# True only while this type's own body is being walked for the first time (#finish_type_declaration) -- the window during which `../member := value` may self-declare a brand-new static member, mirroring Instance's `has?('new')` check for the same rule on instance members.
+		attr_accessor :tag_instance
+		attr_accessor :tag_declaration
 		attr_accessor :declaration_in_progress
 
 		def initialize name = nil
 			super name
-			@types                = Set[name]
-			@declarations['name'] = name
-			@static_declarations.add 'name' # So that Type.name works
+			@types                         = Set[name]
+			@declarations['name']          = name
+			# Same as `.name` until/unless a tag makes this type's real display richer than its bare name (see #declare_tag) -- lets consumers (e.g. lost/member.tape's `to_s`) read one field for "how should this type be shown" without needing to know about `.tag` at all.
+			@declarations['display_name']  = name
+			@static_declarations           += %w(name display_name) # So that Type.name/Type.display_name work
 			@declaration_in_progress = false
 		end
 	end

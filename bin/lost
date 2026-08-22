@@ -84,8 +84,8 @@ begin
 		result = Lost.declare_file ARGV[1]
 		pp result if print_output
 	when 'interpf'
-		interpreter, result = interp_and_print_output File.read(ARGV[1]), file: ARGV[1]
-		puts interpreter.stringify_for_display(result) if print_output
+		result = Lost.interp_file ARGV[1]
+		pp result if print_output
 	when 'interp-nostd'
 		interpreter, result = interp_and_print_output ARGV[1], load_standard_library: false
 		puts interpreter.stringify_for_display(result) if print_output

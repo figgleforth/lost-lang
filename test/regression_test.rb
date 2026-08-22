@@ -991,8 +991,8 @@ class Regression_Test < Base_Test
 		end
 	end
 
-	def test_capitalized_identifier_comparison_does_not_get_parsed_as_a_structured_type_reference_regression
-		# `X < Y` (X/Y capitalized variables, not types) looks identical up to `TYPE_IDENTIFIER '<'` to `Abc<Number>` -- #begin_expression always committed to #parse_type_decl/#parse_struct on sight of that shape, which then ran out of tokens hunting for a `>` that was never coming (Lost::Out_Of_Tokens) instead of falling through to an ordinary `<` comparison. #try_parse_type_decl now actually attempts the real parse and rewinds on any syntax error instead of guessing via lookahead.
+	def test_capitalized_identifier_comparison_does_not_get_parsed_as_a_tagged_type_reference_regression
+		# `X < Y` (X/Y capitalized variables, not types) looks identical up to `TYPE_IDENTIFIER '<'` to `Ident <...>` -- #begin_expression always committed to #parse_struct on sight of that shape, which then ran out of tokens hunting for a `>` that was never coming (Lost::Out_Of_Tokens) instead of falling through to an ordinary `<` comparison. #try_parse_struct now actually attempts the real parse and rewinds on any syntax error instead of guessing via lookahead.
 		assert_equal true, Lost.interp(<<~CODE)
 		    X := 1
 		    Y := 2
@@ -1005,18 +1005,18 @@ class Regression_Test < Base_Test
 		    compute(1, 2)
 		CODE
 
-		# A real structured-type declaration/reference on one line still works, comma-separated members included -- confirms the fix didn't just move the false negative onto legitimate `Abc<Number>` usage.
+		# A real tagged-type declaration/reference on one line still works, comma-separated members included -- confirms the fix didn't just move the false negative onto legitimate `Abc\<Number>` usage.
 		assert_equal true, Lost.interp(<<~CODE)
-		    Dictionary_Like<String, Number> {}
-		    z := Dictionary_Like<String, Number>()
-		    z.structure.types.length() == 2
+		    Dictionary_Like\\<String, Number> {}
+		    z := Dictionary_Like\\<String, Number>()
+		    z.tag.types.length() == 2
 		CODE
 
 		# A struct member's own default value can legitimately contain delimiters (`(`/`)`, `[`/`]`, nested `{`/`}`) before the real closing `>` -- must not be mistaken for the statement's own boundary.
 		assert_equal true, Lost.interp(<<~CODE)
 		    mk {; 5 }
-		    Abc<id := mk(), items := [1,2], dict := {x: 1}> {}
-		    z := Abc<mk(), [1,2], {x:1}>()
+		    Abc\\<id := mk(), items := [1,2], dict := {x: 1}> {}
+		    z := Abc\\<mk(), [1,2], {x:1}>()
 		    z =/= nil
 		CODE
 	end
